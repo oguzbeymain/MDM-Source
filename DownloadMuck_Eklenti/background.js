@@ -1,28 +1,63 @@
-// DownloadMuck / MDM tarayici entegrasyonu v1.3
+// DownloadMuck / MDM tarayici entegrasyonu v1.4
 // Once masaustu uygulamasina ilet; BASARILI olursa tarayici indirmesini iptal et.
-// Masaustu birden fazla port deneyebilir — ayni listeyi burada da dene.
 
 const CANDIDATE_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
 
-function buildEndpoints() {
+async function disableBrowserDownloadUi() {
+  try {
+    if (chrome.downloads.setShelfEnabled) {
+      chrome.downloads.setShelfEnabled(false);
+    }
+  } catch (e) {
+    console.warn("MDM: setShelfEnabled desteklenmiyor", e);
+  }
+
+  try {
+    if (chrome.downloads.setUiOptions) {
+      await chrome.downloads.setUiOptions({ enabled: false });
+    }
+  } catch (_) { /* eski chrome */ }
+}
+
+function buildEndpoints(preferredPort) {
+  const ports = preferredPort
+    ? [preferredPort, ...CANDIDATE_PORTS.filter(p => p !== preferredPort)]
+    : CANDIDATE_PORTS.slice();
+
   const list = [];
-  for (const port of CANDIDATE_PORTS) {
-    list.push(`http://127.0.0.1:${port}/`);
-    list.push(`http://localhost:${port}/`);
+  for (const port of ports) {
+    list.push({ port, url: `http://127.0.0.1:${port}/` });
+    list.push({ port, url: `http://localhost:${port}/` });
   }
   return list;
 }
 
+async function getPreferredPort() {
+  try {
+    const data = await chrome.storage.local.get("mdmPort");
+    return data.mdmPort || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function savePreferredPort(port) {
+  try {
+    await chrome.storage.local.set({ mdmPort: port });
+  } catch (_) { /* ignore */ }
+}
+
 async function handoffToDesktop(url, filename) {
   const payload = JSON.stringify({ url, filename });
-  const endpoints = buildEndpoints();
+  const preferred = await getPreferredPort();
+  const endpoints = buildEndpoints(preferred);
 
   for (const endpoint of endpoints) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 800);
+      const timer = setTimeout(() => controller.abort(), 600);
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(endpoint.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: payload,
@@ -32,7 +67,8 @@ async function handoffToDesktop(url, filename) {
       clearTimeout(timer);
 
       if (response.ok) {
-        console.log("MDM: handoff OK via", endpoint);
+        await savePreferredPort(endpoint.port);
+        console.log("MDM: handoff OK via", endpoint.url);
         return true;
       }
     } catch (_) {
@@ -43,10 +79,23 @@ async function handoffToDesktop(url, filename) {
   return false;
 }
 
+disableBrowserDownloadUi();
+
+chrome.runtime.onInstalled.addListener(() => {
+  disableBrowserDownloadUi();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  disableBrowserDownloadUi();
+});
+
 chrome.downloads.onCreated.addListener(async (downloadItem) => {
   if (downloadItem.byExtensionId === chrome.runtime.id) {
     return;
   }
+
+  // Shelf/UI kapali kalsin
+  disableBrowserDownloadUi();
 
   const url = downloadItem.finalUrl || downloadItem.url || "";
   if (!/^https?:\/\//i.test(url)) {
@@ -60,11 +109,7 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
   const fullPath = downloadItem.filename || "";
   const rawFileName = fullPath.split(/[/\\]/).pop() || "download";
 
-  // Gecici durdur — app yoksa devam edebilsin
-  try {
-    await chrome.downloads.pause(downloadItem.id);
-  } catch (_) { /* ignore */ }
-
+  // Once uygulamaya ilet — basariliysa hemen sil (bildirim/raf azalir)
   const accepted = await handoffToDesktop(url, rawFileName);
 
   if (accepted) {
@@ -74,18 +119,6 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
     return;
   }
 
-  console.warn("MDM: masaustu uygulamaya ulasilamadi, tarayici indirmesi surduruluyor.");
-  try {
-    await chrome.downloads.resume(downloadItem.id);
-  } catch (err) {
-    try {
-      await chrome.downloads.download({
-        url: url,
-        filename: rawFileName !== "download" ? rawFileName : undefined,
-        saveAs: false
-      });
-    } catch (downloadErr) {
-      console.error("MDM: tarayici indirmesi yeniden baslatilamadi:", downloadErr);
-    }
-  }
+  // Uygulama yok — tarayici indirsin (pause etmedik, zaten devam ediyor)
+  console.warn("MDM: masaustu uygulamaya ulasilamadi, tarayici indirmesi suruyor.");
 });

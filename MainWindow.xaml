@@ -4,7 +4,8 @@
         Title="DownloadMuck" Height="600" Width="980"
         Background="#121212" Foreground="#E0E0E0"
         WindowStartupLocation="CenterScreen" WindowStyle="None"
-        AllowsTransparency="True" FontFamily="Segoe UI">
+        AllowsTransparency="True" FontFamily="Segoe UI"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.Resources>
         <SolidColorBrush x:Key="BgDark" Color="#121212"/>
@@ -293,7 +294,9 @@
                               Foreground="White" CanUserSortColumns="True" AllowDrop="True"
                               CanUserResizeColumns="True" CanUserReorderColumns="True"
                               SelectionMode="Extended" SelectionUnit="FullRow"
-                              MouseDoubleClick="DgDownloads_MouseDoubleClick" Drop="DgDownloads_Drop">
+                              MouseDoubleClick="DgDownloads_MouseDoubleClick" Drop="DgDownloads_Drop"
+                              PreviewKeyDown="DgDownloads_PreviewKeyDown"
+                              SelectionChanged="DgDownloads_SelectionChanged">
 
                         <DataGrid.Resources>
                             <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#251A12"/>
