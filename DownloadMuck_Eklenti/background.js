@@ -47,8 +47,8 @@ async function savePreferredPort(port) {
   } catch (_) { /* ignore */ }
 }
 
-async function handoffToDesktop(url, filename) {
-  const payload = JSON.stringify({ url, filename });
+async function handoffToDesktop(url, filename, mime) {
+  const payload = JSON.stringify({ url, filename, mime: mime || "" });
   const preferred = await getPreferredPort();
   const endpoints = buildEndpoints(preferred);
 
@@ -59,7 +59,7 @@ async function handoffToDesktop(url, filename) {
 
       const response = await fetch(endpoint.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json; charset=utf-8" },
         body: payload,
         signal: controller.signal
       });
@@ -108,9 +108,10 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
 
   const fullPath = downloadItem.filename || "";
   const rawFileName = fullPath.split(/[/\\]/).pop() || "download";
+  const mime = downloadItem.mime || "";
 
   // Once uygulamaya ilet — basariliysa hemen sil (bildirim/raf azalir)
-  const accepted = await handoffToDesktop(url, rawFileName);
+  const accepted = await handoffToDesktop(url, rawFileName, mime);
 
   if (accepted) {
     try { await chrome.downloads.cancel(downloadItem.id); } catch (_) { /* ignore */ }

@@ -51,9 +51,19 @@ namespace DownloadMuck
             set
             {
                 if (!SetField(ref _status, value)) return;
-                IsDownloading = value.Contains("İndiriliyor")
-                    || value.Contains("Dosya bilgileri")
-                    || value.Contains("Tek kanaldan");
+                if (value.Contains("İptal", StringComparison.OrdinalIgnoreCase)
+                    || value.Contains("Tamamlandı", StringComparison.OrdinalIgnoreCase)
+                    || value.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
+                    || value.Contains("Hata", StringComparison.OrdinalIgnoreCase))
+                {
+                    IsDownloading = false;
+                }
+                else
+                {
+                    IsDownloading = value.Contains("İndiriliyor")
+                        || value.Contains("Dosya bilgileri")
+                        || value.Contains("Tek kanaldan");
+                }
             }
         }
 

@@ -17,7 +17,7 @@ namespace DownloadMuck
         // 6800 Hyper-V / Windows tarafindan sikca engellenir; once daha guvenli portlar
         public static readonly int[] CandidatePorts = { 18680, 18681, 18682, 18700, 27182, 38472, 6800 };
 
-        private readonly Action<string, string> _onDownloadRequested;
+        private readonly Action<string, string, string> _onDownloadRequested;
         private TcpListener? _listener;
         private CancellationTokenSource? _cts;
         private Task? _loopTask;
@@ -26,7 +26,7 @@ namespace DownloadMuck
         public int ActivePort { get; private set; }
         public string? LastError { get; private set; }
 
-        public BrowserCaptureServer(Action<string, string> onDownloadRequested)
+        public BrowserCaptureServer(Action<string, string, string> onDownloadRequested)
         {
             _onDownloadRequested = onDownloadRequested;
         }
@@ -183,6 +183,7 @@ namespace DownloadMuck
                     string json = new string(bodyBuffer, 0, read);
                     string url = "";
                     string filename = "";
+                    string mime = "";
 
                     if (!string.IsNullOrWhiteSpace(json))
                     {
@@ -190,11 +191,13 @@ namespace DownloadMuck
                         if (doc.RootElement.TryGetProperty("url", out JsonElement urlEl))
                             url = urlEl.GetString() ?? "";
                         if (doc.RootElement.TryGetProperty("filename", out JsonElement nameEl))
-                            filename = nameEl.GetString() ?? "";
+                            filename = FileNameHelper.DecodeDisplayName(nameEl.GetString() ?? "");
+                        if (doc.RootElement.TryGetProperty("mime", out JsonElement mimeEl))
+                            mime = mimeEl.GetString() ?? "";
                     }
 
                     if (!string.IsNullOrWhiteSpace(url))
-                        _onDownloadRequested(url, filename);
+                        _onDownloadRequested(url, filename, mime);
 
                     await WriteResponseAsync(stream, 200, "OK");
                 }

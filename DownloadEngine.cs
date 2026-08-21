@@ -117,9 +117,8 @@ namespace DownloadMuck
 
                 if (IsCancelled)
                 {
-                    StatusChanged?.Invoke("İndirme İptal Edildi!");
-                    SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
-                    ProgressChanged?.Invoke(0);
+                    StatusChanged?.Invoke("İptal Edildi");
+                    SpeedAndTimeChanged?.Invoke("", "00:00:00");
 
                     // Sıfırlama işlemleri
                     _isInitialized = false;

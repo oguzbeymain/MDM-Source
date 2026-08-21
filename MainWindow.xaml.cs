@@ -71,14 +71,14 @@ namespace DownloadMuck
             try
             {
                 _captureServer?.Stop();
-                _captureServer = new BrowserCaptureServer((url, filename) =>
+                _captureServer = new BrowserCaptureServer((url, filename, mime) =>
                 {
                     Dispatcher.BeginInvoke(async () =>
                     {
                         try
                         {
                             TxtUrl.Text = url;
-                            await StartDownloadProcess(url, filename);
+                            await StartDownloadProcess(url, filename, mime);
                         }
                         catch (Exception ex)
                         {
@@ -87,31 +87,10 @@ namespace DownloadMuck
                     });
                 });
                 _captureServer.Start();
-                SetCaptureStatus(true, null);
             }
             catch (Exception ex)
             {
-                SetCaptureStatus(false, ex.Message);
-                // Sessizce durum cubugunda goster; korkutucu popup sadece gercekten hic port yoksa
                 Debug.WriteLine($"Capture server failed: {ex.Message}");
-            }
-        }
-
-        private void SetCaptureStatus(bool online, string? error)
-        {
-            if (TxtCaptureStatus == null) return;
-
-            if (online && _captureServer != null)
-            {
-                TxtCaptureStatus.Text = $"Eklenti: hazır (:{_captureServer.ActivePort})";
-                TxtCaptureStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0xCB, 0x6B));
-                TxtCaptureStatus.ToolTip = $"127.0.0.1:{_captureServer.ActivePort} dinleniyor";
-            }
-            else
-            {
-                TxtCaptureStatus.Text = "Eklenti: kapalı";
-                TxtCaptureStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35));
-                TxtCaptureStatus.ToolTip = error ?? "Yakalama sunucusu çalışmıyor";
             }
         }
 
@@ -272,30 +251,74 @@ namespace DownloadMuck
             return fullPath;
         }
 
-        private async Task<string> ResolveFileNameAsync(string url, string suggestedName)
+        private async Task<string> ResolveFileNameAsync(string url, string suggestedName, string? mimeHint = null)
         {
-            if (!string.IsNullOrEmpty(suggestedName) && suggestedName != "downloaded_file.zip" && suggestedName != "download")
-            {
-                return suggestedName;
-            }
+            string? contentType = null;
+            string? fromHeader = null;
+
+            string decodedSuggested = FileNameHelper.DecodeDisplayName(suggestedName);
 
             try
             {
-                using var client = new HttpClient();
-                using var request = new HttpRequestMessage(HttpMethod.Head, url);
-                client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                client.DefaultRequestHeaders.TryAddWithoutValidation(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-                using var response = await client.SendAsync(request);
-
-                if (response.Content.Headers.ContentDisposition?.FileName != null)
+                HttpResponseMessage? response = null;
+                try
                 {
-                    string fn = response.Content.Headers.ContentDisposition.FileName.Trim('"');
-                    if (!string.IsNullOrEmpty(fn)) return fn;
+                    using var head = new HttpRequestMessage(HttpMethod.Head, url);
+                    response = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
+                }
+                catch { /* bazi sunucular HEAD kabul etmez */ }
+
+                if (response == null || !response.IsSuccessStatusCode)
+                {
+                    response?.Dispose();
+                    using var get = new HttpRequestMessage(HttpMethod.Get, url);
+                    response = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead);
+                }
+
+                using (response)
+                {
+                    contentType = response.Content.Headers.ContentType?.MediaType;
+                    fromHeader = FileNameHelper.ExtractFromContentDisposition(response.Content.Headers);
                 }
             }
-            catch { }
+            catch { /* ignore */ }
 
-            return !string.IsNullOrEmpty(suggestedName) ? suggestedName : "downloaded_file.rar";
+            if (string.IsNullOrWhiteSpace(contentType) && !string.IsNullOrWhiteSpace(mimeHint))
+                contentType = mimeHint;
+
+            string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
+
+            string chosen = PickBestFileName(fromHeader, decodedSuggested, fromUrl) ?? "download";
+            chosen = FileNameHelper.EnsureExtension(chosen, contentType);
+
+            if (string.IsNullOrEmpty(Path.GetExtension(chosen)))
+            {
+                string ext = FileNameHelper.GuessExtensionFromContentType(contentType);
+                if (FileNameHelper.IsPlaceholderName(chosen))
+                    chosen = "download" + (string.IsNullOrEmpty(ext) ? ".bin" : ext);
+                else if (!string.IsNullOrEmpty(ext))
+                    chosen += ext;
+            }
+
+            return chosen;
+        }
+
+        private static string? PickBestFileName(params string?[] candidates)
+        {
+            string? strong = candidates.FirstOrDefault(n =>
+                !string.IsNullOrWhiteSpace(n) && !FileNameHelper.IsPlaceholderName(n));
+            if (strong != null) return strong;
+
+            string? withExt = candidates.FirstOrDefault(n =>
+                !string.IsNullOrWhiteSpace(n) && !string.IsNullOrEmpty(Path.GetExtension(n!)));
+            if (withExt != null) return withExt;
+
+            return candidates.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
         }
 
         private async void BtnDownload_Click(object sender, RoutedEventArgs e)
@@ -304,7 +327,7 @@ namespace DownloadMuck
             await StartDownloadProcess(url, "");
         }
 
-        private async Task StartDownloadProcess(string url, string incomingFilename)
+        private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null)
         {
             string saveFolder = TxtDefaultFolder.Text.Trim();
 
@@ -319,7 +342,7 @@ namespace DownloadMuck
                 Directory.CreateDirectory(saveFolder);
             }
 
-            string solvedFileName = await ResolveFileNameAsync(url, incomingFilename);
+            string solvedFileName = await ResolveFileNameAsync(url, incomingFilename, mimeHint);
             string savePath = GetUniqueFilePath(saveFolder, solvedFileName);
 
             string finalFileName = Path.GetFileName(savePath);
@@ -327,7 +350,7 @@ namespace DownloadMuck
             {
                 FileName = finalFileName,
                 FilePath = savePath,
-                FileType = Path.GetExtension(savePath).ToUpper().Replace(".", ""),
+                FileType = FileNameHelper.FormatTypeLabel(finalFileName),
                 DateAdded = DateTime.Now,
                 Status = "İndiriliyor",
                 FileIcon = IconHelper.GetIconForExtension(finalFileName)
@@ -347,6 +370,9 @@ namespace DownloadMuck
             {
                 Dispatcher.BeginInvoke(() =>
                 {
+                    if (engine.IsCancelled) return;
+                    if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) return;
+
                     item.ProgressValue = progress;
                     item.StatusText = $"İndiriliyor %{progress:F1}";
                     if (!item.IsDownloading)
@@ -358,17 +384,35 @@ namespace DownloadMuck
             {
                 Dispatcher.BeginInvoke(() =>
                 {
-                    if (status.Contains('%'))
-                        item.StatusText = status;
+                    if (status.Contains("İptal", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.Status = "İptal Edildi";
+                        item.StatusText = "";
+                        item.CurrentSpeed = "";
+                        item.IsDownloading = false;
+                        item.ProgressValue = 0;
+                    }
+                    else if (status.Contains('%'))
+                    {
+                        if (!engine.IsCancelled)
+                            item.StatusText = status;
+                    }
                     else
+                    {
                         item.Status = status;
+                    }
                     UpdateTransportButtons();
                 });
             };
 
             engine.SpeedAndTimeChanged += (speed, time) =>
             {
-                Dispatcher.BeginInvoke(() => item.CurrentSpeed = speed);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (engine.IsCancelled) return;
+                    if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) return;
+                    item.CurrentSpeed = speed;
+                });
             };
 
             UpdateTransportButtons();
@@ -543,6 +587,12 @@ namespace DownloadMuck
             var target = ResolveControlTarget();
             if (target == null || !_engines.TryGetValue(target, out var engine))
                 return;
+
+            target.Status = "İptal Edildi";
+            target.StatusText = "";
+            target.CurrentSpeed = "";
+            target.IsDownloading = false;
+            target.ProgressValue = 0;
 
             engine.Cancel();
             UpdateTransportButtons();
