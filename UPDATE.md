@@ -1,42 +1,26 @@
-# MDM / DownloadMuck — Otomatik Güncelleme
+# MDM Auto-Update
 
-## Repolar
+## Apps
 
-| Repo | URL | Amaç |
-|------|-----|------|
-| Kaynak (private) | https://github.com/oguzbeymain/MDM-Source | Geliştirme kaynak kodu |
-| Uygulama (public) | https://github.com/oguzbeymain/MDM-App | Release build paketleri |
+| File | Role |
+|------|------|
+| `MDM.Updater.exe` | Checks GitHub releases, installs update, launches main app |
+| `DownloadMuck.exe` | Main download manager (no self-update) |
 
-## Nasıl çalışır?
+## Flow
 
-1. Uygulama açılışta `MDM-App` reposundaki **en son GitHub Release** bilgisini okur.
-2. Release etiketi (`v1.0.1`) mevcut sürümden yeniyse `.zip` (veya `.exe`) asset indirilir.
-3. Geçici bir güncelleyici eski süreci kapatıp dosyaları değiştirir ve uygulamayı yeniden başlatır.
+1. User starts `DownloadMuck.exe` (or `MDM.Updater.exe`).
+2. Main app immediately starts **MDM.Updater** and exits (so files are not locked).
+3. Updater reads latest release from `oguzbeymain/MDM-App`.
+4. If newer: downloads zip, replaces files, starts `DownloadMuck.exe --from-updater`.
+5. If same: starts main app directly.
 
-> Debug derlemesinde (`bin\Debug`) otomatik güncelleme **atlanır**.
+Debug builds skip the updater redirect.
 
-## Yeni sürüm yayınlama
-
-1. `DownloadMuck.csproj` içindeki `Version` değerini artırın (script de yapabilir).
-2. PowerShell:
+## Publish
 
 ```powershell
-cd C:\Users\oguz\source\repos\DownloadMuck\DownloadMuck
-.\scripts\Publish-Release.ps1 -Version 1.0.1 -Notes "Kısa değişiklik özeti"
+.\scripts\Publish-Release.ps1 -Version 1.0.1 -Notes "Separate updater"
 ```
 
-3. Script:
-   - Release self-contained `win-x86` paket üretir
-   - `artifacts\MDM-1.0.1-win-x86.zip` oluşturur
-   - `oguzbeymain/MDM-App` üzerinde `v1.0.1` release açar / asset yükler
-
-## Release kuralları
-
-- Tag formatı: `vMAJOR.MINOR.PATCH` (ör. `v1.0.1`)
-- Asset: mümkünse **`.zip`** (tercih edilen); yoksa `.exe`
-- Zip içinde kökte veya tek alt klasörde `DownloadMuck.exe` olmalı
-
-## Gereksinimler (yayın için)
-
-- [GitHub CLI](https://cli.github.com/) — `gh auth login`
-- `MDM-App` reposuna release yazma yetkisi
+Zip contains both executables.

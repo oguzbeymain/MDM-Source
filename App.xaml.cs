@@ -1,51 +1,34 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows;
 
 namespace DownloadMuck
 {
     public partial class App : Application
     {
-        protected override async void OnStartup(StartupEventArgs e)
+        protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
-            UpdateWindow? updateWindow = null;
-            bool isDevBuild = IsDevelopmentBuild();
+            bool launchedByUpdater = e.Args.Any(a =>
+                string.Equals(a, "--from-updater", StringComparison.OrdinalIgnoreCase));
 
-            try
+            // Updater yoksa (gelistirme) dogrudan ac
+            string updaterPath = Path.Combine(AppContext.BaseDirectory, "MDM.Updater.exe");
+            bool updaterExists = File.Exists(updaterPath);
+
+            if (updaterExists && !launchedByUpdater && !IsDevelopmentBuild())
             {
-                if (!isDevBuild)
+                // Guncelleme ayri process'te yapilsin; ana exe kilitlenmesin
+                Process.Start(new ProcessStartInfo
                 {
-                    updateWindow = new UpdateWindow();
-                    updateWindow.Show();
-
-                    var progress = new Progress<string>(msg => updateWindow.SetStatus(msg));
-                    UpdateCheckResult result = await new UpdateService().CheckAndApplyUpdateAsync(progress);
-
-                    if (result.RestartingForUpdate)
-                    {
-                        updateWindow.SetStatus(result.Message ?? "Yeniden başlatılıyor...");
-                        await Task.Delay(600);
-                        Shutdown();
-                        return;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(result.Message) &&
-                        result.Message.Contains("başarısız", StringComparison.OrdinalIgnoreCase))
-                    {
-                        updateWindow.SetStatus(result.Message);
-                        await Task.Delay(1200);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Update startup error: {ex}");
-            }
-            finally
-            {
-                updateWindow?.Close();
+                    FileName = updaterPath,
+                    WorkingDirectory = AppContext.BaseDirectory,
+                    UseShellExecute = true
+                });
+                Shutdown();
+                return;
             }
 
             var main = new MainWindow();
@@ -56,7 +39,6 @@ namespace DownloadMuck
         private static bool IsDevelopmentBuild()
         {
             if (Debugger.IsAttached) return true;
-
             string baseDir = AppContext.BaseDirectory;
             return baseDir.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}Debug{Path.DirectorySeparatorChar}",
                 StringComparison.OrdinalIgnoreCase);

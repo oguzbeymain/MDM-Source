@@ -62,7 +62,8 @@ namespace DownloadMuck
             DgDownloads.ItemsSource = _downloadView;
 
             HighlightCategoryButton(BtnCatAll);
-            TxtVersion.Text = $"v{UpdateService.GetCurrentVersion()}";
+            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            TxtVersion.Text = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "";
             StartLocalServer();
         }
 
@@ -338,41 +339,47 @@ namespace DownloadMuck
 
             _currentEngine = new DownloadEngine(url, savePath, threadCount: 8);
 
-            _currentEngine.ProgressChanged += (progress) =>
+            _currentEngine.TotalSizeKnown += (totalBytes) =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
                     if (_activeItem != null)
-                    {
-                        _activeItem.ProgressValue = progress;
-                        _activeItem.StatusText = $"İndiriliyor %{progress:F1}";
-                        _activeItem.Status = $"İndiriliyor (%{progress:F1})";
-                        DgDownloads.Items.Refresh();
-                    }
+                        _activeItem.FileSize = FormatFileSize(totalBytes);
+                });
+            };
+
+            _currentEngine.ProgressChanged += (progress) =>
+            {
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (_activeItem == null) return;
+                    _activeItem.ProgressValue = progress;
+                    _activeItem.StatusText = $"İndiriliyor %{progress:F1}";
+                    // Status'u her tick'te degistirme — IsDownloading flicker'ini onler
+                    if (!_activeItem.IsDownloading)
+                        _activeItem.Status = "İndiriliyor";
                 });
             };
 
             _currentEngine.StatusChanged += (status) =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
-                    if (_activeItem != null)
-                    {
+                    if (_activeItem == null) return;
+                    // Yuzde iceren ara durumlari StatusText'te tut; Status sabit kalsin
+                    if (status.Contains('%'))
+                        _activeItem.StatusText = status;
+                    else
                         _activeItem.Status = status;
-                        DgDownloads.Items.Refresh();
-                    }
                 });
             };
 
             _currentEngine.SpeedAndTimeChanged += (speed, time) =>
             {
-                Dispatcher.Invoke(() =>
+                Dispatcher.BeginInvoke(() =>
                 {
                     if (_activeItem != null)
-                    {
                         _activeItem.CurrentSpeed = speed;
-                        DgDownloads.Items.Refresh();
-                    }
                 });
             };
 
@@ -399,19 +406,33 @@ namespace DownloadMuck
                     {
                         _activeItem.Status = "İptal Edildi";
                         _activeItem.ProgressValue = 0;
+                        _activeItem.StatusText = "";
+                        _activeItem.CurrentSpeed = "";
                     }
                     else if (_currentEngine != null && !_currentEngine.IsPaused)
                     {
                         _activeItem.Status = "Tamamlandı";
+                        _activeItem.StatusText = "";
+                        _activeItem.CurrentSpeed = "";
                         if (File.Exists(_activeItem.FilePath))
                         {
                             long bytes = new FileInfo(_activeItem.FilePath).Length;
-                            _activeItem.FileSize = $"{bytes / (1024.0 * 1024.0):F1} MB";
+                            _activeItem.FileSize = FormatFileSize(bytes);
                         }
                     }
-                    DgDownloads.Items.Refresh();
                 }
             }
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            double kb = bytes / 1024.0;
+            if (kb < 1024) return $"{kb:F1} KB";
+            double mb = kb / 1024.0;
+            if (mb < 1024) return $"{mb:F1} MB";
+            double gb = mb / 1024.0;
+            return $"{gb:F2} GB";
         }
 
         private async void BtnPauseResume_Click(object sender, RoutedEventArgs e)
@@ -422,12 +443,12 @@ namespace DownloadMuck
             {
                 _currentEngine.Pause();
                 BtnPauseResume.Content = "Devam Et";
-                if (_activeItem != null) { _activeItem.Status = "Duraklatıldı"; DgDownloads.Items.Refresh(); }
+                if (_activeItem != null) { _activeItem.Status = "Duraklatıldı"; _activeItem.IsDownloading = false; }
             }
             else if (_currentEngine.IsPaused)
             {
                 BtnPauseResume.Content = "Duraklat";
-                if (_activeItem != null) { _activeItem.Status = "İndiriliyor"; DgDownloads.Items.Refresh(); }
+                if (_activeItem != null) { _activeItem.Status = "İndiriliyor"; }
                 await _currentEngine.StartOrResumeDownloadAsync();
             }
         }
@@ -472,7 +493,19 @@ namespace DownloadMuck
             _marqueeCtrlBase = null;
             _dragStartPoint = e.GetPosition(null);
 
-            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            var row = FindParent<DataGridRow>(source);
+
+            // Bos alana tiklaninca secimi kaldir — yazi turuncuda kalmasin
+            if (row == null)
+            {
+                if (!ctrl)
+                {
+                    DgDownloads.UnselectAll();
+                    DgDownloads.CurrentCell = new DataGridCellInfo();
+                }
+            }
+            else if (ctrl)
             {
                 _marqueeCtrlBase = DgDownloads.SelectedItems.Cast<DownloadItem>().ToHashSet();
             }

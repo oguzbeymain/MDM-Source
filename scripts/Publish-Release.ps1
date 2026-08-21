@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds DownloadMuck/MDM and uploads a GitHub Release to MDM-App.
+  Builds DownloadMuck + MDM.Updater and uploads a GitHub Release to MDM-App.
 
 .EXAMPLE
   .\scripts\Publish-Release.ps1 -Version 1.0.1
@@ -32,66 +32,71 @@ if (-not (Test-Path (Join-Path $ProjectRoot "DownloadMuck.csproj"))) {
     }
 }
 
-$Csproj = Join-Path $ProjectRoot "DownloadMuck.csproj"
+$MainCsproj = Join-Path $ProjectRoot "DownloadMuck.csproj"
+$UpdaterCsproj = Join-Path $ProjectRoot "MDM.Updater\MDM.Updater.csproj"
 $PublishDir = Join-Path $ProjectRoot "artifacts\publish\$Runtime"
 $ZipPath = Join-Path $ProjectRoot "artifacts\MDM-$Version-$Runtime.zip"
 
+function Set-ProjectVersion([string]$csprojPath, [string]$ver) {
+    [xml]$xml = Get-Content $csprojPath
+    $pg = $xml.Project.PropertyGroup | Where-Object { $_.Version -or $_.TargetFramework } | Select-Object -First 1
+    if (-not $pg) { throw "PropertyGroup not found in $csprojPath" }
+    $pg.Version = $ver
+    if ($null -ne $pg.AssemblyVersion) { $pg.AssemblyVersion = "$ver.0" }
+    if ($null -ne $pg.FileVersion) { $pg.FileVersion = "$ver.0" }
+    if ($null -ne $pg.InformationalVersion) { $pg.InformationalVersion = $ver }
+    $xml.Save($csprojPath)
+}
+
 Write-Host "==> Version: $Tag" -ForegroundColor Cyan
-Write-Host "==> Project: $Csproj"
-
-[xml]$xml = Get-Content $Csproj
-$pg = $xml.Project.PropertyGroup | Where-Object { $_.Version -or $_.TargetFramework } | Select-Object -First 1
-if (-not $pg) { throw "csproj PropertyGroup not found." }
-
-$pg.Version = $Version
-if ($null -ne $pg.AssemblyVersion) { $pg.AssemblyVersion = "$Version.0" }
-if ($null -ne $pg.FileVersion) { $pg.FileVersion = "$Version.0" }
-if ($null -ne $pg.InformationalVersion) { $pg.InformationalVersion = $Version }
-
-$xml.Save($Csproj)
-Write-Host "==> csproj version set to $Version"
+Set-ProjectVersion $MainCsproj $Version
+Set-ProjectVersion $UpdaterCsproj $Version
 
 if (Test-Path $PublishDir) { Remove-Item $PublishDir -Recurse -Force }
 New-Item -ItemType Directory -Path $PublishDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Split-Path $ZipPath -Parent) -Force | Out-Null
 
-Write-Host "==> dotnet publish ($Runtime, self-contained, single-file)"
-dotnet publish $Csproj `
-    -c Release `
-    -r $Runtime `
-    --self-contained true `
-    -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:Version=$Version `
-    -p:InformationalVersion=$Version `
-    -o $PublishDir
+$commonArgs = @(
+    "-c", "Release",
+    "-r", $Runtime,
+    "--self-contained", "true",
+    "-p:PublishSingleFile=true",
+    "-p:IncludeNativeLibrariesForSelfExtract=true",
+    "-p:Version=$Version",
+    "-p:InformationalVersion=$Version",
+    "-o", $PublishDir
+)
 
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
+Write-Host "==> Publishing DownloadMuck..."
+dotnet publish $MainCsproj @commonArgs
+if ($LASTEXITCODE -ne 0) { throw "Main publish failed." }
+
+Write-Host "==> Publishing MDM.Updater..."
+dotnet publish $UpdaterCsproj @commonArgs
+if ($LASTEXITCODE -ne 0) { throw "Updater publish failed." }
 
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Write-Host "==> Creating zip: $ZipPath"
 Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $ZipPath -Force
 
-Write-Host "==> Creating GitHub release: $AppRepo $Tag"
+Write-Host "==> GitHub release: $AppRepo $Tag"
 $ErrorActionPreference = "Continue"
 gh release view $Tag --repo $AppRepo 2>$null | Out-Null
 $viewExit = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 
 if ($viewExit -eq 0) {
-    Write-Host "Release $Tag already exists - uploading asset..." -ForegroundColor Yellow
+    Write-Host "Release exists - uploading asset..." -ForegroundColor Yellow
     gh release upload $Tag $ZipPath --repo $AppRepo --clobber
 } else {
-    gh release create $Tag $ZipPath `
-        --repo $AppRepo `
-        --title "MDM $Tag" `
-        --notes $Notes
+    gh release create $Tag $ZipPath --repo $AppRepo --title "MDM $Tag" --notes $Notes
 }
 
-if ($LASTEXITCODE -ne 0) { throw "GitHub release failed. Check 'gh auth status'." }
+if ($LASTEXITCODE -ne 0) { throw "GitHub release failed." }
 
 Write-Host ""
 Write-Host "Done." -ForegroundColor Green
-Write-Host "  Tag:   $Tag"
-Write-Host "  Zip:   $ZipPath"
-Write-Host "  URL:   https://github.com/$AppRepo/releases/tag/$Tag"
+Write-Host "  Tag: $Tag"
+Write-Host "  Zip: $ZipPath"
+Write-Host "  URL: https://github.com/$AppRepo/releases/tag/$Tag"
+Write-Host "  Run: MDM.Updater.exe  (or DownloadMuck.exe which redirects to updater)"

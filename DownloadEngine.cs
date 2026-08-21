@@ -27,6 +27,8 @@ namespace DownloadMuck
         private long _totalSize;
         private long _totalBytesDownloaded;
         private bool _isInitialized = false;
+        private long _lastProgressReportTimestamp;
+        private int _lastProgressBucket = -1;
 
         public bool IsPaused { get; private set; }
         public bool IsDownloading { get; private set; }
@@ -35,6 +37,7 @@ namespace DownloadMuck
         public event Action<double>? ProgressChanged;
         public event Action<string>? StatusChanged;
         public event Action<string, string>? SpeedAndTimeChanged;
+        public event Action<long>? TotalSizeKnown;
 
         public DownloadEngine(string url, string savePath, int threadCount = 8)
         {
@@ -85,12 +88,16 @@ namespace DownloadMuck
 
                     if (!response.IsSuccessStatusCode || !contentLength.HasValue || contentLength.Value <= 0 || !supportsRange)
                     {
+                        if (contentLength.HasValue && contentLength.Value > 0)
+                            TotalSizeKnown?.Invoke(contentLength.Value);
+
                         StatusChanged?.Invoke("Tek kanaldan indiriliyor...");
                         await DownloadSingleStreamAsync(response, _cts.Token);
                         return;
                     }
 
                     _totalSize = contentLength.Value;
+                    TotalSizeKnown?.Invoke(_totalSize);
                     InitChunks(_totalSize);
 
                     using (var fs = new FileStream(_savePath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
@@ -234,7 +241,7 @@ namespace DownloadMuck
 
                         long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, bytesRead);
                         double progress = (double)currentTotal / _totalSize * 100;
-                        ProgressChanged?.Invoke(progress);
+                        ReportProgressThrottled(progress);
                     }
                 }, token));
             }
@@ -272,6 +279,21 @@ namespace DownloadMuck
             }
         }
 
+        private void ReportProgressThrottled(double progress)
+        {
+            int bucket = progress >= 100 ? int.MaxValue : (int)(progress * 5); // 0.2% adimlar
+            long now = Environment.TickCount64;
+            int lastBucket = Volatile.Read(ref _lastProgressBucket);
+            long lastTs = Interlocked.Read(ref _lastProgressReportTimestamp);
+
+            if (bucket != int.MaxValue && bucket == lastBucket && now - lastTs < 100)
+                return;
+
+            Volatile.Write(ref _lastProgressBucket, bucket);
+            Interlocked.Exchange(ref _lastProgressReportTimestamp, now);
+            ProgressChanged?.Invoke(progress > 100 ? 100 : progress);
+        }
+
         private async Task DownloadSingleStreamAsync(HttpResponseMessage initialResponse, CancellationToken token)
         {
             initialResponse.EnsureSuccessStatusCode();
@@ -292,7 +314,7 @@ namespace DownloadMuck
                 if (totalSize.HasValue && totalSize.Value > 0)
                 {
                     double progress = (double)totalDownloaded / totalSize.Value * 100;
-                    ProgressChanged?.Invoke(progress);
+                    ReportProgressThrottled(progress);
                 }
             }
 

@@ -290,14 +290,49 @@
                               Background="{StaticResource CardDark}" RowBackground="{StaticResource CardDark}" 
                               BorderBrush="#222222" HeadersVisibility="Column" GridLinesVisibility="None"
                               Foreground="White" CanUserSortColumns="True" AllowDrop="True"
+                              CanUserResizeColumns="True" CanUserReorderColumns="True"
                               SelectionMode="Extended" SelectionUnit="FullRow"
                               MouseDoubleClick="DgDownloads_MouseDoubleClick" Drop="DgDownloads_Drop">
 
                         <DataGrid.Resources>
                             <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#251A12"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF6B00"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="Transparent"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#E0E0E0"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#251A12"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF6B00"/>
+
+                            <!-- Kolon ayirici (resize) tutamaci -->
+                            <Style x:Key="ColumnHeaderGripperStyle" TargetType="{x:Type Thumb}">
+                                <Setter Property="Width" Value="10"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Cursor" Value="SizeWE"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="{x:Type Thumb}">
+                                            <Border x:Name="gripBg" Background="Transparent">
+                                                <Rectangle x:Name="gripLine"
+                                                           Width="2"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Stretch"
+                                                           Margin="0,4"
+                                                           RadiusX="1" RadiusY="1"
+                                                           Fill="#3A3A3A"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="gripBg" Property="Background" Value="#40FF6B00"/>
+                                                    <Setter TargetName="gripLine" Property="Fill" Value="#FF6B00"/>
+                                                    <Setter TargetName="gripLine" Property="Width" Value="3"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="gripBg" Property="Background" Value="#66FF6B00"/>
+                                                    <Setter TargetName="gripLine" Property="Fill" Value="#FF8533"/>
+                                                    <Setter TargetName="gripLine" Property="Width" Value="3"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
 
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="#181818"/>
@@ -306,12 +341,50 @@
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
                                 <Setter Property="BorderBrush" Value="#222222"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridColumnHeader">
+                                            <Grid Background="{TemplateBinding Background}">
+                                                <Border x:Name="headerBorder"
+                                                        Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                                </Border>
+                                                <Thumb x:Name="PART_LeftHeaderGripper"
+                                                       HorizontalAlignment="Left"
+                                                       Style="{StaticResource ColumnHeaderGripperStyle}"/>
+                                                <Thumb x:Name="PART_RightHeaderGripper"
+                                                       HorizontalAlignment="Right"
+                                                       Style="{StaticResource ColumnHeaderGripperStyle}"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="headerBorder" Property="Background" Value="#1F1F1F"/>
+                                                    <Setter Property="Foreground" Value="#CCCCCC"/>
+                                                </Trigger>
+                                                <Trigger Property="SortDirection" Value="Ascending">
+                                                    <Setter Property="Foreground" Value="#FF6B00"/>
+                                                </Trigger>
+                                                <Trigger Property="SortDirection" Value="Descending">
+                                                    <Setter Property="Foreground" Value="#FF6B00"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
 
                             <Style TargetType="DataGridCell">
                                 <Setter Property="Padding" Value="8,6"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                 <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
@@ -329,76 +402,163 @@
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Foreground" Value="#E0E0E0"/>
                                 <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
                                 <EventSetter Event="MouseMove" Handler="DataGridRow_MouseMove"/>
 
                                 <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#2C221A"/>
-                                        <Setter Property="Foreground" Value="#FF6B00"/>
-                                    </Trigger>
+                                    <!-- Sadece hover: hafif arka plan, yazi gri kalsin -->
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                            <Condition Property="IsSelected" Value="False"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" Value="#222222"/>
+                                        <Setter Property="Foreground" Value="#F5F5F5"/>
+                                    </MultiTrigger>
+                                    <!-- Secili -->
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter Property="Background" Value="#251A12"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
+                                    <!-- Secili + hover -->
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                            <Condition Property="IsSelected" Value="True"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" Value="#332318"/>
+                                        <Setter Property="Foreground" Value="#FF8533"/>
+                                    </MultiTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.Resources>
 
                         <DataGrid.ContextMenu>
-                            <ContextMenu Background="#1E1E1E" Foreground="#E0E0E0" BorderBrush="#333333">
+                            <ContextMenu x:Name="DownloadContextMenu"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         HasDropShadow="True">
+                                <ContextMenu.Template>
+                                    <ControlTemplate TargetType="ContextMenu">
+                                        <Border Background="#1C1C1C"
+                                                BorderBrush="#333333"
+                                                BorderThickness="1"
+                                                CornerRadius="10"
+                                                Padding="6"
+                                                SnapsToDevicePixels="True">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.45" Color="#000000"/>
+                                            </Border.Effect>
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ContextMenu.Template>
                                 <ContextMenu.Resources>
                                     <Style TargetType="MenuItem">
-                                        <Setter Property="Background" Value="#1E1E1E"/>
-                                        <Setter Property="Foreground" Value="#E0E0E0"/>
-                                        <Setter Property="Padding" Value="10,6"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Foreground" Value="#E8E8E8"/>
+                                        <Setter Property="FontSize" Value="13"/>
+                                        <Setter Property="Padding" Value="12,9"/>
+                                        <Setter Property="Margin" Value="0,1"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Left"/>
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="MenuItem">
-                                                    <Border x:Name="templateBorder" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                                    <Border x:Name="itemBorder"
+                                                            Background="{TemplateBinding Background}"
+                                                            CornerRadius="7"
+                                                            Padding="{TemplateBinding Padding}">
+                                                        <DockPanel>
+                                                            <TextBlock x:Name="iconText"
+                                                                       DockPanel.Dock="Left"
+                                                                       Text="{TemplateBinding Tag}"
+                                                                       Width="22"
+                                                                       FontSize="14"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="0,0,8,0"/>
+                                                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                                        </DockPanel>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="templateBorder" Property="Background" Value="#2C221A"/>
+                                                        <Trigger Property="IsHighlighted" Value="True">
+                                                            <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
                                                             <Setter Property="Foreground" Value="#FF6B00"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter Property="Foreground" Value="#666666"/>
                                                         </Trigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Setter.Value>
                                         </Setter>
                                     </Style>
+                                    <Style x:Key="ModernSeparator" TargetType="Separator">
+                                        <Setter Property="Margin" Value="8,5"/>
+                                        <Setter Property="Background" Value="#333333"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Separator">
+                                                    <Border Height="1" Background="#333333" Margin="{TemplateBinding Margin}"/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
                                 </ContextMenu.Resources>
-                                <MenuItem Header="📁 Dosya Konumunu Aç" Click="MenuOpenFolder_Click"/>
-                                <MenuItem Header="🗑️ Listeden ve Diskten Sil" Click="MenuDeleteFile_Click"/>
+                                <MenuItem Header="Dosya konumunu aç" Tag="📂" Click="MenuOpenFolder_Click"/>
+                                <Separator Style="{StaticResource ModernSeparator}"/>
+                                <MenuItem Header="Listeden ve diskten sil" Tag="🗑" Click="MenuDeleteFile_Click"/>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
 
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="Dosya Adı" Width="*">
+                            <DataGridTemplateColumn Header="Dosya Adı" Width="*" MinWidth="140" MaxWidth="900">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <Image Source="{Binding FileIcon}" Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding FileName}" VerticalAlignment="Center" FontWeight="SemiBold"
-                                                       Foreground="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
+                                                       Foreground="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"
+                                                       TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Boyut" Binding="{Binding FileSize}" Width="90"/>
-                            <DataGridTextColumn Header="Tür" Binding="{Binding FileType}" Width="80"/>
-                            <DataGridTextColumn Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="130"/>
+                            <DataGridTextColumn Header="Boyut" Binding="{Binding FileSize}" Width="100" MinWidth="72" MaxWidth="160">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Tür" Binding="{Binding FileType}" Width="80" MinWidth="56" MaxWidth="120">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="130" MinWidth="110" MaxWidth="200">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
                             <!-- Durum Sütunu Güncellemesi -->
-                            <DataGridTemplateColumn Header="Durum" Width="180">
+                            <DataGridTemplateColumn Header="Durum" Width="180" MinWidth="140" MaxWidth="320">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center">
                                             <!-- Tamamlandı veya Normal Durum -->
-                                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" 
-                           Foreground="#E0E0E0">
+                                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center"
+                                                       Foreground="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Visibility" Value="Visible"/>
