@@ -21,7 +21,7 @@ namespace DownloadMuck
 {
     public partial class MainWindow : Window
     {
-        private HttpListener? _httpListener;
+        private BrowserCaptureServer? _captureServer;
         private DownloadEngine? _currentEngine;
         public ObservableCollection<DownloadItem> DownloadList { get; set; } = new ObservableCollection<DownloadItem>();
         private ICollectionView? _downloadView;
@@ -64,7 +64,61 @@ namespace DownloadMuck
             HighlightCategoryButton(BtnCatAll);
             var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             TxtVersion.Text = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "";
-            StartLocalServer();
+            StartBrowserCaptureServer();
+        }
+
+        private void StartBrowserCaptureServer()
+        {
+            try
+            {
+                _captureServer?.Stop();
+                _captureServer = new BrowserCaptureServer((url, filename) =>
+                {
+                    Dispatcher.BeginInvoke(async () =>
+                    {
+                        try
+                        {
+                            TxtUrl.Text = url;
+                            await StartDownloadProcess(url, filename);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Capture download error: {ex.Message}");
+                        }
+                    });
+                });
+                _captureServer.Start();
+                SetCaptureStatus(true, null);
+            }
+            catch (Exception ex)
+            {
+                SetCaptureStatus(false, ex.Message);
+                MessageBox.Show(
+                    "Tarayıcı eklentisi bağlantı noktası açılamadı (127.0.0.1:6800).\n\n" +
+                    "Uygulama açıkken eklenti indirmeleri yakalanamaz.\n" +
+                    $"Detay: {ex.Message}",
+                    "Eklenti sunucusu",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+
+        private void SetCaptureStatus(bool online, string? error)
+        {
+            if (TxtCaptureStatus == null) return;
+
+            if (online)
+            {
+                TxtCaptureStatus.Text = "Eklenti: hazır";
+                TxtCaptureStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0xCB, 0x6B));
+                TxtCaptureStatus.ToolTip = "127.0.0.1:6800 dinleniyor";
+            }
+            else
+            {
+                TxtCaptureStatus.Text = "Eklenti: kapalı";
+                TxtCaptureStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35));
+                TxtCaptureStatus.ToolTip = error ?? "Yakalama sunucusu çalışmıyor";
+            }
         }
 
         private bool FilterByCategory(object obj)
@@ -240,59 +294,6 @@ namespace DownloadMuck
             catch { }
 
             return !string.IsNullOrEmpty(suggestedName) ? suggestedName : "downloaded_file.rar";
-        }
-
-        private async void StartLocalServer()
-        {
-            try
-            {
-                _httpListener = new HttpListener();
-                _httpListener.Prefixes.Add("http://localhost:6800/");
-                _httpListener.Start();
-
-                while (_httpListener.IsListening)
-                {
-                    HttpListenerContext context = await _httpListener.GetContextAsync();
-                    HttpListenerRequest request = context.Request;
-                    HttpListenerResponse response = context.Response;
-
-                    response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    response.Headers.Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-                    response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Accept");
-
-                    if (request.HttpMethod == "OPTIONS")
-                    {
-                        response.StatusCode = 200;
-                        response.Close();
-                        continue;
-                    }
-
-                    if (request.HttpMethod == "POST")
-                    {
-                        using StreamReader reader = new StreamReader(request.InputStream, request.ContentEncoding);
-                        string jsonString = await reader.ReadToEndAsync();
-
-                        using JsonDocument doc = JsonDocument.Parse(jsonString);
-                        string downloadUrl = doc.RootElement.GetProperty("url").GetString() ?? "";
-                        string filename = doc.RootElement.GetProperty("filename").GetString() ?? "";
-
-                        _ = Dispatcher.InvokeAsync(async () =>
-                        {
-                            TxtUrl.Text = downloadUrl;
-                            await StartDownloadProcess(downloadUrl, filename);
-                        });
-                    }
-
-                    byte[] buffer = Encoding.UTF8.GetBytes("OK");
-                    response.ContentLength64 = buffer.Length;
-                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                    response.OutputStream.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Sunucu hatası: {ex.Message}");
-            }
         }
 
         private async void BtnDownload_Click(object sender, RoutedEventArgs e)
@@ -712,7 +713,7 @@ namespace DownloadMuck
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
-            _httpListener?.Stop();
+            _captureServer?.Stop();
         }
     }
 }

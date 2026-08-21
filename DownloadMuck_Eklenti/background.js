@@ -1,5 +1,41 @@
+// DownloadMuck / MDM tarayici entegrasyonu
+// Onemli: Once masaustu uygulamasina ilet, BASARILI olursa tarayici indirmesini iptal et.
+
+const APP_ENDPOINTS = [
+  "http://127.0.0.1:6800/",
+  "http://localhost:6800/"
+];
+
+async function handoffToDesktop(url, filename) {
+  const payload = JSON.stringify({ url, filename });
+
+  for (const endpoint of APP_ENDPOINTS) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2500);
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        signal: controller.signal
+      });
+
+      clearTimeout(timer);
+
+      if (response.ok) {
+        return true;
+      }
+    } catch (err) {
+      console.warn("MDM handoff failed via", endpoint, err);
+    }
+  }
+
+  return false;
+}
+
 chrome.downloads.onCreated.addListener(async (downloadItem) => {
-  // Eklentinin fallback olarak yeniden başlattığı indirmeleri atla
+  // Eklentinin kendi baslattigi indirmeleri atla
   if (downloadItem.byExtensionId === chrome.runtime.id) {
     return;
   }
@@ -9,38 +45,44 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
     return;
   }
 
+  // Cerez / blob vb. desteklenmeyenler
+  if (url.startsWith("blob:") || url.startsWith("data:")) {
+    return;
+  }
+
   const fullPath = downloadItem.filename || "";
   const rawFileName = fullPath.split(/[/\\]/).pop() || "download";
 
-  // Tarayıcı native indirmesini hemen durdur ve listeden sil (iptal olarak görünmesin)
+  // Tarayici indirmesini gecici durdur (iptal etme) — app yoksa devam edebilsin
   try {
-    await chrome.downloads.cancel(downloadItem.id);
-  } catch (_) { /* zaten bitmiş olabilir */ }
+    await chrome.downloads.pause(downloadItem.id);
+  } catch (_) {
+    /* bazi indirmeler pause desteklemeyebilir */
+  }
 
+  const accepted = await handoffToDesktop(url, rawFileName);
+
+  if (accepted) {
+    // Masaustu uygulamasi aldi — tarayici indirmesini kaldir
+    try {
+      await chrome.downloads.cancel(downloadItem.id);
+    } catch (_) { /* ignore */ }
+
+    try {
+      await chrome.downloads.erase({ id: downloadItem.id });
+    } catch (_) { /* ignore */ }
+
+    console.log("MDM: indirme masaustu uygulamasina aktarildi:", rawFileName);
+    return;
+  }
+
+  // Uygulama kapali / ulasilamiyor — tarayici indirmesine devam et
+  console.warn("MDM: masaustu uygulamaya ulasilamadi, tarayici indirmesi surduruluyor.");
   try {
-    await chrome.downloads.erase({ id: downloadItem.id });
-  } catch (_) { /* yok say */ }
-
-  // İndirmeyi yalnızca DownloadMuck masaüstü uygulamasına aktar
-  try {
-    const response = await fetch("http://localhost:6800/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        url: url,
-        filename: rawFileName
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error("DownloadMuck HTTP " + response.status);
-    }
+    await chrome.downloads.resume(downloadItem.id);
   } catch (err) {
-    console.error("DownloadMuck'a bağlanılamadı, indirme tarayıcıya geri veriliyor:", err);
-
-    // Uygulama kapalıysa indirmeyi tarayıcıda yeniden başlat
+    // Resume olmazsa yeniden baslat
+    console.warn("MDM: resume basarisiz, yeniden baslatiliyor", err);
     try {
       await chrome.downloads.download({
         url: url,
@@ -48,7 +90,7 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
         saveAs: false
       });
     } catch (downloadErr) {
-      console.error("Tarayıcı indirmesi yeniden başlatılamadı:", downloadErr);
+      console.error("MDM: tarayici indirmesi yeniden baslatilamadi:", downloadErr);
     }
   }
 });

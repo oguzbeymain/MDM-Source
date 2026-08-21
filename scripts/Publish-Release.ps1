@@ -75,6 +75,15 @@ Write-Host "==> Publishing MDM.Updater..."
 dotnet publish $UpdaterCsproj @commonArgs
 if ($LASTEXITCODE -ne 0) { throw "Updater publish failed." }
 
+# Eklentiyi paketle
+$ExtSrc = Join-Path $ProjectRoot "DownloadMuck_Eklenti"
+$ExtDst = Join-Path $PublishDir "DownloadMuck_Eklenti"
+if (Test-Path $ExtSrc) {
+    if (Test-Path $ExtDst) { Remove-Item $ExtDst -Recurse -Force }
+    Copy-Item $ExtSrc $ExtDst -Recurse -Force
+    Write-Host "==> Extension copied into package"
+}
+
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
 Write-Host "==> Creating zip: $ZipPath"
 Compress-Archive -Path (Join-Path $PublishDir "*") -DestinationPath $ZipPath -Force
