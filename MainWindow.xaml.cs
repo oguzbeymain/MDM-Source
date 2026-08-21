@@ -201,6 +201,13 @@ namespace DownloadMuck
             DeleteSelectedItems();
         }
 
+        private void MenuRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            _downloadView?.Refresh();
+            DgDownloads.Items.Refresh();
+            UpdateTransportButtons();
+        }
+
         private void DeleteSelectedItems()
         {
             var selectedItems = DgDownloads.SelectedItems.Cast<DownloadItem>().ToList();
@@ -384,9 +391,19 @@ namespace DownloadMuck
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
                     if (engine.IsCancelled) return;
+                    if (!engine.IsDownloading) return;
                     if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) return;
+                    if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)) return;
+                    if (item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)) return;
 
                     item.ProgressValue = progress;
+                    if (progress >= 99.9)
+                    {
+                        // Tamamlanma StatusChanged ile gelecek; ara durumda %100'e takilma
+                        item.StatusText = "İndiriliyor %100";
+                        return;
+                    }
+
                     item.StatusText = $"İndiriliyor %{progress:F1}";
                     if (!item.IsDownloading)
                         item.Status = "İndiriliyor";
@@ -406,20 +423,25 @@ namespace DownloadMuck
                         item.ProgressValue = 0;
                         UpdateTransportButtons();
                     }
+                    else if (status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.Status = "Tamamlandı";
+                        item.StatusText = "";
+                        item.CurrentSpeed = "";
+                        item.IsDownloading = false;
+                        item.ProgressValue = 100;
+                        UpdateTransportButtons();
+                    }
                     else if (status.Contains('%'))
                     {
-                        if (!engine.IsCancelled)
+                        if (!engine.IsCancelled && engine.IsDownloading)
                             item.StatusText = status;
                     }
-                    else if (status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
-                             || status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)
-                             || status.Contains("Hata", StringComparison.OrdinalIgnoreCase))
+                    else if (status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
                     {
-                        item.Status = status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
-                            ? "Duraklatıldı"
-                            : status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)
-                                ? "Tamamlandı"
-                                : status;
+                        item.Status = "Duraklatıldı";
+                        item.StatusText = "";
+                        item.IsDownloading = false;
                         UpdateTransportButtons();
                     }
                     else if (!status.StartsWith("İndiriliyor", StringComparison.OrdinalIgnoreCase)

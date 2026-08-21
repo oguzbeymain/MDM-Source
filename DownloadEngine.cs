@@ -108,6 +108,9 @@ namespace DownloadMuck
                     _isInitialized = true;
                 }
 
+                if (_isInitialized && TryCompleteIfAlreadyDownloaded())
+                    return;
+
                 StatusChanged?.Invoke($"İndiriliyor... ({_threadCount} Paralel Kanal)");
                 await DownloadChunksAsync(_cts.Token);
             }
@@ -147,6 +150,34 @@ namespace DownloadMuck
                 IsDownloading = false;
                 throw;
             }
+        }
+
+        private bool TryCompleteIfAlreadyDownloaded()
+        {
+            if (_chunks == null || _totalSize <= 0) return false;
+
+            long downloaded = 0;
+            bool allDone = true;
+            foreach (var chunk in _chunks)
+            {
+                long written = Math.Max(0, chunk.CurrentOffset - chunk.Start);
+                long expected = chunk.End - chunk.Start + 1;
+                downloaded += Math.Min(written, expected);
+                if (chunk.CurrentOffset <= chunk.End)
+                    allDone = false;
+            }
+
+            _totalBytesDownloaded = downloaded;
+
+            if (!allDone && downloaded < _totalSize)
+                return false;
+
+            IsDownloading = false;
+            IsPaused = false;
+            ProgressChanged?.Invoke(100);
+            SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
+            StatusChanged?.Invoke("İndirme Tamamlandı!");
+            return true;
         }
 
         private void InitChunks(long totalSize)
@@ -254,6 +285,7 @@ namespace DownloadMuck
             if (!token.IsCancellationRequested)
             {
                 IsDownloading = false;
+                IsPaused = false;
                 ProgressChanged?.Invoke(100);
                 SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
                 StatusChanged?.Invoke("İndirme Tamamlandı!");
@@ -322,6 +354,7 @@ namespace DownloadMuck
             SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
             StatusChanged?.Invoke("İndirme Tamamlandı!");
             IsDownloading = false;
+            IsPaused = false;
         }
     }
 }

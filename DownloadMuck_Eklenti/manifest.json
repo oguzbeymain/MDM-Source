@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "DownloadMuck Integration",
+  "name": "MDM Integration",
   "version": "1.5",
-  "description": "DownloadMuck / MDM masaustu indirme yoneticisi entegrasyonu",
+  "description": "MuckDownloadManager (MDM) masaustu indirme yoneticisi entegrasyonu",
   "permissions": [
     "downloads",
     "downloads.shelf",
