@@ -2,7 +2,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace DownloadMuck
 {
@@ -15,19 +17,79 @@ namespace DownloadMuck
         private DownloadEngine? _engine;
         private bool _started;
 
+        public DownloadItem? BoundItem => _item;
+
         public DownloadSessionWindow(MainWindow host, string url, string fileName, string defaultFolder, string sizeLabel)
         {
             InitializeComponent();
             _host = host;
             _url = url;
             _fileName = fileName;
+            ApplyMeta(fileName, url, defaultFolder, sizeLabel);
+        }
 
+        /// <summary>Mevcut indirmeye bagli oturum (cift tik).</summary>
+        public DownloadSessionWindow(MainWindow host, DownloadItem item, DownloadEngine? engine, string url)
+        {
+            InitializeComponent();
+            _host = host;
+            _url = url;
+            _fileName = item.FileName;
+            _item = item;
+            _engine = engine;
+            _started = true;
+
+            string folder = Path.GetDirectoryName(item.FilePath) ?? "";
+            ApplyMeta(item.FileName, url, folder, item.FileSize);
+
+            TxtFolder.IsEnabled = false;
+            BtnBrowse.IsEnabled = false;
+            _item.PropertyChanged += ItemOnPropertyChanged;
+
+            if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
+            {
+                PanelActive.Visibility = Visibility.Collapsed;
+                PanelDone.Visibility = Visibility.Visible;
+            }
+            else if (engine != null && engine.IsPaused)
+            {
+                BtnStart.IsEnabled = true;
+                BtnStart.Content = "Devam Et";
+                BtnPause.IsEnabled = false;
+                BtnCancelDl.IsEnabled = true;
+            }
+            else if (item.IsDownloading || (engine != null && engine.IsDownloading))
+            {
+                BtnStart.IsEnabled = false;
+                BtnPause.IsEnabled = true;
+                BtnCancelDl.IsEnabled = true;
+            }
+            else
+            {
+                BtnStart.IsEnabled = false;
+                BtnPause.IsEnabled = false;
+                BtnCancelDl.IsEnabled = false;
+            }
+
+            SyncFromItem();
+        }
+
+        private void ApplyMeta(string fileName, string url, string folder, string sizeLabel)
+        {
             TxtUrl.Text = url;
             TxtFileName.Text = fileName;
             TxtFileType.Text = FileNameHelper.FormatTypeLabel(fileName);
-            TxtFolder.Text = defaultFolder;
-            TxtSize.Text = string.IsNullOrWhiteSpace(sizeLabel) ? "—" : sizeLabel;
+            TxtFolder.Text = folder;
+            TxtSize.Text = string.IsNullOrWhiteSpace(sizeLabel) || sizeLabel == "-" ? "—" : sizeLabel;
             ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
+        }
+
+        private void SessionChrome_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (sender is not Border border) return;
+            border.Clip = new System.Windows.Media.RectangleGeometry(
+                new Rect(0, 0, border.ActualWidth, border.ActualHeight),
+                14, 14);
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -76,6 +138,7 @@ namespace DownloadMuck
 
             _started = true;
             TxtFolder.IsEnabled = false;
+            BtnBrowse.IsEnabled = false;
             BtnStart.IsEnabled = false;
             BtnPause.IsEnabled = true;
             BtnCancelDl.IsEnabled = true;
@@ -85,6 +148,7 @@ namespace DownloadMuck
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder);
             _item = run.Item;
             _engine = run.Engine;
+            _host.RegisterSessionWindow(_item, this);
             _item.PropertyChanged += ItemOnPropertyChanged;
             SyncFromItem();
         }
@@ -111,7 +175,7 @@ namespace DownloadMuck
             {
                 TxtStatus.Text = "İptal edildi";
                 BtnPause.IsEnabled = false;
-                BtnCancelDl.IsEnabled = false;
+                BtnCancelDl.IsEnabled = true;
                 BtnStart.IsEnabled = false;
             }
             else if (_item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
@@ -120,6 +184,7 @@ namespace DownloadMuck
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Content = "Devam Et";
+                BtnCancelDl.IsEnabled = true;
             }
             else if (_item.IsDownloading)
             {
@@ -128,6 +193,7 @@ namespace DownloadMuck
                 BtnPause.Content = "Duraklat";
                 BtnStart.IsEnabled = false;
                 BtnStart.Content = "Başlat";
+                BtnCancelDl.IsEnabled = true;
             }
         }
 
@@ -143,12 +209,18 @@ namespace DownloadMuck
 
         private void BtnCancelDl_Click(object sender, RoutedEventArgs e)
         {
-            if (_engine == null || _item == null) return;
+            // Baslatilmadiysa sadece pencereyi kapat
+            if (!_started || _engine == null || _item == null)
+            {
+                Close();
+                return;
+            }
+
             _host.CancelFromSession(_item, _engine);
             TxtStatus.Text = "İptal edildi";
             BtnPause.IsEnabled = false;
-            BtnCancelDl.IsEnabled = false;
             BtnStart.IsEnabled = false;
+            Close();
         }
 
         private void BtnOpenFile_Click(object sender, RoutedEventArgs e)
@@ -191,7 +263,10 @@ namespace DownloadMuck
         protected override void OnClosed(EventArgs e)
         {
             if (_item != null)
+            {
                 _item.PropertyChanged -= ItemOnPropertyChanged;
+                _host.UnregisterSessionWindow(_item, this);
+            }
             base.OnClosed(e);
         }
     }

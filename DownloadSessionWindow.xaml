@@ -1,175 +1,424 @@
 <Window x:Class="DownloadMuck.DownloadSessionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="İndirme" Height="420" Width="480"
+        Title="İndirme" Height="300" Width="400"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ResizeMode="NoResize"
         FontFamily="Segoe UI" ShowInTaskbar="True"
-        Topmost="True">
+        Topmost="False" ShowActivated="True">
 
-    <Border Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1" CornerRadius="14" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="28" ShadowDepth="0" Opacity="0.55" Color="#000000"/>
-        </Border.Effect>
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="40"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+    <Grid Margin="8">
+        <!-- Golge (clip disinda) -->
+        <Border Background="#1B1B1B" CornerRadius="14" Opacity="0.01">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.55" Color="#000000"/>
+            </Border.Effect>
+        </Border>
 
-            <!-- Title -->
-            <Border Grid.Row="0" Background="#222222" CornerRadius="14,14,0,0"
-                    MouseLeftButtonDown="TitleBar_MouseDown">
-                <Grid Margin="14,0">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="6" Height="14" Background="#FF6B00" CornerRadius="2" Margin="0,0,8,0"/>
-                        <TextBlock Text="İndirme" FontWeight="SemiBold" FontSize="13" Foreground="#F0F0F0" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <Button HorizontalAlignment="Right" Width="28" Height="28" Content="✕"
-                            Background="Transparent" Foreground="#888" BorderThickness="0"
-                            Cursor="Hand" Click="BtnClose_Click" FontSize="12"/>
-                </Grid>
-            </Border>
+        <Border x:Name="SessionChrome" Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1"
+                CornerRadius="14" ClipToBounds="True" SizeChanged="SessionChrome_SizeChanged">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="34"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="18,14,18,8">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                        <Image x:Name="ImgIcon" Width="32" Height="32" Margin="0,0,12,0" VerticalAlignment="Top"/>
-                        <StackPanel>
-                            <TextBlock x:Name="TxtFileName" Text="dosya" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="#EEEEEE" TextWrapping="Wrap"/>
-                            <TextBlock x:Name="TxtFileType" Text="" FontSize="11" Foreground="#888888" Margin="0,4,0,0"/>
+                <Border Grid.Row="0" Background="#222222" CornerRadius="14,14,0,0" ClipToBounds="True"
+                        MouseLeftButtonDown="TitleBar_MouseDown">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Border Width="5" Height="12" Background="#FF6B00" CornerRadius="2" Margin="0,0,8,0"/>
+                            <TextBlock Text="İndirme" FontWeight="SemiBold" FontSize="12" Foreground="#F0F0F0" VerticalAlignment="Center"/>
                         </StackPanel>
-                    </StackPanel>
+                        <Button HorizontalAlignment="Right" Width="34" Height="34" Content="✕"
+                                Cursor="Hand" Click="BtnClose_Click" FontSize="11"
+                                Foreground="#888" BorderThickness="0" Background="Transparent">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#00000000" CornerRadius="0,13,0,0" ClipToBounds="True">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#E53935" Duration="0:0:0.15"/>
+                                                    <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
+                                                                    To="#FFFFFF" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#00000000" Duration="0:0:0.15"/>
+                                                    <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
+                                                                    To="#888888" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </Grid>
+                </Border>
 
-                    <TextBlock Text="Adres" FontSize="11" Foreground="#777" Margin="0,0,0,4"/>
-                    <TextBox x:Name="TxtUrl" IsReadOnly="True" TextWrapping="NoWrap"
-                             Background="#252525" Foreground="#BBBBBB" BorderBrush="#333" BorderThickness="1"
-                             Padding="8,6" Margin="0,0,0,12"/>
+                <StackPanel Grid.Row="1" Margin="12,8,12,4">
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="1.05*"/>
+                        </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Kayıt klasörü" FontSize="11" Foreground="#777" Margin="0,0,0,4"/>
-                    <Grid Margin="0,0,0,12">
+                        <Image x:Name="ImgIcon" Width="26" Height="26" Margin="0,2,8,0" VerticalAlignment="Top"/>
+
+                        <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                            <TextBlock x:Name="TxtFileName" Text="dosya" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="#EEEEEE" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"/>
+                            <TextBlock x:Name="TxtFileType" Text="" FontSize="10" Foreground="#888888" Margin="0,2,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" VerticalAlignment="Top">
+                            <TextBlock Text="Adres" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
+                            <TextBox x:Name="TxtUrl" IsReadOnly="True" TextWrapping="NoWrap"
+                                     FontSize="10" Height="26" VerticalContentAlignment="Center"
+                                     Background="#252525" Foreground="#999999" BorderBrush="#333" BorderThickness="1">
+                                <TextBox.Template>
+                                    <ControlTemplate TargetType="TextBox">
+                                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                                            <ScrollViewer x:Name="PART_ContentHost" Margin="6,0" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </TextBox.Template>
+                            </TextBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Kayıt klasörü" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
+                    <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBox x:Name="TxtFolder" Background="#252525" Foreground="White"
-                                 BorderBrush="#333" BorderThickness="1" Padding="8,6"/>
-                        <Button Grid.Column="1" Content="Gözat" Margin="8,0,0,0" Padding="12,0" Height="30"
-                                Cursor="Hand" Click="BtnBrowse_Click" Background="#2D2D2D" Foreground="#EEE" BorderThickness="0"/>
+                        <TextBox x:Name="TxtFolder" FontSize="11" Height="28" VerticalContentAlignment="Center"
+                                 Background="#252525" Foreground="White" BorderBrush="#333" BorderThickness="1">
+                            <TextBox.Template>
+                                <ControlTemplate TargetType="TextBox">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                                        <ScrollViewer x:Name="PART_ContentHost" Margin="8,0" VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </TextBox.Template>
+                        </TextBox>
+                        <Button Grid.Column="1" x:Name="BtnBrowse" Content="Gözat" Margin="6,0,0,0" Width="68" Height="28"
+                                Cursor="Hand" Click="BtnBrowse_Click" FontSize="11" FontWeight="SemiBold"
+                                Background="#2D2D2D" Foreground="#E0E0E0" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#2D2D2D" CornerRadius="8">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#3D3D3D" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#2D2D2D" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                     </Grid>
 
-                    <Grid Margin="0,0,0,14">
+                    <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Boyut" FontSize="11" Foreground="#777"/>
-                            <TextBlock x:Name="TxtSize" Text="—" FontSize="13" FontWeight="SemiBold" Foreground="#DDD" Margin="0,2,0,0"/>
+                            <TextBlock Text="Boyut" FontSize="9" Foreground="#666"/>
+                            <TextBlock x:Name="TxtSize" Text="—" FontSize="12" FontWeight="SemiBold" Foreground="#DDD" Margin="0,1,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="Hız" FontSize="11" Foreground="#777"/>
-                            <TextBlock x:Name="TxtSpeed" Text="—" FontSize="13" FontWeight="SemiBold" Foreground="#DDD" Margin="0,2,0,0"/>
+                            <TextBlock Text="Hız" FontSize="9" Foreground="#666"/>
+                            <TextBlock x:Name="TxtSpeed" Text="—" FontSize="12" FontWeight="SemiBold" Foreground="#DDD" Margin="0,1,0,0"/>
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock x:Name="TxtStatus" Text="Hazır — başlatmak için Başlat'a bas" FontSize="12" Foreground="#AAAAAA" Margin="0,0,0,8"/>
-                    <ProgressBar x:Name="BarProgress" Height="8" Minimum="0" Maximum="100" Value="0"
-                                 Background="#2A2A2A" Foreground="#FF6B00" BorderThickness="0"/>
-                    <TextBlock x:Name="TxtPercent" Text="%0" FontSize="11" Foreground="#888" Margin="0,6,0,0" HorizontalAlignment="Right"/>
-                </StackPanel>
-            </ScrollViewer>
-
-            <!-- Buttons -->
-            <StackPanel Grid.Row="2" Margin="18,4,18,16">
-                <!-- Ready / downloading controls -->
-                <StackPanel x:Name="PanelActive" Orientation="Horizontal" HorizontalAlignment="Right">
-        <Button x:Name="BtnStart" Content="Başlat" Width="96" Height="34" Margin="0,0,8,0"
-                            Cursor="Hand" Click="BtnStart_Click" FontWeight="SemiBold"
-                            Background="#FF6B00" Foreground="White" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="10,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
+                    <TextBlock x:Name="TxtStatus" Text="Hazır — Başlat'a bas" FontSize="11" Foreground="#AAAAAA" Margin="0,0,0,5"/>
+                    <ProgressBar x:Name="BarProgress" Height="7" Minimum="0" Maximum="100" Value="0"
+                                 Background="#2A2A2A" Foreground="#FF6B00" BorderThickness="0">
+                        <ProgressBar.Template>
+                            <ControlTemplate TargetType="ProgressBar">
+                                <Grid>
+                                    <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                                    <Border x:Name="PART_Track"/>
+                                    <Grid x:Name="PART_Indicator" ClipToBounds="True" HorizontalAlignment="Left">
+                                        <Border Background="{TemplateBinding Foreground}" CornerRadius="4"/>
+                                    </Grid>
+                                </Grid>
                             </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                    <Button x:Name="BtnPause" Content="Duraklat" Width="96" Height="34" Margin="0,0,8,0"
-                            Cursor="Hand" Click="BtnPause_Click" IsEnabled="False" FontWeight="SemiBold"
-                            Background="#2D2D2D" Foreground="#EEE" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="10,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                    <Button x:Name="BtnCancelDl" Content="İptal" Width="88" Height="34"
-                            Cursor="Hand" Click="BtnCancelDl_Click" IsEnabled="False" FontWeight="SemiBold"
-                            Background="#3A1C1C" Foreground="#FF6B6B" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="10,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
+                        </ProgressBar.Template>
+                    </ProgressBar>
+                    <TextBlock x:Name="TxtPercent" Text="%0" FontSize="10" Foreground="#777" Margin="0,3,0,0" HorizontalAlignment="Right"/>
                 </StackPanel>
 
-                <!-- Completed controls -->
-                <StackPanel x:Name="PanelDone" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Collapsed">
-                    <Button Content="Dosyayı aç" Width="100" Height="34" Margin="0,0,8,0"
-                            Cursor="Hand" Click="BtnOpenFile_Click" FontWeight="SemiBold"
-                            Background="#FF6B00" Foreground="White" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="8,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                    <Button Content="Klasörü aç" Width="100" Height="34" Margin="0,0,8,0"
-                            Cursor="Hand" Click="BtnOpenFolder_Click" FontWeight="SemiBold"
-                            Background="#2D2D2D" Foreground="#EEE" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="8,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                    <Button Content="Sil" Width="72" Height="34" Margin="0,0,8,0"
-                            Cursor="Hand" Click="BtnDelete_Click" FontWeight="SemiBold"
-                            Background="#3A1C1C" Foreground="#FF6B6B" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="8,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
-                    <Button Content="Kapat" Width="72" Height="34"
-                            Cursor="Hand" Click="BtnClose_Click" FontWeight="SemiBold"
-                            Background="#2D2D2D" Foreground="#EEE" BorderThickness="0">
-                        <Button.Template>
-                            <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="8,0">
-                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                            </ControlTemplate>
-                        </Button.Template>
-                    </Button>
+                <StackPanel Grid.Row="2" Margin="12,2,12,10">
+                    <StackPanel x:Name="PanelActive" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="BtnStart" Content="Başlat" Width="84" Height="30" Margin="0,0,6,0"
+                                Cursor="Hand" Click="BtnStart_Click" FontWeight="SemiBold" FontSize="12"
+                                Foreground="White" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#FF6B00" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="bd" Property="Background" Value="#553311"/>
+                                            <Setter Property="Foreground" Value="#888"/>
+                                        </Trigger>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#FF8533" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#FF6B00" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button x:Name="BtnPause" Content="Duraklat" Width="84" Height="30" Margin="0,0,6,0"
+                                Cursor="Hand" Click="BtnPause_Click" IsEnabled="False" FontWeight="SemiBold" FontSize="12"
+                                Foreground="#EEE" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#2D2D2D" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="bd" Property="Opacity" Value="0.55"/>
+                                            <Setter Property="Foreground" Value="#777"/>
+                                        </Trigger>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#404040" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#2D2D2D" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button x:Name="BtnCancelDl" Content="İptal" Width="76" Height="30"
+                                Cursor="Hand" Click="BtnCancelDl_Click" IsEnabled="True" FontWeight="SemiBold" FontSize="12"
+                                Foreground="#FF6B6B" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#3A1C1C" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#5A2828" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#3A1C1C" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PanelDone" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Collapsed">
+                        <Button Content="Dosyayı aç" Width="88" Height="30" Margin="0,0,6,0"
+                                Cursor="Hand" Click="BtnOpenFile_Click" FontWeight="SemiBold" FontSize="12"
+                                Background="#FF6B00" Foreground="White" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#FF6B00" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#FF8533" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#FF6B00" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Content="Klasör" Width="70" Height="30" Margin="0,0,6,0"
+                                Cursor="Hand" Click="BtnOpenFolder_Click" FontWeight="SemiBold" FontSize="12"
+                                Foreground="#EEE" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#2D2D2D" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#404040" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#2D2D2D" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Content="Sil" Width="60" Height="30" Margin="0,0,6,0"
+                                Cursor="Hand" Click="BtnDelete_Click" FontWeight="SemiBold" FontSize="12"
+                                Foreground="#FF6B6B" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#3A1C1C" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#5A2828" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#3A1C1C" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Content="Kapat" Width="60" Height="30"
+                                Cursor="Hand" Click="BtnClose_Click" FontWeight="SemiBold" FontSize="12"
+                                Foreground="#EEE" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="#2D2D2D" CornerRadius="9">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <EventTrigger RoutedEvent="MouseEnter">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#404040" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                        <EventTrigger RoutedEvent="MouseLeave">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <ColorAnimation Storyboard.TargetName="bd"
+                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                    To="#2D2D2D" Duration="0:0:0.15"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
-        </Grid>
-    </Border>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

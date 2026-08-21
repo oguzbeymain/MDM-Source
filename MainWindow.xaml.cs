@@ -23,6 +23,8 @@ namespace DownloadMuck
     {
         private BrowserCaptureServer? _captureServer;
         private readonly Dictionary<DownloadItem, DownloadEngine> _engines = new();
+        private readonly Dictionary<DownloadItem, DownloadSessionWindow> _sessionWindows = new();
+        private readonly Dictionary<DownloadItem, string> _itemUrls = new();
         public ObservableCollection<DownloadItem> DownloadList { get; set; } = new ObservableCollection<DownloadItem>();
         private ICollectionView? _downloadView;
 
@@ -134,6 +136,14 @@ namespace DownloadMuck
             }
         }
 
+        private void ListPanelBorder_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (sender is not Border border) return;
+            border.Clip = new RectangleGeometry(
+                new Rect(0, 0, border.ActualWidth, border.ActualHeight),
+                14, 14);
+        }
+
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Left) DragMove();
@@ -147,12 +157,21 @@ namespace DownloadMuck
             {
                 WindowState = WindowState.Normal;
                 BtnMaximize.Content = "☐";
+                RootChrome.CornerRadius = new CornerRadius(16);
             }
             else
             {
                 WindowState = WindowState.Maximized;
                 BtnMaximize.Content = "❐";
+                RootChrome.CornerRadius = new CornerRadius(0);
             }
+        }
+
+        private void BtnSettings_Click(object sender, RoutedEventArgs e)
+        {
+            TxtDefaultFolder.Focus();
+            TxtDefaultFolder.SelectAll();
+            BtnBrowseFolder_Click(sender, e);
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
@@ -360,8 +379,44 @@ namespace DownloadMuck
 
             var session = new DownloadSessionWindow(this, url, solvedFileName, defaultFolder, sizeHint)
             {
-                Owner = this
+                Owner = null,
+                Topmost = false,
+                ShowInTaskbar = true
             };
+            session.Show();
+        }
+
+        public void RegisterSessionWindow(DownloadItem item, DownloadSessionWindow window)
+        {
+            _sessionWindows[item] = window;
+        }
+
+        public void UnregisterSessionWindow(DownloadItem item, DownloadSessionWindow window)
+        {
+            if (_sessionWindows.TryGetValue(item, out var current) && ReferenceEquals(current, window))
+                _sessionWindows.Remove(item);
+        }
+
+        public void ShowSessionForItem(DownloadItem item)
+        {
+            if (_sessionWindows.TryGetValue(item, out var existing))
+            {
+                if (!existing.IsVisible) existing.Show();
+                existing.Activate();
+                return;
+            }
+
+            _itemUrls.TryGetValue(item, out string? url);
+            url ??= "";
+            _engines.TryGetValue(item, out var engine);
+
+            var session = new DownloadSessionWindow(this, item, engine, url)
+            {
+                Owner = null,
+                Topmost = false,
+                ShowInTaskbar = true
+            };
+            _sessionWindows[item] = session;
             session.Show();
         }
 
@@ -409,6 +464,7 @@ namespace DownloadMuck
             };
 
             DownloadList.Insert(0, item);
+            _itemUrls[item] = url;
 
             int activeCount = Math.Max(1, _engines.Count + 1);
             int threadCount = activeCount >= 3 ? 4 : 8;
@@ -469,6 +525,8 @@ namespace DownloadMuck
             catch { /* ignore */ }
 
             DownloadList.Remove(item);
+            _itemUrls.Remove(item);
+            _sessionWindows.Remove(item);
             UpdateTransportButtons();
         }
 
@@ -776,16 +834,27 @@ namespace DownloadMuck
 
         private void DgDownloads_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (DgDownloads.SelectedItem is DownloadItem selectedItem)
+            if (DgDownloads.SelectedItem is not DownloadItem selectedItem)
+                return;
+
+            // Indirme / duraklatma / yeni tamamlanan: oturum penceresini ac
+            if (selectedItem.IsDownloading
+                || selectedItem.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
+                || selectedItem.Status.Contains("İndiriliyor", StringComparison.OrdinalIgnoreCase)
+                || _engines.ContainsKey(selectedItem)
+                || _sessionWindows.ContainsKey(selectedItem))
             {
-                if (File.Exists(selectedItem.FilePath))
-                {
-                    Process.Start(new ProcessStartInfo(selectedItem.FilePath) { UseShellExecute = true });
-                }
-                else
-                {
-                    MessageBox.Show("Dosya belirtilen konumda bulunamadı!", "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                ShowSessionForItem(selectedItem);
+                return;
+            }
+
+            if (File.Exists(selectedItem.FilePath))
+            {
+                Process.Start(new ProcessStartInfo(selectedItem.FilePath) { UseShellExecute = true });
+            }
+            else
+            {
+                MessageBox.Show("Dosya belirtilen konumda bulunamadı!", "Hata", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
