@@ -93,13 +93,8 @@ namespace DownloadMuck
             catch (Exception ex)
             {
                 SetCaptureStatus(false, ex.Message);
-                MessageBox.Show(
-                    "Tarayıcı eklentisi bağlantı noktası açılamadı (127.0.0.1:6800).\n\n" +
-                    "Uygulama açıkken eklenti indirmeleri yakalanamaz.\n" +
-                    $"Detay: {ex.Message}",
-                    "Eklenti sunucusu",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                // Sessizce durum cubugunda goster; korkutucu popup sadece gercekten hic port yoksa
+                Debug.WriteLine($"Capture server failed: {ex.Message}");
             }
         }
 
@@ -107,11 +102,11 @@ namespace DownloadMuck
         {
             if (TxtCaptureStatus == null) return;
 
-            if (online)
+            if (online && _captureServer != null)
             {
-                TxtCaptureStatus.Text = "Eklenti: hazır";
+                TxtCaptureStatus.Text = $"Eklenti: hazır (:{_captureServer.ActivePort})";
                 TxtCaptureStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0xCB, 0x6B));
-                TxtCaptureStatus.ToolTip = "127.0.0.1:6800 dinleniyor";
+                TxtCaptureStatus.ToolTip = $"127.0.0.1:{_captureServer.ActivePort} dinleniyor";
             }
             else
             {

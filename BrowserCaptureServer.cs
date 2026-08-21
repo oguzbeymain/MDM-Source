@@ -9,12 +9,13 @@ using System.Threading;
 namespace DownloadMuck
 {
     /// <summary>
-    /// Tarayici eklentisi icin 127.0.0.1:6800 uzerinde hafif HTTP sunucu.
-    /// HttpListener/URL ACL gerektirmez — arkadas makinelerinde de calisir.
+    /// Tarayici eklentisi icin 127.0.0.1 uzerinde hafif HTTP sunucu.
+    /// Windows excluded-port / WSAEACCES icin birden fazla port dener.
     /// </summary>
     public sealed class BrowserCaptureServer : IDisposable
     {
-        public const int Port = 6800;
+        // 6800 Hyper-V / Windows tarafindan sikca engellenir; once daha guvenli portlar
+        public static readonly int[] CandidatePorts = { 18680, 18681, 18682, 18700, 27182, 38472, 6800 };
 
         private readonly Action<string, string> _onDownloadRequested;
         private TcpListener? _listener;
@@ -22,6 +23,7 @@ namespace DownloadMuck
         private Task? _loopTask;
 
         public bool IsRunning { get; private set; }
+        public int ActivePort { get; private set; }
         public string? LastError { get; private set; }
 
         public BrowserCaptureServer(Action<string, string> onDownloadRequested)
@@ -33,23 +35,43 @@ namespace DownloadMuck
         {
             if (IsRunning) return;
 
-            try
+            var errors = new List<string>();
+
+            foreach (int port in CandidatePorts)
             {
-                _cts = new CancellationTokenSource();
-                _listener = new TcpListener(IPAddress.Loopback, Port);
-                _listener.Start();
-                IsRunning = true;
-                LastError = null;
-                _loopTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
-                Debug.WriteLine($"BrowserCaptureServer listening on 127.0.0.1:{Port}");
+                try
+                {
+                    _cts = new CancellationTokenSource();
+                    var listener = new TcpListener(IPAddress.Loopback, port);
+                    listener.Start();
+
+                    _listener = listener;
+                    ActivePort = port;
+                    IsRunning = true;
+                    LastError = null;
+                    _loopTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
+
+                    TryWritePortFile(port);
+                    Debug.WriteLine($"BrowserCaptureServer listening on 127.0.0.1:{port}");
+                    return;
+                }
+                catch (SocketException ex)
+                {
+                    errors.Add($"{port}: {ex.Message}");
+                    Debug.WriteLine($"Port {port} failed: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{port}: {ex.Message}");
+                    Debug.WriteLine($"Port {port} failed: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                IsRunning = false;
-                LastError = ex.Message;
-                Debug.WriteLine($"BrowserCaptureServer start failed: {ex.Message}");
-                throw;
-            }
+
+            IsRunning = false;
+            ActivePort = 0;
+            LastError = string.Join(" | ", errors);
+            throw new InvalidOperationException(
+                "Hicbir eklenti portu acilamadi. " + LastError);
         }
 
         public void Stop()
@@ -65,6 +87,22 @@ namespace DownloadMuck
         }
 
         public void Dispose() => Stop();
+
+        private static void TryWritePortFile(int port)
+        {
+            try
+            {
+                string dir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MDM");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(
+                    Path.Combine(dir, "capture_port.txt"),
+                    port.ToString(),
+                    Encoding.ASCII);
+            }
+            catch { /* ignore */ }
+        }
 
         private async Task AcceptLoopAsync(CancellationToken token)
         {
@@ -95,9 +133,6 @@ namespace DownloadMuck
                 try
                 {
                     using NetworkStream stream = client.GetStream();
-                    stream.ReadTimeout = 5000;
-                    stream.WriteTimeout = 5000;
-
                     using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
                     string? requestLine = await reader.ReadLineAsync();
                     if (string.IsNullOrWhiteSpace(requestLine))
@@ -115,9 +150,7 @@ namespace DownloadMuck
                         if (header == null || header.Length == 0) break;
 
                         if (header.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                        {
                             _ = int.TryParse(header.Substring("Content-Length:".Length).Trim(), out contentLength);
-                        }
                     }
 
                     if (method == "OPTIONS")
@@ -128,7 +161,7 @@ namespace DownloadMuck
 
                     if (method == "GET")
                     {
-                        await WriteResponseAsync(stream, 200, "MDM capture ready");
+                        await WriteResponseAsync(stream, 200, $"MDM capture ready on {ActivePort}");
                         return;
                     }
 
