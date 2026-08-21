@@ -5,10 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>1.0.10</Version>
-    <AssemblyVersion>1.0.10.0</AssemblyVersion>
-    <FileVersion>1.0.10.0</FileVersion>
-    <InformationalVersion>1.0.10</InformationalVersion>
+    <Version>1.0.19</Version>
+    <AssemblyVersion>1.0.19.0</AssemblyVersion>
+    <FileVersion>1.0.19.0</FileVersion>
+    <InformationalVersion>1.0.19</InformationalVersion>
     <Product>MDM Updater</Product>
     <AssemblyTitle>MDM.Updater</AssemblyTitle>
     <RootNamespace>MDM.Updater</RootNamespace>
