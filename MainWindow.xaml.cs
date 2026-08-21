@@ -345,24 +345,59 @@ namespace DownloadMuck
 
         private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true)
         {
-            string saveFolder = TxtDefaultFolder.Text.Trim();
-
             if (string.IsNullOrEmpty(url) || !url.StartsWith("http"))
             {
                 MessageBox.Show("Lütfen geçerli bir indirme bağlantısı girin!", "Uyarı", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (!Directory.Exists(saveFolder))
-            {
-                Directory.CreateDirectory(saveFolder);
-            }
+            string defaultFolder = TxtDefaultFolder.Text.Trim();
+            if (string.IsNullOrWhiteSpace(defaultFolder))
+                defaultFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 
-            // Dosya adi cozumunu await ile yap; HTTP I/O UI'yi bloklamaz
             string solvedFileName = await ResolveFileNameAsync(url, incomingFilename, mimeHint);
-            string savePath = GetUniqueFilePath(saveFolder, solvedFileName);
+            string sizeHint = await ProbeContentLengthLabelAsync(url);
 
+            var session = new DownloadSessionWindow(this, url, solvedFileName, defaultFolder, sizeHint)
+            {
+                Owner = this
+            };
+            session.Show();
+        }
+
+        private async Task<string> ProbeContentLengthLabelAsync(string url)
+        {
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                client.DefaultRequestHeaders.TryAddWithoutValidation(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+                using var head = new HttpRequestMessage(HttpMethod.Head, url);
+                using var response = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
+                long? len = response.Content.Headers.ContentLength;
+                if (len.HasValue && len.Value > 0)
+                    return FormatFileSize(len.Value);
+            }
+            catch { /* ignore */ }
+            return "—";
+        }
+
+        public sealed class DownloadRun
+        {
+            public required DownloadItem Item { get; init; }
+            public required DownloadEngine Engine { get; init; }
+        }
+
+        public DownloadRun BeginDownloadFromSession(string url, string fileName, string folder)
+        {
+            if (!Directory.Exists(folder))
+                Directory.CreateDirectory(folder);
+
+            string savePath = GetUniqueFilePath(folder, fileName);
             string finalFileName = Path.GetFileName(savePath);
+
             var item = new DownloadItem
             {
                 FileName = finalFileName,
@@ -380,6 +415,65 @@ namespace DownloadMuck
             var engine = new DownloadEngine(url, savePath, threadCount: threadCount);
             _engines[item] = engine;
 
+            WireEngineEvents(item, engine);
+            UpdateTransportButtons();
+
+            _ = RunEngineAsync(item, engine);
+            return new DownloadRun { Item = item, Engine = engine };
+        }
+
+        public void PauseFromSession(DownloadItem item, DownloadEngine engine)
+        {
+            if (engine.IsDownloading && !engine.IsPaused)
+            {
+                engine.Pause();
+                item.Status = "Duraklatıldı";
+                item.IsDownloading = false;
+                item.CurrentSpeed = "";
+                item.StatusText = "";
+                UpdateTransportButtons();
+            }
+        }
+
+        public async Task ResumeFromSessionAsync(DownloadItem item, DownloadEngine engine)
+        {
+            item.Status = "İndiriliyor";
+            item.IsDownloading = true;
+            await RunEngineAsync(item, engine);
+        }
+
+        public void CancelFromSession(DownloadItem item, DownloadEngine engine)
+        {
+            item.Status = "İptal Edildi";
+            item.StatusText = "";
+            item.CurrentSpeed = "";
+            item.IsDownloading = false;
+            item.ProgressValue = 0;
+            engine.Cancel();
+            UpdateTransportButtons();
+        }
+
+        public void DeleteItemFromSession(DownloadItem item)
+        {
+            if (_engines.TryGetValue(item, out var engine))
+            {
+                engine.Cancel();
+                _engines.Remove(item);
+            }
+
+            try
+            {
+                if (File.Exists(item.FilePath))
+                    File.Delete(item.FilePath);
+            }
+            catch { /* ignore */ }
+
+            DownloadList.Remove(item);
+            UpdateTransportButtons();
+        }
+
+        private void WireEngineEvents(DownloadItem item, DownloadEngine engine)
+        {
             engine.TotalSizeKnown += (totalBytes) =>
             {
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
@@ -399,7 +493,6 @@ namespace DownloadMuck
                     item.ProgressValue = progress;
                     if (progress >= 99.9)
                     {
-                        // Tamamlanma StatusChanged ile gelecek; ara durumda %100'e takilma
                         item.StatusText = "İndiriliyor %100";
                         return;
                     }
@@ -464,12 +557,10 @@ namespace DownloadMuck
                     item.CurrentSpeed = speed;
                 });
             };
+        }
 
-            if (selectItem)
-                DgDownloads.SelectedItem = item;
-
-            UpdateTransportButtons();
-
+        private async Task RunEngineAsync(DownloadItem item, DownloadEngine engine)
+        {
             try
             {
                 await engine.StartOrResumeDownloadAsync().ConfigureAwait(true);
@@ -481,7 +572,6 @@ namespace DownloadMuck
             }
             finally
             {
-                // Duraklatildiysa engine listede kalsin; bitis/iptalde temizle
                 if (engine.IsPaused && !engine.IsCancelled)
                 {
                     item.Status = "Duraklatıldı";
