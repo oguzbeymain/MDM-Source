@@ -14,6 +14,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -33,39 +34,77 @@ namespace DownloadMuck
         private bool _marqueeActive;
         private Point _marqueeStart;
         private HashSet<DownloadItem>? _marqueeCtrlBase;
+        private string _defaultFolder = "";
         private string _currentCategory = "All";
-
-        private static readonly HashSet<string> DocumentExts = new(StringComparer.OrdinalIgnoreCase)
-            { "pdf", "doc", "docx", "txt", "rtf", "odt", "xls", "xlsx", "ppt", "pptx", "csv", "md" };
-        private static readonly HashSet<string> VideoExts = new(StringComparer.OrdinalIgnoreCase)
-            { "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "mpeg", "mpg" };
-        private static readonly HashSet<string> AudioExts = new(StringComparer.OrdinalIgnoreCase)
-            { "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus" };
-        private static readonly HashSet<string> ArchiveExts = new(StringComparer.OrdinalIgnoreCase)
-            { "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "cab" };
-        private static readonly HashSet<string> AppExts = new(StringComparer.OrdinalIgnoreCase)
-            { "exe", "msi", "apk", "bat", "cmd", "msix", "appx", "dmg" };
-
-        private readonly SolidColorBrush _catSelectedBg = new(Color.FromRgb(0x25, 0x1A, 0x12));
-        private readonly SolidColorBrush _catSelectedFg = new(Color.FromRgb(0xFF, 0x6B, 0x00));
-        private readonly SolidColorBrush _catNormalBg = Brushes.Transparent;
-        private readonly SolidColorBrush _catNormalFg = new(Color.FromRgb(0xAA, 0xAA, 0xAA));
+        private string _searchText = "";
+        public ObservableCollection<CategoryItem> Categories { get; private set; } = CategoryStore.CreateDefaults();
+        public ObservableCollection<CategoryItem> VisibleCategories { get; } = new();
+        private Point _categoryDragStart;
+        private CategoryItem? _categoryDragItem;
+        private bool _isPseudoMaximized;
+        private Rect _restoreBounds;
+        private bool _catMarqueeArmed;
+        private bool _catMarqueeActive;
+        private Point _catMarqueeStart;
+        private HashSet<CategoryItem>? _catMarqueeCtrlBase;
+        private bool _suppressCategorySelection;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            string defaultDownloadsFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            TxtDefaultFolder.Text = defaultDownloadsFolder;
+            _defaultFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            Categories = CategoryStore.Load();
+            RebuildVisibleCategories();
+            LstCategories.ItemsSource = VisibleCategories;
 
             _downloadView = CollectionViewSource.GetDefaultView(DownloadList);
             _downloadView.Filter = FilterByCategory;
             DgDownloads.ItemsSource = _downloadView;
+            DgDownloads.GiveFeedback += DgDownloads_GiveFeedback;
+            DgDownloads.PreviewGiveFeedback += DgDownloads_GiveFeedback;
+            DgDownloads.LayoutUpdated += DgDownloads_LayoutUpdated;
 
-            HighlightCategoryButton(BtnCatAll);
+            _currentCategory = "All";
+            HighlightAllDownloadsButton(true);
             var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             TxtVersion.Text = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "";
             StartBrowserCaptureServer();
+        }
+
+        private void RebuildVisibleCategories()
+        {
+            var selectedId = (LstCategories?.SelectedItem as CategoryItem)?.Id;
+            _suppressCategorySelection = true;
+            try
+            {
+                VisibleCategories.Clear();
+                foreach (var root in Categories)
+                {
+                    if (root.Id == "All") continue; // ustte ayri buton
+                    AppendVisible(root);
+                }
+
+                if (selectedId != null && selectedId != "All")
+                {
+                    var match = VisibleCategories.FirstOrDefault(c => c.Id == selectedId);
+                    if (match != null) LstCategories.SelectedItem = match;
+                }
+            }
+            finally
+            {
+                _suppressCategorySelection = false;
+            }
+        }
+
+        private void AppendVisible(CategoryItem item)
+        {
+            VisibleCategories.Add(item);
+            if (item.IsExpanded)
+            {
+                foreach (var child in item.Children)
+                    AppendVisible(child);
+            }
         }
 
         private void StartBrowserCaptureServer()
@@ -79,7 +118,6 @@ namespace DownloadMuck
                     {
                         try
                         {
-                            TxtUrl.Text = url;
                             await StartDownloadProcess(url, filename, mime, selectItem: false);
                         }
                         catch (Exception ex)
@@ -99,40 +137,690 @@ namespace DownloadMuck
         private bool FilterByCategory(object obj)
         {
             if (obj is not DownloadItem item) return false;
+
+            if (!string.IsNullOrWhiteSpace(_searchText))
+            {
+                if (item.FileName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) != true
+                    && item.FileType?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) != true)
+                    return false;
+            }
+
             if (_currentCategory == "All") return true;
 
-            string ext = (item.FileType ?? "").Trim().TrimStart('.');
-            return _currentCategory switch
+            var cat = CategoryStore.FindById(Categories, _currentCategory);
+            if (cat == null) return true;
+
+            var treeIds = new HashSet<string>(cat.Flatten().Select(c => c.Id), StringComparer.OrdinalIgnoreCase);
+            string ext = Path.GetExtension(item.FileName)?.TrimStart('.') ?? "";
+
+            // Acik atama
+            if (!string.IsNullOrEmpty(item.CategoryId) && item.CategoryId != "All")
             {
-                "Documents" => DocumentExts.Contains(ext),
-                "Videos" => VideoExts.Contains(ext),
-                "Audio" => AudioExts.Contains(ext),
-                "Archives" => ArchiveExts.Contains(ext),
-                "Apps" => AppExts.Contains(ext),
-                _ => true
-            };
+                if (treeIds.Contains(item.CategoryId)) return true;
+            }
+
+            // Uzanti kurallari (secili kategori + altlar)
+            foreach (var node in cat.Flatten())
+            {
+                if (node.Extensions is { Count: > 0 } && node.Extensions.Contains(ext))
+                    return true;
+            }
+
+            return false;
         }
 
-        private void Category_Click(object sender, RoutedEventArgs e)
+        private void LstCategories_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is not Button btn || btn.Tag is not string category)
+            if (_suppressCategorySelection) return;
+            try
+            {
+                if (LstCategories.SelectedItem is not CategoryItem cat) return;
+                _currentCategory = cat.Id;
+                HighlightAllDownloadsButton(false);
+                // Secim degisirken DataGrid ile cakismasin
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        _downloadView?.Refresh();
+                        DgDownloads.SelectedItems.Clear();
+                    }
+                    catch (Exception ex) { Debug.WriteLine($"Category filter refresh: {ex.Message}"); }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LstCategories_SelectionChanged: {ex}");
+            }
+        }
+
+        private void BtnAllDownloads_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _currentCategory = "All";
+                _suppressCategorySelection = true;
+                try { LstCategories.SelectedItems.Clear(); }
+                finally { _suppressCategorySelection = false; }
+                HighlightAllDownloadsButton(true);
+                Dispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        _downloadView?.Refresh();
+                        DgDownloads.SelectedItems.Clear();
+                    }
+                    catch (Exception ex) { Debug.WriteLine($"All downloads refresh: {ex.Message}"); }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"BtnAllDownloads_Click: {ex}");
+            }
+        }
+
+        private void HighlightAllDownloadsButton(bool selected)
+        {
+            BtnAllDownloads.Opacity = selected ? 1 : 0.82;
+            BtnAllDownloads.ApplyTemplate();
+            if (BtnAllDownloads.Template?.FindName("bd", BtnAllDownloads) is Border bd)
+            {
+                bd.BorderBrush = selected
+                    ? new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))
+                    : new SolidColorBrush(Color.FromRgb(0x55, 0x44, 0x33));
+                bd.Background = selected
+                    ? new SolidColorBrush(Color.FromRgb(0x25, 0x1A, 0x12))
+                    : new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C));
+            }
+        }
+
+        private static readonly SolidColorBrush ColumnDragBrush =
+            new(Color.FromRgb(0xFF, 0x6B, 0x00)) { Opacity = 0.85 };
+
+        private void DgDownloads_GiveFeedback(object sender, GiveFeedbackEventArgs e)
+        {
+            e.UseDefaultCursors = false;
+            Mouse.SetCursor(Cursors.SizeWE);
+            e.Handled = true;
+            RecolorColumnDragAdorners();
+        }
+
+        private DateTime _lastDragRecolor = DateTime.MinValue;
+
+        private void DgDownloads_LayoutUpdated(object? sender, EventArgs e)
+        {
+            if (Mouse.LeftButton != MouseButtonState.Pressed) return;
+            // Her layout'ta gorsel agaci gezmek donmaya yol acar — throttle
+            if ((DateTime.UtcNow - _lastDragRecolor).TotalMilliseconds < 50) return;
+            _lastDragRecolor = DateTime.UtcNow;
+            RecolorColumnDragAdorners();
+        }
+
+        private void RecolorColumnDragAdorners()
+        {
+            RecolorBlueVisuals(DgDownloads);
+
+            var layer = AdornerLayer.GetAdornerLayer(DgDownloads);
+            if (layer != null)
+                RecolorBlueVisuals(layer);
+
+            // Header presenter uzerindeki gostergeler
+            if (FindVisualChild<DataGridColumnHeadersPresenter>(DgDownloads) is { } headers)
+                RecolorBlueVisuals(headers);
+        }
+
+        private void RecolorBlueVisuals(DependencyObject root)
+        {
+            foreach (var sep in FindVisualChildren<Separator>(root))
+            {
+                sep.Background = ColumnDragBrush;
+                sep.BorderBrush = ColumnDragBrush;
+                sep.Foreground = ColumnDragBrush;
+            }
+
+            foreach (var border in FindVisualChildren<Border>(root))
+            {
+                if (border.Background is SolidColorBrush sb && LooksLikeSystemBlue(sb.Color))
+                    border.Background = ColumnDragBrush;
+                if (border.BorderBrush is SolidColorBrush bb && LooksLikeSystemBlue(bb.Color))
+                    border.BorderBrush = ColumnDragBrush;
+            }
+
+            foreach (var rect in FindVisualChildren<System.Windows.Shapes.Rectangle>(root))
+            {
+                if (rect.Fill is SolidColorBrush fb && LooksLikeSystemBlue(fb.Color))
+                    rect.Fill = ColumnDragBrush;
+                if (rect.Stroke is SolidColorBrush st && LooksLikeSystemBlue(st.Color))
+                    rect.Stroke = ColumnDragBrush;
+            }
+        }
+
+        private static bool LooksLikeSystemBlue(Color c)
+        {
+            return c.B > 180 && c.B > c.R + 40 && c.B > c.G + 20;
+        }
+
+        private static T? FindVisualChild<T>(DependencyObject root) where T : DependencyObject
+        {
+            foreach (var child in FindVisualChildren<T>(root))
+                return child;
+            return null;
+        }
+
+        private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+        {
+            if (root == null) yield break;
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                if (child is T match) yield return match;
+                foreach (var nested in FindVisualChildren<T>(child))
+                    yield return nested;
+            }
+        }
+
+        private void BtnAddCategory_Click(object sender, RoutedEventArgs e) => AddCategoryInteractive();
+
+        private void MenuAddCategory_Click(object sender, RoutedEventArgs e) => AddCategoryInteractive();
+
+        private void AddCategoryInteractive()
+        {
+            var dlg = new PromptDialog("Yeni kategori", "Kategori adı:", "Yeni kategori")
+            {
+                Owner = this
+            };
+            if (dlg.ShowDialog() != true) return;
+            string name = dlg.ResultText.Trim();
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            var item = new CategoryItem
+            {
+                Id = "custom_" + Guid.NewGuid().ToString("N")[..8],
+                Name = name,
+                Icon = "📁",
+                IsBuiltin = false,
+                Depth = 0
+            };
+
+            if (LstCategories.SelectedItem is CategoryItem parent && parent.Id != "All")
+            {
+                item.ParentId = parent.Id;
+                item.Depth = parent.Depth + 1;
+                parent.Children.Add(item);
+                parent.IsExpanded = true;
+                parent.NotifyChildrenChanged();
+            }
+            else
+            {
+                Categories.Add(item);
+            }
+
+            CategoryStore.Save(Categories);
+            RebuildVisibleCategories();
+            LstCategories.SelectedItem = item;
+        }
+
+        private void MenuCategoryRules_Click(object sender, RoutedEventArgs e)
+        {
+            if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
+            {
+                InfoDialog.Show(this, "Kategori", "Dosya türü ayarlamak için bir kategori seçin.");
+                return;
+            }
+
+            var dlg = new CategoryRulesDialog(cat) { Owner = this };
+            if (dlg.ShowDialog() == true)
+            {
+                CategoryStore.Save(Categories);
+                // Mevcut dosyalari yeniden esle
+                foreach (var item in DownloadList)
+                {
+                    string resolved = ResolveCategoryForNewFile(item.FileName);
+                    if (resolved != "All")
+                        item.CategoryId = resolved;
+                }
+                _downloadView?.Refresh();
+            }
+        }
+
+        private void LstCategories_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Delete)
+            {
+                MenuDeleteCategories_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        private void CatMarquee_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource is DependencyObject d && FindAncestor<ListBoxItem>(d) != null)
+                return; // satirda — normal secim/surukle
+
+            _catMarqueeArmed = true;
+            _catMarqueeActive = false;
+            _catMarqueeStart = e.GetPosition((IInputElement)sender);
+            _catMarqueeCtrlBase = Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+                ? LstCategories.SelectedItems.OfType<CategoryItem>().ToHashSet()
+                : null;
+            ((UIElement)sender).CaptureMouse();
+        }
+
+        private void CatMarquee_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_catMarqueeArmed || e.LeftButton != MouseButtonState.Pressed) return;
+            try
+            {
+                Point pos = e.GetPosition((IInputElement)sender);
+                if (!_catMarqueeActive)
+                {
+                    if (Math.Abs(pos.X - _catMarqueeStart.X) < 4 && Math.Abs(pos.Y - _catMarqueeStart.Y) < 4)
+                        return;
+                    _catMarqueeActive = true;
+                    CatSelectionRect.Visibility = Visibility.Visible;
+                    if (_catMarqueeCtrlBase == null)
+                    {
+                        _suppressCategorySelection = true;
+                        try { LstCategories.SelectedItems.Clear(); }
+                        finally { _suppressCategorySelection = false; }
+                    }
+                }
+
+                double x = Math.Min(_catMarqueeStart.X, pos.X);
+                double y = Math.Min(_catMarqueeStart.Y, pos.Y);
+                double w = Math.Abs(pos.X - _catMarqueeStart.X);
+                double h = Math.Abs(pos.Y - _catMarqueeStart.Y);
+                Canvas.SetLeft(CatSelectionRect, x);
+                Canvas.SetTop(CatSelectionRect, y);
+                CatSelectionRect.Width = w;
+                CatSelectionRect.Height = h;
+
+                var rect = new Rect(x, y, w, h);
+                var keep = _catMarqueeCtrlBase ?? new HashSet<CategoryItem>();
+                var hits = new List<CategoryItem>();
+                foreach (var cat in VisibleCategories.ToList())
+                {
+                    if (LstCategories.ItemContainerGenerator.ContainerFromItem(cat) is not ListBoxItem lbi)
+                        continue;
+                    if (!lbi.IsVisible || lbi.ActualWidth <= 0) continue;
+                    Point tl = lbi.TranslatePoint(new Point(0, 0), (UIElement)sender);
+                    var itemRect = new Rect(tl.X, tl.Y, lbi.ActualWidth, lbi.ActualHeight);
+                    if (rect.IntersectsWith(itemRect))
+                        hits.Add(cat);
+                }
+
+                _suppressCategorySelection = true;
+                try
+                {
+                    LstCategories.SelectedItems.Clear();
+                    foreach (var item in keep)
+                        LstCategories.SelectedItems.Add(item);
+                    foreach (var cat in hits)
+                    {
+                        if (!LstCategories.SelectedItems.Contains(cat))
+                            LstCategories.SelectedItems.Add(cat);
+                    }
+                }
+                finally { _suppressCategorySelection = false; }
+
+                // Son secilen kategoriye filtre uygula
+                if (LstCategories.SelectedItem is CategoryItem last)
+                {
+                    _currentCategory = last.Id;
+                    HighlightAllDownloadsButton(false);
+                    _downloadView?.Refresh();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"CatMarquee_PreviewMouseMove: {ex.Message}");
+            }
+        }
+
+        private void CatMarquee_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+            => EndCatMarquee(sender);
+
+        private void CatMarquee_LostMouseCapture(object sender, MouseEventArgs e)
+            => EndCatMarquee(sender);
+
+        private void EndCatMarquee(object sender)
+        {
+            if (!_catMarqueeArmed) return;
+            _catMarqueeArmed = false;
+            _catMarqueeActive = false;
+            CatSelectionRect.Visibility = Visibility.Collapsed;
+            if (sender is UIElement el && el.IsMouseCaptured)
+                el.ReleaseMouseCapture();
+        }
+
+        private void MenuDeleteCategories_Click(object sender, RoutedEventArgs e)
+        {
+            var toDelete = LstCategories.SelectedItems
+                .OfType<CategoryItem>()
+                .Where(c => !c.IsBuiltin && c.Id != "All")
+                .ToList();
+
+            if (toDelete.Count == 0)
+            {
+                InfoDialog.Show(this, "Kategori",
+                    "Silmek için özel (eklediğiniz) kategorileri seçin.",
+                    "Ctrl ile çoklu seçim yapabilirsiniz. Varsayılan kategoriler silinemez.");
+                return;
+            }
+
+            foreach (var cat in toDelete.ToList())
+                RemoveCategoryRecursive(cat);
+
+            CategoryStore.Save(Categories);
+            RebuildVisibleCategories();
+            BtnAllDownloads_Click(BtnAllDownloads, new RoutedEventArgs());
+            _downloadView?.Refresh();
+        }
+
+        private void RemoveCategoryRecursive(CategoryItem cat)
+        {
+            foreach (var child in cat.Children.ToList())
+                RemoveCategoryRecursive(child);
+
+            foreach (var dl in DownloadList.Where(d => d.CategoryId == cat.Id))
+                dl.CategoryId = "All";
+
+            if (!string.IsNullOrEmpty(cat.ParentId))
+            {
+                var parent = CategoryStore.FindById(Categories, cat.ParentId);
+                parent?.Children.Remove(cat);
+                parent?.NotifyChildrenChanged();
+            }
+            else
+            {
+                Categories.Remove(cat);
+            }
+        }
+
+        private void CategoryExpand_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: CategoryItem cat }) return;
+            cat.IsExpanded = !cat.IsExpanded;
+            CategoryStore.Save(Categories);
+            RebuildVisibleCategories();
+            e.Handled = true;
+        }
+
+        private void LstCategories_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _categoryDragStart = e.GetPosition(null);
+            _categoryDragItem = null;
+            // Expand butonundan surukleme baslatma
+            if (e.OriginalSource is DependencyObject d0 && FindAncestor<Button>(d0) != null)
+                return;
+            if (e.OriginalSource is DependencyObject d)
+            {
+                var lbi = FindAncestor<ListBoxItem>(d);
+                if (lbi?.DataContext is CategoryItem cat)
+                    _categoryDragItem = cat;
+            }
+        }
+
+        private void LstCategories_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || _categoryDragItem == null) return;
+            if (_catMarqueeActive) return;
+            Point pos = e.GetPosition(null);
+            if (Math.Abs(pos.X - _categoryDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(pos.Y - _categoryDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
                 return;
 
-            _currentCategory = category;
-            HighlightCategoryButton(btn);
-            _downloadView?.Refresh();
-            DgDownloads.SelectedItems.Clear();
+            if (_categoryDragItem.Id == "All") return;
+
+            var dragged = _categoryDragItem;
+            TxtDragGhost.Text = dragged.DisplayLabel;
+            CategoryDragPopup.IsOpen = true;
+
+            if (LstCategories.ItemContainerGenerator.ContainerFromItem(dragged) is ListBoxItem lbi)
+                lbi.Opacity = 0.35;
+
+            try
+            {
+                DragDrop.DoDragDrop(LstCategories, dragged, DragDropEffects.Move);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Category drag: {ex.Message}");
+            }
+            finally
+            {
+                CategoryDragPopup.IsOpen = false;
+                if (LstCategories.ItemContainerGenerator.ContainerFromItem(dragged) is ListBoxItem lbi2)
+                    lbi2.Opacity = 1;
+                _categoryDragItem = null;
+            }
         }
 
-        private void HighlightCategoryButton(Button selected)
+        private void LstCategories_GiveFeedback(object sender, GiveFeedbackEventArgs e)
         {
-            Button[] buttons = { BtnCatAll, BtnCatDocuments, BtnCatVideos, BtnCatAudio, BtnCatArchives, BtnCatApps };
-            foreach (Button button in buttons)
+            e.UseDefaultCursors = false;
+            Mouse.SetCursor(Cursors.Hand);
+            e.Handled = true;
+
+            // Ghost popup mouse'u takip etsin
+            Point screen = GetMouseScreenPoint();
+            CategoryDragPopup.HorizontalOffset = screen.X + 12;
+            CategoryDragPopup.VerticalOffset = screen.Y + 12;
+            if (!CategoryDragPopup.IsOpen)
+                CategoryDragPopup.IsOpen = true;
+        }
+
+        private void LstCategories_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
+        {
+            if (e.EscapePressed)
             {
-                bool isSelected = ReferenceEquals(button, selected);
-                button.Background = isSelected ? _catSelectedBg : _catNormalBg;
-                button.Foreground = isSelected ? _catSelectedFg : _catNormalFg;
-                button.FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal;
+                e.Action = DragAction.Cancel;
+                CategoryDragPopup.IsOpen = false;
+            }
+        }
+
+        private static Point GetMouseScreenPoint()
+        {
+            GetCursorPos(out var pt);
+            return new Point(pt.X, pt.Y);
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out NativePoint lpPoint);
+
+        private void LstCategories_DragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = e.Data.GetDataPresent(typeof(CategoryItem)) ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void LstCategories_Drop(object sender, DragEventArgs e)
+        {
+            try
+            {
+                CategoryDragPopup.IsOpen = false;
+                if (e.Data.GetData(typeof(CategoryItem)) is not CategoryItem dragged) return;
+                if (dragged.Id == "All") return;
+
+                var target = (e.OriginalSource as DependencyObject) is DependencyObject d
+                    ? FindAncestor<ListBoxItem>(d)?.DataContext as CategoryItem
+                    : null;
+
+                // Bos alana birakma = kok seviyeye tasi
+                if (target == null)
+                {
+                    DetachCategory(dragged);
+                    dragged.ParentId = null;
+                    dragged.Depth = 0;
+                    if (!Categories.Contains(dragged))
+                        Categories.Add(dragged);
+                    CategoryStore.RecalcDepths(Categories, 0);
+                    CategoryStore.Save(Categories);
+                    RebuildVisibleCategories();
+                    LstCategories.SelectedItem = dragged;
+                    return;
+                }
+
+                if (ReferenceEquals(target, dragged) || target.IsDescendantOf(dragged))
+                    return;
+
+                DetachCategory(dragged);
+
+                if (target.Id == "All")
+                {
+                    dragged.ParentId = null;
+                    dragged.Depth = 0;
+                    if (!Categories.Contains(dragged))
+                    {
+                        int insertAt = Math.Min(1, Categories.Count);
+                        Categories.Insert(insertAt, dragged);
+                    }
+                }
+                else
+                {
+                    dragged.ParentId = target.Id;
+                    target.Children.Add(dragged);
+                    target.IsExpanded = true;
+                    target.NotifyChildrenChanged();
+                }
+
+                CategoryStore.RecalcDepths(Categories, 0);
+                CategoryStore.Save(Categories);
+                RebuildVisibleCategories();
+                LstCategories.SelectedItem = dragged;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LstCategories_Drop: {ex}");
+                CategoryDragPopup.IsOpen = false;
+                _categoryDragItem = null;
+            }
+        }
+
+        private void DetachCategory(CategoryItem item)
+        {
+            if (!string.IsNullOrEmpty(item.ParentId))
+            {
+                var parent = CategoryStore.FindById(Categories, item.ParentId);
+                parent?.Children.Remove(item);
+                parent?.NotifyChildrenChanged();
+            }
+            else
+            {
+                Categories.Remove(item);
+            }
+            item.ParentId = null;
+        }
+
+        private static T? FindAncestor<T>(DependencyObject current) where T : DependencyObject
+        {
+            while (current != null)
+            {
+                if (current is T match) return match;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
+        }
+
+        private void MenuMoveCategory_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = DgDownloads.SelectedItems.OfType<DownloadItem>().ToList();
+            if (selected.Count == 0 && DgDownloads.SelectedItem is DownloadItem one)
+                selected.Add(one);
+            if (selected.Count == 0) return;
+
+            var choices = CategoryStore.AllFlat(Categories).Where(c => c.Id != "All").ToList();
+            if (choices.Count == 0) return;
+
+            var menu = new ContextMenu
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0)
+            };
+            menu.Template = CreateDarkMenuTemplate();
+
+            foreach (var cat in choices)
+            {
+                var mi = new MenuItem
+                {
+                    Header = new string(' ', cat.Depth * 2) + cat.DisplayLabel,
+                    Tag = cat.Id,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+                    Background = Brushes.Transparent,
+                    Padding = new Thickness(12, 8, 12, 8)
+                };
+                mi.Template = CreateDarkMenuItemTemplate();
+                mi.Click += (_, _) =>
+                {
+                    foreach (var item in selected)
+                        item.CategoryId = (string)mi.Tag;
+                    _downloadView?.Refresh();
+                };
+                menu.Items.Add(mi);
+            }
+
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+            menu.IsOpen = true;
+        }
+
+        private static ControlTemplate CreateDarkMenuTemplate()
+        {
+            var template = new ControlTemplate(typeof(ContextMenu));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C)));
+            factory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            factory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            factory.SetValue(Border.PaddingProperty, new Thickness(6));
+            var panel = new FrameworkElementFactory(typeof(StackPanel));
+            panel.SetValue(Panel.IsItemsHostProperty, true);
+            factory.AppendChild(panel);
+            template.VisualTree = factory;
+            return template;
+        }
+
+        private static ControlTemplate CreateDarkMenuItemTemplate()
+        {
+            var template = new ControlTemplate(typeof(MenuItem));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.Name = "bd";
+            factory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(MenuItem.BackgroundProperty));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+            factory.SetValue(Border.PaddingProperty, new TemplateBindingExtension(MenuItem.PaddingProperty));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            factory.AppendChild(cp);
+            template.VisualTree = factory;
+
+            var trigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "bd"));
+            trigger.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            template.Triggers.Add(trigger);
+            return template;
+        }
+
+        private void RowPauseResume_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: DownloadItem item }) return;
+            if (!_engines.TryGetValue(item, out var engine)) return;
+
+            if (engine.IsPaused || item.IsPausedState || item.IsErrorState)
+            {
+                _ = ResumeFromSessionAsync(item, engine);
+            }
+            else if (engine.IsDownloading && !engine.IsPaused)
+            {
+                PauseFromSession(item, engine);
             }
         }
 
@@ -146,47 +834,163 @@ namespace DownloadMuck
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left) DragMove();
+            if (e.ChangedButton != MouseButton.Left) return;
+
+            if (e.ClickCount == 2)
+            {
+                ToggleMaximize();
+                e.Handled = true;
+                return;
+            }
+
+            if (_isPseudoMaximized) return;
+            DragMove();
         }
 
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-        private void BtnMaximize_Click(object sender, RoutedEventArgs e)
+        private void BtnMaximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
+
+        private void ToggleMaximize()
         {
-            if (WindowState == WindowState.Maximized)
+            BeginAnimation(LeftProperty, null);
+            BeginAnimation(TopProperty, null);
+            BeginAnimation(WidthProperty, null);
+            BeginAnimation(HeightProperty, null);
+            RootChrome.BeginAnimation(OpacityProperty, null);
+            RootChrome.RenderTransform = null;
+
+            if (_isPseudoMaximized)
             {
-                WindowState = WindowState.Normal;
+                Left = _restoreBounds.X;
+                Top = _restoreBounds.Y;
+                Width = _restoreBounds.Width;
+                Height = _restoreBounds.Height;
                 BtnMaximize.Content = "☐";
                 RootChrome.CornerRadius = new CornerRadius(16);
+                ContentChrome.CornerRadius = new CornerRadius(0, 0, 16, 16);
+                _isPseudoMaximized = false;
             }
             else
             {
-                WindowState = WindowState.Maximized;
+                _restoreBounds = new Rect(Left, Top, ActualWidth, ActualHeight);
+                var wa = SystemParameters.WorkArea;
+                Left = wa.Left;
+                Top = wa.Top;
+                Width = wa.Width;
+                Height = wa.Height;
                 BtnMaximize.Content = "❐";
                 RootChrome.CornerRadius = new CornerRadius(0);
+                ContentChrome.CornerRadius = new CornerRadius(0);
+                _isPseudoMaximized = true;
             }
         }
 
-        private void BtnSettings_Click(object sender, RoutedEventArgs e)
-        {
-            TxtDefaultFolder.Focus();
-            TxtDefaultFolder.SelectAll();
-            BtnBrowseFolder_Click(sender, e);
-        }
+        private void ApplyWindowStateToggle() => ToggleMaximize();
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
-        private void BtnBrowseFolder_Click(object sender, RoutedEventArgs e)
+        private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var dialog = new Microsoft.Win32.OpenFolderDialog
-            {
-                Title = "Varsayılan İndirme Klasörünü Seçin"
-            };
+            _searchText = TxtSearch.Text?.Trim() ?? "";
+            _downloadView?.Refresh();
+        }
 
-            if (dialog.ShowDialog() == true)
+        private async void ToolbarNew_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new NewUrlDialog { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+            await StartDownloadProcess(dlg.Url, "", selectItem: true);
+        }
+
+        private void ToolbarSettings_Click(object sender, RoutedEventArgs e)
+        {
+            InfoDialog.Show(this, "Ayarlar", "Ayarlar yakında eklenecek.");
+        }
+
+        private List<DownloadItem> GetToolbarTargets()
+        {
+            var checkedItems = DownloadList.Where(i => i.IsChecked).ToList();
+            if (checkedItems.Count > 0) return checkedItems;
+
+            return DgDownloads.SelectedItems.OfType<DownloadItem>().ToList();
+        }
+
+        private void ToolbarDelete_Click(object sender, RoutedEventArgs e)
+        {
+            var targets = GetToolbarTargets();
+            if (targets.Count == 0)
             {
-                TxtDefaultFolder.Text = dialog.FolderName;
+                InfoDialog.Show(this, "Sil", "İşlem için dosya seçin veya tikleyin.");
+                return;
             }
+            DeleteItems(targets);
+        }
+
+        private void ToolbarOpen_Click(object sender, RoutedEventArgs e)
+        {
+            var targets = GetToolbarTargets();
+            if (targets.Count == 0)
+            {
+                InfoDialog.Show(this, "Aç", "İşlem için dosya seçin veya tikleyin.");
+                return;
+            }
+
+            foreach (var item in targets)
+            {
+                if (!File.Exists(item.FilePath))
+                {
+                    InfoDialog.Show(this, "Dosya", $"Dosya bulunamadı: {item.FileName}");
+                    continue;
+                }
+                try { Process.Start(new ProcessStartInfo(item.FilePath) { UseShellExecute = true }); }
+                catch (Exception ex) { InfoDialog.Show(this, "Hata", ex.Message); }
+            }
+        }
+
+        private void ToolbarOpenFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var targets = GetToolbarTargets();
+            if (targets.Count == 0)
+            {
+                InfoDialog.Show(this, "Klasör", "İşlem için dosya seçin veya tikleyin.");
+                return;
+            }
+
+            foreach (var selectedItem in targets)
+            {
+                try
+                {
+                    if (File.Exists(selectedItem.FilePath))
+                        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{selectedItem.FilePath}\"") { UseShellExecute = true });
+                    else if (Directory.Exists(Path.GetDirectoryName(selectedItem.FilePath)))
+                        Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(selectedItem.FilePath)!) { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    InfoDialog.Show(this, "Hata", ex.Message);
+                }
+            }
+        }
+
+        private void ChkSelectAll_Click(object sender, RoutedEventArgs e)
+        {
+            bool check = ChkSelectAll.IsChecked == true;
+            foreach (var item in DownloadList)
+                item.IsChecked = check;
+        }
+
+        private void RowOpenDownload_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: DownloadItem item }) return;
+            ShowSessionForItem(item);
+        }
+
+        private void RowCancel_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: DownloadItem item }) return;
+            if (_engines.TryGetValue(item, out var engine))
+                CancelFromSession(item, engine);
         }
 
         private void MenuOpenFolder_Click(object sender, RoutedEventArgs e)
@@ -229,7 +1033,13 @@ namespace DownloadMuck
 
         private void DeleteSelectedItems()
         {
-            var selectedItems = DgDownloads.SelectedItems.Cast<DownloadItem>().ToList();
+            var selectedItems = GetToolbarTargets();
+            if (selectedItems.Count == 0) return;
+            DeleteItems(selectedItems);
+        }
+
+        private void DeleteItems(List<DownloadItem> selectedItems)
+        {
             if (selectedItems.Count == 0) return;
 
             string message = selectedItems.Count == 1
@@ -358,8 +1168,8 @@ namespace DownloadMuck
 
         private async void BtnDownload_Click(object sender, RoutedEventArgs e)
         {
-            string url = TxtUrl.Text.Trim();
-            await StartDownloadProcess(url, "", selectItem: true);
+            // Ust URL cubugu kaldirildi; eklenti / oturum penceresi kullanilir
+            await Task.CompletedTask;
         }
 
         private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true)
@@ -370,7 +1180,7 @@ namespace DownloadMuck
                 return;
             }
 
-            string defaultFolder = TxtDefaultFolder.Text.Trim();
+            string defaultFolder = _defaultFolder;
             if (string.IsNullOrWhiteSpace(defaultFolder))
                 defaultFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
 
@@ -384,6 +1194,8 @@ namespace DownloadMuck
                 ShowInTaskbar = true
             };
             session.Show();
+            session.Activate(); // yeni indirme: one al
+            session.BringToFrontSoft();
         }
 
         public void RegisterSessionWindow(DownloadItem item, DownloadSessionWindow window)
@@ -403,6 +1215,7 @@ namespace DownloadMuck
             {
                 if (!existing.IsVisible) existing.Show();
                 existing.Activate();
+                existing.BringToFrontSoft();
                 return;
             }
 
@@ -418,6 +1231,8 @@ namespace DownloadMuck
             };
             _sessionWindows[item] = session;
             session.Show();
+            session.Activate();
+            session.BringToFrontSoft();
         }
 
         private async Task<string> ProbeContentLengthLabelAsync(string url)
@@ -460,7 +1275,8 @@ namespace DownloadMuck
                 FileType = FileNameHelper.FormatTypeLabel(finalFileName),
                 DateAdded = DateTime.Now,
                 Status = "İndiriliyor",
-                FileIcon = IconHelper.GetIconForExtension(finalFileName)
+                FileIcon = IconHelper.GetIconForExtension(finalFileName),
+                CategoryId = ResolveCategoryForNewFile(finalFileName)
             };
 
             DownloadList.Insert(0, item);
@@ -478,6 +1294,32 @@ namespace DownloadMuck
             return new DownloadRun { Item = item, Engine = engine };
         }
 
+        private string ResolveCategoryForNewFile(string fileName)
+        {
+            // Secili kategori (All degilse) once
+            if (_currentCategory != "All")
+            {
+                var selected = CategoryStore.FindById(Categories, _currentCategory);
+                if (selected != null)
+                    return selected.Id;
+            }
+
+            string ext = Path.GetExtension(fileName)?.TrimStart('.') ?? "";
+            if (string.IsNullOrEmpty(ext)) return "All";
+
+            // En derin eslesen kurali tercih et
+            CategoryItem? best = null;
+            foreach (var c in CategoryStore.AllFlat(Categories))
+            {
+                if (c.Id == "All" || c.Extensions == null || !c.Extensions.Contains(ext))
+                    continue;
+                if (best == null || c.Depth > best.Depth)
+                    best = c;
+            }
+
+            return best?.Id ?? "All";
+        }
+
         public void PauseFromSession(DownloadItem item, DownloadEngine engine)
         {
             if (engine.IsDownloading && !engine.IsPaused)
@@ -488,6 +1330,15 @@ namespace DownloadMuck
                 item.CurrentSpeed = "";
                 item.StatusText = "";
                 UpdateTransportButtons();
+                if (_sessionWindows.TryGetValue(item, out var session))
+                    session.RefreshFromHost();
+            }
+            else if (engine.IsPaused)
+            {
+                item.Status = "Duraklatıldı";
+                item.IsDownloading = false;
+                if (_sessionWindows.TryGetValue(item, out var session))
+                    session.RefreshFromHost();
             }
         }
 
@@ -495,6 +1346,8 @@ namespace DownloadMuck
         {
             item.Status = "İndiriliyor";
             item.IsDownloading = true;
+            if (_sessionWindows.TryGetValue(item, out var session))
+                session.RefreshFromHost();
             await RunEngineAsync(item, engine);
         }
 
@@ -625,8 +1478,13 @@ namespace DownloadMuck
             }
             catch (Exception ex)
             {
+                // Duraklatma kaynakli hatalari kullaniciya gosterme
+                if (engine.IsPaused || engine.IsCancelled)
+                    return;
+
                 item.Status = "Hata";
-                MessageBox.Show($"Hata oluştu: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
+                item.StatusText = ex.Message;
+                // Engine kalir — Devam Et ile yeniden denenebilir
             }
             finally
             {
@@ -635,26 +1493,48 @@ namespace DownloadMuck
                     item.Status = "Duraklatıldı";
                     item.IsDownloading = false;
                     item.CurrentSpeed = "";
+                    item.StatusText = "";
                 }
-                else
+                else if (engine.IsCancelled)
                 {
                     item.IsDownloading = false;
                     item.CurrentSpeed = "";
                     item.StatusText = "";
-
-                    if (engine.IsCancelled)
-                    {
-                        item.Status = "İptal Edildi";
-                        item.ProgressValue = 0;
-                    }
-                    else if (!engine.IsPaused)
-                    {
-                        item.Status = "Tamamlandı";
-                        if (File.Exists(item.FilePath))
-                            item.FileSize = FormatFileSize(new FileInfo(item.FilePath).Length);
-                    }
-
+                    item.Status = "İptal Edildi";
+                    item.ProgressValue = 0;
                     _engines.Remove(item);
+                }
+                else if (item.Status.Contains("Hata", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsDownloading = false;
+                    item.CurrentSpeed = "";
+                    // engine tutulur
+                }
+                else if (engine.CompletedSuccessfully)
+                {
+                    item.IsDownloading = false;
+                    item.CurrentSpeed = "";
+                    item.StatusText = "";
+                    item.Status = "Tamamlandı";
+                    item.ProgressValue = 100;
+                    if (File.Exists(item.FilePath))
+                        item.FileSize = FormatFileSize(new FileInfo(item.FilePath).Length);
+                    _engines.Remove(item);
+                }
+                else if (engine.IsPaused)
+                {
+                    item.Status = "Duraklatıldı";
+                    item.IsDownloading = false;
+                    item.CurrentSpeed = "";
+                    item.StatusText = "";
+                }
+                else
+                {
+                    // Belirsiz bitis — tamamlandi sayma, duraklatilmis gibi tut
+                    item.Status = "Duraklatıldı";
+                    item.IsDownloading = false;
+                    item.CurrentSpeed = "";
+                    item.StatusText = "";
                 }
 
                 UpdateTransportButtons();
@@ -682,23 +1562,7 @@ namespace DownloadMuck
 
         private void UpdateTransportButtons()
         {
-            var selected = GetSelectedEngines();
-            bool hasSelection = selected.Count > 0;
-
-            BtnPauseResume.IsEnabled = hasSelection;
-            BtnCancel.IsEnabled = hasSelection;
-
-            if (hasSelection)
-            {
-                bool anyDownloading = selected.Any(x => x.Engine.IsDownloading && !x.Engine.IsPaused);
-                BtnPauseResume.Content = anyDownloading ? "Duraklat" : "Devam Et";
-            }
-            else
-            {
-                BtnPauseResume.Content = "Duraklat";
-            }
-
-            BtnDownload.IsEnabled = true;
+            // Ust transport cubugu kaldirildi; satir aksiyonlari kullanilir
         }
 
         private void DgDownloads_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -781,8 +1645,10 @@ namespace DownloadMuck
             }
             catch (Exception ex)
             {
+                if (engine.IsPaused || engine.IsCancelled)
+                    return;
                 target.Status = "Hata";
-                MessageBox.Show($"Hata oluştu: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
+                target.StatusText = ex.Message;
             }
             finally
             {
@@ -799,15 +1665,23 @@ namespace DownloadMuck
                     target.StatusText = "";
                     _engines.Remove(target);
                 }
-                else if (!engine.IsPaused)
+                else if (target.Status.Contains("Hata", StringComparison.OrdinalIgnoreCase))
+                {
+                    target.IsDownloading = false;
+                }
+                else if (engine.CompletedSuccessfully)
                 {
                     target.Status = "Tamamlandı";
                     target.IsDownloading = false;
-                    target.StatusText = "";
-                    target.CurrentSpeed = "";
+                    target.ProgressValue = 100;
                     if (File.Exists(target.FilePath))
                         target.FileSize = FormatFileSize(new FileInfo(target.FilePath).Length);
                     _engines.Remove(target);
+                }
+                else
+                {
+                    target.Status = "Duraklatıldı";
+                    target.IsDownloading = false;
                 }
 
                 UpdateTransportButtons();

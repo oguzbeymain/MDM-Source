@@ -102,6 +102,32 @@ namespace DownloadMuck
             set => SetField(ref _fileIcon, value);
         }
 
+        private bool _isChecked;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set => SetField(ref _isChecked, value);
+        }
+
+        private string _categoryId = "All";
+        public string CategoryId
+        {
+            get => _categoryId;
+            set => SetField(ref _categoryId, value);
+        }
+
+        public bool IsPausedState =>
+            Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsErrorState =>
+            Status.Contains("Hata", StringComparison.OrdinalIgnoreCase);
+
+        public bool CanPauseResume => IsDownloading || IsPausedState || IsErrorState;
+
+        public string PauseResumeGlyph => (IsPausedState || IsErrorState) ? "▶" : "⏸";
+
+        public string PauseResumeTip => (IsPausedState || IsErrorState) ? "Devam et" : "Durdur";
+
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
@@ -110,6 +136,14 @@ namespace DownloadMuck
             if (EqualityComparer<T>.Default.Equals(field, value)) return false;
             field = value;
             OnPropertyChanged(name);
+            if (name is nameof(Status) or nameof(IsDownloading))
+            {
+                OnPropertyChanged(nameof(IsPausedState));
+                OnPropertyChanged(nameof(IsErrorState));
+                OnPropertyChanged(nameof(CanPauseResume));
+                OnPropertyChanged(nameof(PauseResumeGlyph));
+                OnPropertyChanged(nameof(PauseResumeTip));
+            }
             return true;
         }
     }

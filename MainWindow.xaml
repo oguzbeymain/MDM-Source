@@ -26,6 +26,16 @@
         <SolidColorBrush x:Key="OrangeAccent" Color="#FF6B00"/>
         <SolidColorBrush x:Key="OrangeHover" Color="#FF8533"/>
 
+        <!-- Kolon surukle / secim sistem renklerini uygulama temasına cevir -->
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#251A12"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#2A2118"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.GradientActiveCaptionBrushKey}" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.ActiveCaptionBrushKey}" Color="#FF6B00"/>
+
         <!-- Genel Progress Bar Stili -->
         <Style x:Key="OrangeProgressBarStyle" TargetType="ProgressBar">
             <Setter Property="Background" Value="#2A2A2A"/>
@@ -174,7 +184,7 @@
             </Setter>
         </Style>
 
-        <!-- Title bar: kapat — sag ust oval, tasmasiz -->
+        <!-- Title bar: kapat — hover tamamen kirmizi (ColorAnimation yok, mavi gecis olmasin) -->
         <Style x:Key="TitleBarCloseButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888888"/>
@@ -186,83 +196,384 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="#00000000" CornerRadius="0,15,0,0" ClipToBounds="True">
+                        <Border x:Name="border" Background="Transparent" CornerRadius="0,15,0,0" ClipToBounds="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="MouseEnter">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#E53935" Duration="0:0:0.16"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#FFFFFF" Duration="0:0:0.16"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="MouseLeave">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#00000000" Duration="0:0:0.16"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#888888" Duration="0:0:0.16"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E53935"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#C62828"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <!-- Sol menü kategori butonu — yumusak hover (overlay) -->
-        <Style x:Key="CategoryButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#AAAAAA"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Padding" Value="10,0,0,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
-            <Setter Property="FontWeight" Value="Normal"/>
+        <!-- Modern koyu scrollbar -->
+        <Style x:Key="ModernScrollBarThumb" TargetType="Thumb">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="IsTabStop" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}" ClipToBounds="True">
-                            <Grid>
-                                <Border x:Name="hoverGlow" Background="#FF6B00" CornerRadius="10" Opacity="0" IsHitTestVisible="False"/>
-                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="thumb" Background="#3A3A3A" CornerRadius="4" Margin="1"/>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="MouseEnter">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hoverGlow"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0.14" Duration="0:0:0.2"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="MouseLeave">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hoverGlow"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.22"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="thumb" Property="Background" Value="#FF6B00"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="thumb" Property="Background" Value="#FF8533"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="MinWidth" Value="8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid x:Name="GridRoot" Background="Transparent">
+                            <Border Background="#1A1A1A" CornerRadius="4" Opacity="0.5" Margin="1"/>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Height="0"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ModernScrollBarThumb}"/>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Height="0"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter TargetName="GridRoot" Property="LayoutTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="-90"/>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="Width" Value="Auto"/>
+                                <Setter Property="Height" Value="8"/>
+                                <Setter Property="MinHeight" Value="8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Sol menü kategori butonu — temiz hover -->
+        <Style x:Key="CategoryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="10,0,8,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="cp" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
+                                <Setter Property="Foreground" Value="#F0F0F0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#333333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CategoryAddButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FF6B00"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="10,0,8,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#2A2118"/>
+                                <Setter Property="Foreground" Value="#FFB06B"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#332418"/>
+                                <Setter Property="Foreground" Value="#FFC48A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CategoryListItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#B0B0B0"/>
+            <Setter Property="Padding" Value="4,0,6,0"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                                Padding="{TemplateBinding Padding}" BorderThickness="0">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
+                                <Setter Property="Foreground" Value="#F2F2F2"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#251A12"/>
+                                <Setter Property="Foreground" Value="#FF6B00"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="bd" Property="Background" Value="#2E2016"/>
+                                <Setter Property="Foreground" Value="#FF8533"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarFlatButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#C8C8C8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#555555"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToolbarButtonStyle" TargetType="Button" BasedOn="{StaticResource ToolbarFlatButtonStyle}"/>
+
+
+        <ContextMenu x:Key="CategoryPanelContextMenu"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True">
+            <ContextMenu.Template>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                            CornerRadius="10" Padding="6" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.45" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True"/>
+                    </Border>
+                </ControlTemplate>
+            </ContextMenu.Template>
+            <ContextMenu.Resources>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="#E8E8E8"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Padding" Value="12,8"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="MenuItem">
+                                <Border x:Name="itemBorder" Background="{TemplateBinding Background}"
+                                        CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter Property="Foreground" Value="#FF6B00"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ContextMenu.Resources>
+            <MenuItem Header="Yeni kategori ekle" Click="MenuAddCategory_Click"/>
+            <MenuItem Header="Dosya türlerini ayarla" Click="MenuCategoryRules_Click"/>
+            <MenuItem Header="Seçilen kategorileri sil" Click="MenuDeleteCategories_Click"/>
+        </ContextMenu>
+
+        <!-- Koyu checkbox -->
+        <Style x:Key="DarkCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="box" Width="16" Height="16" CornerRadius="3"
+                                Background="#1E1E1E" BorderBrush="#555555" BorderThickness="1.5"
+                                SnapsToDevicePixels="True">
+                            <Path x:Name="mark" Data="M3,8 L6.5,11.5 L13,4" Stroke="#FF6B00"
+                                  StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" Visibility="Collapsed"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="#FF6B00"/>
+                                <Setter TargetName="box" Property="Background" Value="#251A12"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="#FF6B00"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Satir aksiyon ikon butonu -->
+        <Style x:Key="RowActionButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern TextBox sag tik (Windows klasik menuyu degistir) -->
+        <ContextMenu x:Key="ModernEditContextMenu"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True">
+            <ContextMenu.Template>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                            CornerRadius="10" Padding="6" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.45" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True"/>
+                    </Border>
+                </ControlTemplate>
+            </ContextMenu.Template>
+            <ContextMenu.Resources>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="#E8E8E8"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Padding" Value="12,8"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="MenuItem">
+                                <Border x:Name="itemBorder" Background="{TemplateBinding Background}"
+                                        CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{TemplateBinding InputGestureText}"
+                                                   Foreground="#666" FontSize="11" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter Property="Foreground" Value="#FF6B00"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Foreground" Value="#555"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ContextMenu.Resources>
+            <MenuItem Header="Kes" InputGestureText="Ctrl+X" Command="ApplicationCommands.Cut"/>
+            <MenuItem Header="Kopyala" InputGestureText="Ctrl+C" Command="ApplicationCommands.Copy"/>
+            <MenuItem Header="Yapıştır" InputGestureText="Ctrl+V" Command="ApplicationCommands.Paste"/>
+            <Separator>
+                <Separator.Template>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="#333" Margin="8,4"/>
+                    </ControlTemplate>
+                </Separator.Template>
+            </Separator>
+            <MenuItem Header="Tümünü seç" InputGestureText="Ctrl+A" Command="ApplicationCommands.SelectAll"/>
+        </ContextMenu>
 
         <!-- Text Box Stili -->
         <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
@@ -272,6 +583,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,5"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ContextMenu" Value="{StaticResource ModernEditContextMenu}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -282,6 +594,9 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Varsayilan TextBox stili (modern menu) -->
+        <Style TargetType="TextBox" BasedOn="{StaticResource ModernTextBoxStyle}"/>
 
         <!-- Satir sag tik -->
         <ContextMenu x:Key="RowContextMenu"
@@ -337,6 +652,7 @@
                 </Style>
             </ContextMenu.Resources>
             <MenuItem Header="Dosya konumunu aç" Tag="📂" Click="MenuOpenFolder_Click"/>
+            <MenuItem Header="Kategoriye taşı" Tag="📁" Click="MenuMoveCategory_Click"/>
             <Separator Style="{StaticResource ModernSeparator}"/>
             <MenuItem Header="Listeden ve diskten sil" Tag="🗑" Click="MenuDeleteFile_Click"/>
         </ContextMenu>
@@ -396,7 +712,8 @@
             </Grid.RowDefinitions>
 
             <!-- Özel Title Bar -->
-            <Border Grid.Row="0" Background="#181818" CornerRadius="16,16,0,0" ClipToBounds="True" MouseDown="TitleBar_MouseDown">
+            <Border Grid.Row="0" Background="#181818" CornerRadius="16,16,0,0" ClipToBounds="True"
+                    MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -422,92 +739,149 @@
             </Border>
 
             <!-- Ana İçerik: alt köşeler oval -->
-            <Border Grid.Row="1" Background="#101010" CornerRadius="0,0,16,16" ClipToBounds="True">
+            <Border x:Name="ContentChrome" Grid.Row="1" Background="#101010" CornerRadius="0,0,16,16" ClipToBounds="True">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Sol: kategori + ayrı ayarlar -->
-                    <Grid Grid.Column="0" Width="196" Margin="14,12,6,14">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                    <!-- Sol kategori paneli -->
+                    <Border Grid.Column="0" Width="196" Margin="14,12,6,14"
+                            VerticalAlignment="Stretch"
+                            Background="#1A1A1A" BorderBrush="#2C2C2C" BorderThickness="1"
+                            CornerRadius="16"
+                            ContextMenu="{StaticResource CategoryPanelContextMenu}">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.45" Color="#000000"/>
+                        </Border.Effect>
+                        <Grid Margin="10,14,10,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" VerticalAlignment="Stretch"
-                                Background="#1A1A1A" BorderBrush="#2C2C2C" BorderThickness="1"
-                                CornerRadius="16" MinHeight="280">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.45" Color="#000000"/>
-                            </Border.Effect>
-                            <StackPanel Margin="12,16,12,16" VerticalAlignment="Top">
-                                <Button x:Name="BtnCatAll" Content="⚡  Tüm İndirilenler" Style="{StaticResource CategoryButtonStyle}"
-                                        Tag="All" Click="Category_Click" Margin="0,0,0,14"/>
-
-                                <TextBlock Text="Kategoriler" Foreground="#777777" FontSize="11" FontWeight="Bold" Margin="8,0,0,10"/>
-
-                                <Button x:Name="BtnCatDocuments" Content="📁  Dökümanlar" Tag="Documents" Style="{StaticResource CategoryButtonStyle}" Click="Category_Click"/>
-                                <Button x:Name="BtnCatVideos" Content="🎬  Videolar" Tag="Videos" Style="{StaticResource CategoryButtonStyle}" Click="Category_Click"/>
-                                <Button x:Name="BtnCatAudio" Content="🎵  Sesler" Tag="Audio" Style="{StaticResource CategoryButtonStyle}" Click="Category_Click"/>
-                                <Button x:Name="BtnCatArchives" Content="📦  Arşivler" Tag="Archives" Style="{StaticResource CategoryButtonStyle}" Click="Category_Click"/>
-                                <Button x:Name="BtnCatApps" Content="🚀  Uygulamalar" Tag="Apps" Style="{StaticResource CategoryButtonStyle}" Click="Category_Click"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Ayrı yüzen ayarlar -->
-                        <Border Grid.Row="1" Margin="0,8,0,0" Height="48"
-                                Background="#1A1A1A" BorderBrush="#2C2C2C" BorderThickness="1"
-                                CornerRadius="14" Cursor="Hand" ClipToBounds="True">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.4" Color="#000000"/>
-                            </Border.Effect>
-                            <Button x:Name="BtnSettings" Click="BtnSettings_Click" Cursor="Hand"
-                                    Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Left"
-                                    Padding="14,0">
+                            <!-- Tum indirilenler — kategorilerden ayri, ustte -->
+                            <Button x:Name="BtnAllDownloads" Grid.Row="0" Click="BtnAllDownloads_Click"
+                                    Cursor="Hand" Margin="0,0,0,10" Height="42"
+                                    HorizontalContentAlignment="Left" BorderThickness="0">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
-                                        <Border Background="Transparent" CornerRadius="14" Padding="{TemplateBinding Padding}" ClipToBounds="True">
-                                            <Grid>
-                                                <Border x:Name="hoverGlow" Background="#FF6B00" CornerRadius="14" Opacity="0" IsHitTestVisible="False"/>
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="iconTxt" Text="⚙" FontSize="16" Foreground="#FF6B00" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                                    <TextBlock x:Name="labelTxt" Text="Ayarlar" FontSize="13" FontWeight="SemiBold" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                                        <Border x:Name="bd" Background="#251A12" BorderBrush="#FF6B00" BorderThickness="1"
+                                                CornerRadius="12" Padding="12,0">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="İndirmeler" FontSize="13" FontWeight="Bold" Foreground="#FF6B00"/>
+                                                    <TextBlock Text="Tüm indirilenler" FontSize="10" Foreground="#AA8866"/>
                                                 </StackPanel>
-                                            </Grid>
+                                            </StackPanel>
                                         </Border>
                                         <ControlTemplate.Triggers>
-                                            <EventTrigger RoutedEvent="MouseEnter">
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="hoverGlow"
-                                                                         Storyboard.TargetProperty="Opacity"
-                                                                         To="0.14" Duration="0:0:0.2"/>
-                                                        <ColorAnimation Storyboard.TargetName="labelTxt"
-                                                                        Storyboard.TargetProperty="(TextBlock.Foreground).(SolidColorBrush.Color)"
-                                                                        To="#FF6B00" Duration="0:0:0.2"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                            <EventTrigger RoutedEvent="MouseLeave">
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="hoverGlow"
-                                                                         Storyboard.TargetProperty="Opacity"
-                                                                         To="0" Duration="0:0:0.22"/>
-                                                        <ColorAnimation Storyboard.TargetName="labelTxt"
-                                                                        Storyboard.TargetProperty="(TextBlock.Foreground).(SolidColorBrush.Color)"
-                                                                        To="#CCCCCC" Duration="0:0:0.22"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bd" Property="Background" Value="#2E2016"/>
+                                            </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                        </Border>
-                    </Grid>
+
+                            <TextBlock Grid.Row="1" Text="Kategoriler" Foreground="#777777" FontSize="11" FontWeight="Bold"
+                                       Margin="8,0,0,8"/>
+
+                            <Grid Grid.Row="2" ClipToBounds="True"
+                                  PreviewMouseLeftButtonDown="CatMarquee_PreviewMouseLeftButtonDown"
+                                  PreviewMouseMove="CatMarquee_PreviewMouseMove"
+                                  PreviewMouseLeftButtonUp="CatMarquee_PreviewMouseLeftButtonUp"
+                                  LostMouseCapture="CatMarquee_LostMouseCapture">
+                            <ListBox x:Name="LstCategories"
+                                     Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ItemContainerStyle="{StaticResource CategoryListItemStyle}"
+                                     SelectionMode="Extended"
+                                     SelectionChanged="LstCategories_SelectionChanged"
+                                     PreviewMouseLeftButtonDown="LstCategories_PreviewMouseLeftButtonDown"
+                                     PreviewMouseMove="LstCategories_PreviewMouseMove"
+                                     GiveFeedback="LstCategories_GiveFeedback"
+                                     QueryContinueDrag="LstCategories_QueryContinueDrag"
+                                     Drop="LstCategories_Drop"
+                                     DragOver="LstCategories_DragOver"
+                                     AllowDrop="True"
+                                     ContextMenu="{StaticResource CategoryPanelContextMenu}"
+                                     PreviewKeyDown="LstCategories_PreviewKeyDown">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="Transparent" BorderBrush="{Binding NestAccentBrush}"
+                                                BorderThickness="{Binding NestAccentThickness}" CornerRadius="8" Padding="2,0">
+                                            <DockPanel LastChildFill="True" Margin="{Binding IndentMargin}">
+                                                <Button DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,4,0"
+                                                        Tag="{Binding}" Click="CategoryExpand_Click"
+                                                        Cursor="Hand" Background="Transparent" BorderThickness="0"
+                                                        VerticalAlignment="Center" Focusable="False">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Visibility" Value="Hidden"/>
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border Background="Transparent">
+                                                                            <TextBlock x:Name="arrow" Text="▸" FontSize="10" Foreground="#888"
+                                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                                <Setter TargetName="arrow" Property="Text" Value="▾"/>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasChildren}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                                <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Foreground="#444"
+                                                           Margin="4,0,0,0" VerticalAlignment="Center"
+                                                           ToolTip="Sürükleyerek taşı / içine ekle"/>
+                                                <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <!-- Surukle ghost -->
+                            <Popup x:Name="CategoryDragPopup" AllowsTransparency="True" IsHitTestVisible="False"
+                                   Placement="Absolute" StaysOpen="True">
+                                <Border Background="#2A2118" BorderBrush="#FF6B00" BorderThickness="1"
+                                        CornerRadius="9" Padding="12,8" Opacity="0.92">
+                                    <Border.Effect>
+                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" Color="#000"/>
+                                    </Border.Effect>
+                                    <TextBlock x:Name="TxtDragGhost" Foreground="#FF6B00" FontWeight="SemiBold" FontSize="12"/>
+                                </Border>
+                            </Popup>
+
+                            <Canvas x:Name="CatSelectionCanvas" IsHitTestVisible="False">
+                                <Rectangle x:Name="CatSelectionRect" Visibility="Collapsed"
+                                           Stroke="#FF6B00" StrokeThickness="1" Fill="#33FF6B00"
+                                           RadiusX="4" RadiusY="4"/>
+                            </Canvas>
+                            </Grid>
+
+                            <Button Grid.Row="3" Content="+  Yeni kategori"
+                                    Style="{StaticResource CategoryAddButtonStyle}"
+                                    Click="BtnAddCategory_Click"/>
+                        </Grid>
+                    </Border>
 
                     <!-- Sağ yüzen içerik paneli -->
                     <Border Grid.Column="1" Margin="6,12,14,14"
@@ -516,39 +890,92 @@
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.35" Color="#000000"/>
                         </Border.Effect>
-                        <Grid Margin="16">
+                        <Grid Margin="12">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="0,0,0,14">
+                            <!-- Ust arac cubugu: Yeni Sil Ac Klasorde Ac | Ara | Menu -->
+                            <Grid Grid.Row="0" Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Kayıt Adresi:" Foreground="#888888" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                                <TextBox x:Name="TxtDefaultFolder" Grid.Column="1" Style="{StaticResource ModernTextBoxStyle}" Height="34"/>
-                                <Button x:Name="BtnBrowseFolder" Content="Gözat" Grid.Column="2" Style="{StaticResource DarkButtonStyle}" Height="34" Margin="5,0,0,0" Click="BtnBrowseFolder_Click"/>
-                            </Grid>
 
-                            <Grid Grid.Row="1" Margin="0,0,0,14">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="75"/>
-                                    <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="75"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="TxtUrl" Style="{StaticResource ModernTextBoxStyle}" Height="34" Text=""/>
-                                <Button x:Name="BtnDownload" Content="İndir" Grid.Column="1" Style="{StaticResource OrangeButtonStyle}" Height="34" Margin="5,0,0,0" Click="BtnDownload_Click"/>
-                                <Button x:Name="BtnPauseResume" Content="Duraklat" Grid.Column="2" Style="{StaticResource DarkButtonStyle}" Height="34" Margin="5,0,0,0" IsEnabled="False" Click="BtnPauseResume_Click"/>
-                                <Button x:Name="BtnCancel" Content="İptal" Grid.Column="3" Style="{StaticResource CancelButtonStyle}" Height="34" Margin="5,0,0,0" IsEnabled="False" Click="BtnCancel_Click"/>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarNew_Click"
+                                            ToolTip="Yeni indirme">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Yeni" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarDelete_Click"
+                                            ToolTip="Seçilenleri sil">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Sil" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarOpen_Click"
+                                            ToolTip="Dosyayı aç">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Aç" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarOpenFolder_Click"
+                                            ToolTip="Klasörde aç">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Klasörü aç" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <Border Grid.Column="1" Background="#252525" BorderBrush="#333" BorderThickness="1"
+                                        CornerRadius="6" Height="30" Width="200" Margin="0,0,6,0">
+                                    <Grid>
+                                        <TextBlock Text="Search" Foreground="#666" Margin="10,0,28,0"
+                                                   VerticalAlignment="Center" FontSize="12"
+                                                   IsHitTestVisible="False">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=TxtSearch}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBox x:Name="TxtSearch" Background="Transparent" BorderThickness="0"
+                                                 Foreground="White" CaretBrush="White" FontSize="12"
+                                                 VerticalContentAlignment="Center" Padding="10,0,28,0"
+                                                 TextChanged="TxtSearch_TextChanged"/>
+                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                                   Foreground="#777" HorizontalAlignment="Right" Margin="0,0,10,0"
+                                                   VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                    </Grid>
+                                </Border>
+
+                                <Button Grid.Column="2" Width="32" Height="30"
+                                        Style="{StaticResource ToolbarFlatButtonStyle}" Margin="0"
+                                        Click="ToolbarSettings_Click" ToolTip="Ayarlar">
+                                    <TextBlock Text="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Button>
                             </Grid>
 
                             <!-- Liste: oval clip -->
-                            <Border x:Name="ListPanelBorder" Grid.Row="2" Background="{StaticResource CardDark}"
+                            <Border x:Name="ListPanelBorder" Grid.Row="1" Background="{StaticResource CardDark}"
                                     BorderBrush="#262626" BorderThickness="1"
                                     CornerRadius="14" ClipToBounds="True"
                                     SizeChanged="ListPanelBorder_SizeChanged">
@@ -559,7 +986,8 @@
                                       PreviewMouseLeftButtonUp="Marquee_PreviewMouseLeftButtonUp"
                                       LostMouseCapture="Marquee_LostMouseCapture">
 
-                    <DataGrid x:Name="DgDownloads" AutoGenerateColumns="False" IsReadOnly="True" 
+                    <DataGrid x:Name="DgDownloads" AutoGenerateColumns="False" IsReadOnly="False"
+                              CanUserAddRows="False" CanUserDeleteRows="False"
                               Background="Transparent" RowBackground="Transparent" 
                               BorderThickness="0" HeadersVisibility="Column" GridLinesVisibility="None"
                               Foreground="White" CanUserSortColumns="True" AllowDrop="True"
@@ -574,10 +1002,29 @@
                               SelectionChanged="DgDownloads_SelectionChanged">
 
                         <DataGrid.Resources>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#251A12"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#251A12"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkDarkBrushKey}" Color="#FF8533"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.GradientActiveCaptionBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.ActiveCaptionBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#2A2118"/>
+
+                            <!-- Kolon birakma gostergesi (Separator) turuncu -->
+                            <Style TargetType="Separator">
+                                <Setter Property="Background" Value="#FF6B00"/>
+                                <Setter Property="BorderBrush" Value="#FF6B00"/>
+                                <Setter Property="Foreground" Value="#FF6B00"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Separator">
+                                            <Border Background="#FF6B00" Width="3" CornerRadius="1"/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
 
                             <!-- Kolon ayirici (resize) tutamaci -->
                             <Style x:Key="ColumnHeaderGripperStyle" TargetType="{x:Type Thumb}">
@@ -724,7 +1171,25 @@
                         </DataGrid.Resources>
 
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="Dosya Adı" Width="*" MinWidth="140" MaxWidth="900">
+                            <!-- Secim tik -->
+                            <DataGridTemplateColumn Width="44" CanUserSort="False">
+                                <DataGridTemplateColumn.Header>
+                                    <CheckBox x:Name="ChkSelectAll" Width="16" Height="16"
+                                              VerticalAlignment="Center" HorizontalAlignment="Center"
+                                              Click="ChkSelectAll_Click"
+                                              Style="{StaticResource DarkCheckBoxStyle}"/>
+                                </DataGridTemplateColumn.Header>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  Width="16" Height="16"
+                                                  VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                  Style="{StaticResource DarkCheckBoxStyle}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Dosya Adı" Width="*" MinWidth="140" MaxWidth="900" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -737,7 +1202,7 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Boyut" Binding="{Binding FileSize}" Width="100" MinWidth="72" MaxWidth="160">
+                            <DataGridTextColumn Header="Boyut" Binding="{Binding FileSize}" Width="100" MinWidth="72" MaxWidth="160" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
@@ -745,7 +1210,7 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Tür" Binding="{Binding FileType}" Width="80" MinWidth="56" MaxWidth="120">
+                            <DataGridTextColumn Header="Tür" Binding="{Binding FileType}" Width="80" MinWidth="56" MaxWidth="120" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
@@ -753,7 +1218,7 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="130" MinWidth="110" MaxWidth="200">
+                            <DataGridTextColumn Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="130" MinWidth="110" MaxWidth="200" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
@@ -762,12 +1227,10 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
 
-                            <!-- Durum Sütunu Güncellemesi -->
-                            <DataGridTemplateColumn Header="Durum" Width="180" MinWidth="140" MaxWidth="320" CanUserResize="False">
+                            <DataGridTemplateColumn Header="Durum" Width="160" MinWidth="120" MaxWidth="280" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center">
-                                            <!-- Tamamlandı veya Normal Durum -->
                                             <TextBlock Text="{Binding Status}" VerticalAlignment="Center"
                                                        Foreground="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}">
                                                 <TextBlock.Style>
@@ -781,8 +1244,6 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
-
-                                            <!-- İndiriliyor Detayı (Titreşimi önlemek için sabit renkler eklendi) -->
                                             <StackPanel Orientation="Vertical">
                                                 <StackPanel.Style>
                                                     <Style TargetType="StackPanel">
@@ -794,19 +1255,38 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </StackPanel.Style>
-
                                                 <Grid Margin="0,0,0,3">
                                                     <TextBlock Text="{Binding StatusText}" FontSize="10" Foreground="#CCCCCC" HorizontalAlignment="Left"/>
                                                     <TextBlock Text="{Binding CurrentSpeed}" FontSize="10" Foreground="{StaticResource OrangeAccent}" FontWeight="Bold" HorizontalAlignment="Right"/>
                                                 </Grid>
-                                                <ProgressBar Value="{Binding ProgressValue}" Maximum="100" Height="5" 
-                                 Style="{StaticResource OrangeProgressBarStyle}"/>
+                                                <ProgressBar Value="{Binding ProgressValue}" Maximum="100" Height="5"
+                                                             Style="{StaticResource OrangeProgressBarStyle}"/>
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            
+
+                            <!-- Satir aksiyonlari: durdur|devam / indir / iptal -->
+                            <DataGridTemplateColumn Header="" Width="110" CanUserResize="False" CanUserSort="False" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Button Content="{Binding PauseResumeGlyph}" ToolTip="{Binding PauseResumeTip}"
+                                                    Style="{StaticResource RowActionButtonStyle}"
+                                                    Foreground="#7CFC9A" Click="RowPauseResume_Click"
+                                                    IsEnabled="{Binding CanPauseResume}"
+                                                    Tag="{Binding}"/>
+                                            <Button Content="⬇" ToolTip="İndirme penceresi" Style="{StaticResource RowActionButtonStyle}"
+                                                    Foreground="#FF6B00" Click="RowOpenDownload_Click"
+                                                    Tag="{Binding}"/>
+                                            <Button Content="✕" ToolTip="İptal et" Style="{StaticResource RowActionButtonStyle}"
+                                                    Foreground="#FF6B6B" Click="RowCancel_Click"
+                                                    Tag="{Binding}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
 

@@ -44,6 +44,8 @@ namespace DownloadMuck
 
             TxtFolder.IsEnabled = false;
             BtnBrowse.IsEnabled = false;
+            TxtFolder.IsHitTestVisible = false;
+            BtnBrowse.IsHitTestVisible = false;
             _item.PropertyChanged += ItemOnPropertyChanged;
 
             if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
@@ -82,6 +84,75 @@ namespace DownloadMuck
             TxtFolder.Text = folder;
             TxtSize.Text = string.IsNullOrWhiteSpace(sizeLabel) || sizeLabel == "-" ? "—" : sizeLabel;
             ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
+            TxtUrl.ContextMenu = BuildEditMenu();
+            TxtFolder.ContextMenu = BuildEditMenu();
+            TxtUrl.IsReadOnly = true;
+            DataObject.AddCopyingHandler(TxtUrl, (_, _) => { /* allow copy */ });
+            TxtUrl.PreviewMouseDoubleClick += (_, e) =>
+            {
+                TxtUrl.SelectAll();
+                e.Handled = true;
+            };
+            CommandManager.AddPreviewExecutedHandler(TxtUrl, (_, e) =>
+            {
+                if (e.Command == ApplicationCommands.Copy && TxtUrl.SelectionLength == 0)
+                {
+                    TxtUrl.SelectAll();
+                }
+            });
+        }
+
+        public void BringToFrontSoft()
+        {
+            // Kisa sure one al, sonra topmost kapat — arka plan islerine engel olmasin
+            try
+            {
+                Topmost = true;
+                Activate();
+                Dispatcher.BeginInvoke(() => Topmost = false, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
+            catch { /* ignore */ }
+        }
+
+        private static ContextMenu BuildEditMenu()
+        {
+            var menu = new ContextMenu { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
+            menu.Template = CreateMenuTemplate();
+            void StyleItem(MenuItem mi)
+            {
+                mi.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8));
+                mi.Background = Brushes.Transparent;
+                mi.Padding = new Thickness(12, 8, 12, 8);
+            }
+            var cut = new MenuItem { Header = "Kes", Command = ApplicationCommands.Cut };
+            var copy = new MenuItem { Header = "Kopyala", Command = ApplicationCommands.Copy };
+            var paste = new MenuItem { Header = "Yapıştır", Command = ApplicationCommands.Paste };
+            var selectAll = new MenuItem { Header = "Tümünü seç", Command = ApplicationCommands.SelectAll };
+            foreach (var mi in new[] { cut, copy, paste, selectAll }) StyleItem(mi);
+            menu.Items.Add(cut);
+            menu.Items.Add(copy);
+            menu.Items.Add(paste);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(selectAll);
+            // Sag tikta kopyala her zaman gorunsun
+            copy.IsEnabled = true;
+            return menu;
+        }
+
+        private static ControlTemplate CreateMenuTemplate()
+        {
+            var template = new ControlTemplate(typeof(ContextMenu));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C)));
+            factory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            factory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            factory.SetValue(Border.PaddingProperty, new Thickness(6));
+            var panel = new FrameworkElementFactory(typeof(StackPanel));
+            panel.SetValue(Panel.IsItemsHostProperty, true);
+            factory.AppendChild(panel);
+            template.VisualTree = factory;
+            return template;
         }
 
         private void SessionChrome_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -114,11 +185,14 @@ namespace DownloadMuck
 
         private async void BtnStart_Click(object sender, RoutedEventArgs e)
         {
-            if (_started && _engine != null && _item != null && _engine.IsPaused)
+            if (_started && _engine != null && _item != null
+                && (_engine.IsPaused || _item.IsPausedState || _item.IsErrorState))
             {
                 BtnPause.IsEnabled = true;
                 BtnStart.IsEnabled = false;
                 BtnStart.Content = "Başlat";
+                BtnStart.Opacity = 0.55;
+                TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = "Devam ediyor...";
                 await _host.ResumeFromSessionAsync(_item, _engine);
                 return;
@@ -137,12 +211,13 @@ namespace DownloadMuck
                 Directory.CreateDirectory(folder);
 
             _started = true;
-            TxtFolder.IsEnabled = false;
-            BtnBrowse.IsEnabled = false;
+            SetFolderPassive(true);
             BtnStart.IsEnabled = false;
+            BtnStart.Opacity = 0.55;
             BtnPause.IsEnabled = true;
             BtnCancelDl.IsEnabled = true;
             BtnPause.Content = "Duraklat";
+            TxtStatus.Visibility = Visibility.Visible;
             TxtStatus.Text = "İndiriliyor...";
 
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder);
@@ -151,6 +226,11 @@ namespace DownloadMuck
             _host.RegisterSessionWindow(_item, this);
             _item.PropertyChanged += ItemOnPropertyChanged;
             SyncFromItem();
+        }
+
+        public void RefreshFromHost()
+        {
+            Dispatcher.BeginInvoke(SyncFromItem);
         }
 
         private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -167,34 +247,61 @@ namespace DownloadMuck
 
             if (_item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
             {
+                TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = "İndirme tamamlandı";
                 PanelActive.Visibility = Visibility.Collapsed;
                 PanelDone.Visibility = Visibility.Visible;
+                SetFolderPassive(true);
             }
             else if (_item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase))
             {
+                TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = "İptal edildi";
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = true;
                 BtnStart.IsEnabled = false;
+                SetFolderPassive(true);
             }
             else if (_item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
             {
-                TxtStatus.Text = "Duraklatıldı — devam için Devam Et";
+                TxtStatus.Visibility = Visibility.Visible;
+                TxtStatus.Text = "Duraklatıldı";
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
+                BtnStart.Opacity = 1;
                 BtnStart.Content = "Devam Et";
                 BtnCancelDl.IsEnabled = true;
+                SetFolderPassive(true);
+                PanelActive.Visibility = Visibility.Visible;
+                PanelDone.Visibility = Visibility.Collapsed;
             }
             else if (_item.IsDownloading)
             {
+                TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = string.IsNullOrWhiteSpace(_item.StatusText) ? "İndiriliyor..." : _item.StatusText;
                 BtnPause.IsEnabled = true;
                 BtnPause.Content = "Duraklat";
                 BtnStart.IsEnabled = false;
+                BtnStart.Opacity = 0.55;
                 BtnStart.Content = "Başlat";
                 BtnCancelDl.IsEnabled = true;
+                SetFolderPassive(true);
+                PanelActive.Visibility = Visibility.Visible;
+                PanelDone.Visibility = Visibility.Collapsed;
             }
+            else
+            {
+                SetFolderPassive(_started);
+            }
+        }
+
+        private void SetFolderPassive(bool passive)
+        {
+            TxtFolder.IsEnabled = !passive;
+            BtnBrowse.IsEnabled = !passive;
+            TxtFolder.IsHitTestVisible = !passive;
+            BtnBrowse.IsHitTestVisible = !passive;
+            TxtFolder.Cursor = passive ? Cursors.Arrow : Cursors.IBeam;
         }
 
         private void BtnPause_Click(object sender, RoutedEventArgs e)

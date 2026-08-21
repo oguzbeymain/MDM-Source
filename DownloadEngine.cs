@@ -71,6 +71,7 @@ namespace DownloadMuck
             IsDownloading = true;
             IsPaused = false;
             IsCancelled = false;
+            CompletedSuccessfully = false;
 
             try
             {
@@ -93,6 +94,7 @@ namespace DownloadMuck
 
                         StatusChanged?.Invoke("Tek kanaldan indiriliyor...");
                         await DownloadSingleStreamAsync(response, _cts.Token);
+                        CompletedSuccessfully = true;
                         return;
                     }
 
@@ -109,7 +111,10 @@ namespace DownloadMuck
                 }
 
                 if (_isInitialized && TryCompleteIfAlreadyDownloaded())
+                {
+                    CompletedSuccessfully = true;
                     return;
+                }
 
                 StatusChanged?.Invoke($"İndiriliyor... ({_threadCount} Paralel Kanal)");
                 await DownloadChunksAsync(_cts.Token);
@@ -117,24 +122,21 @@ namespace DownloadMuck
             catch (OperationCanceledException)
             {
                 IsDownloading = false;
+                CompletedSuccessfully = false;
 
                 if (IsCancelled)
                 {
                     StatusChanged?.Invoke("İptal Edildi");
                     SpeedAndTimeChanged?.Invoke("", "00:00:00");
 
-                    // Sıfırlama işlemleri
                     _isInitialized = false;
                     _totalBytesDownloaded = 0;
                     _chunks = null;
 
-                    // Yarım kalan dosyayı temizle
                     try
                     {
                         if (File.Exists(_savePath))
-                        {
                             File.Delete(_savePath);
-                        }
                     }
                     catch { }
                 }
@@ -145,9 +147,18 @@ namespace DownloadMuck
                     SpeedAndTimeChanged?.Invoke("0 MB/s", "--:--:--");
                 }
             }
+            catch (Exception) when (_cts?.IsCancellationRequested == true && !IsCancelled)
+            {
+                IsDownloading = false;
+                IsPaused = true;
+                CompletedSuccessfully = false;
+                StatusChanged?.Invoke("İndirme Duraklatıldı!");
+                SpeedAndTimeChanged?.Invoke("0 MB/s", "--:--:--");
+            }
             catch (Exception)
             {
                 IsDownloading = false;
+                CompletedSuccessfully = false;
                 throw;
             }
         }
@@ -174,6 +185,7 @@ namespace DownloadMuck
 
             IsDownloading = false;
             IsPaused = false;
+            CompletedSuccessfully = true;
             ProgressChanged?.Invoke(100);
             SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
             StatusChanged?.Invoke("İndirme Tamamlandı!");
@@ -251,51 +263,70 @@ namespace DownloadMuck
 
                 downloadTasks.Add(Task.Run(async () =>
                 {
-                    using HttpClient chunkClient = CreateClient();
-                    var chunkRequest = new HttpRequestMessage(HttpMethod.Get, _url);
-                    chunkRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(chunk.CurrentOffset, chunk.End);
-
-                    using HttpResponseMessage chunkResponse = await chunkClient.SendAsync(chunkRequest, HttpCompletionOption.ResponseHeadersRead, token);
-                    chunkResponse.EnsureSuccessStatusCode();
-
-                    using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
-                    byte[] buffer = new byte[65536];
-                    int bytesRead;
-
-                    while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                    try
                     {
-                        token.ThrowIfCancellationRequested();
+                        using HttpClient chunkClient = CreateClient();
+                        var chunkRequest = new HttpRequestMessage(HttpMethod.Get, _url);
+                        chunkRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(chunk.CurrentOffset, chunk.End);
 
-                        await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, bytesRead), chunk.CurrentOffset, token);
-                        chunk.CurrentOffset += bytesRead;
+                        using HttpResponseMessage chunkResponse = await chunkClient.SendAsync(chunkRequest, HttpCompletionOption.ResponseHeadersRead, token);
+                        if (token.IsCancellationRequested) return;
+                        chunkResponse.EnsureSuccessStatusCode();
 
-                        long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, bytesRead);
-                        double progress = (double)currentTotal / _totalSize * 100;
-                        ReportProgressThrottled(progress);
+                        using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
+                        byte[] buffer = new byte[65536];
+                        int bytesRead;
+
+                        while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                        {
+                            token.ThrowIfCancellationRequested();
+
+                            await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, bytesRead), chunk.CurrentOffset, token);
+                            chunk.CurrentOffset += bytesRead;
+
+                            long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, bytesRead);
+                            double progress = (double)currentTotal / _totalSize * 100;
+                            ReportProgressThrottled(progress);
+                        }
                     }
+                    catch (OperationCanceledException) { /* pause/cancel */ }
+                    catch (Exception) when (token.IsCancellationRequested) { /* pause sirasi 403 vb. */ }
                 }, token));
             }
 
-            await Task.WhenAll(downloadTasks);
+            try
+            {
+                await Task.WhenAll(downloadTasks);
+            }
+            catch (Exception) when (token.IsCancellationRequested)
+            {
+                // Toplu iptalde WhenAll hatasini yut
+            }
 
-            // İndirme bittiği an Hız Zamanlayıcısını iptal et ve sonlanmasını bekle
             timerCts.Cancel();
             try { await timerTask; } catch { }
 
-            if (!token.IsCancellationRequested)
-            {
-                IsDownloading = false;
-                IsPaused = false;
-                ProgressChanged?.Invoke(100);
-                SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
-                StatusChanged?.Invoke("İndirme Tamamlandı!");
-            }
+            // Pause/cancel: normal return etme — ust katman IsPaused/IsCancelled set etsin
+            token.ThrowIfCancellationRequested();
+
+            IsDownloading = false;
+            IsPaused = false;
+            CompletedSuccessfully = true;
+            ProgressChanged?.Invoke(100);
+            SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
+            StatusChanged?.Invoke("İndirme Tamamlandı!");
         }
+
+        public bool CompletedSuccessfully { get; private set; }
 
         public void Pause()
         {
             if (IsDownloading && !IsPaused)
             {
+                // UI hemen Devam Et göstersin — async iptal bitmeden
+                IsPaused = true;
+                CompletedSuccessfully = false;
+                IsDownloading = false;
                 _cts?.Cancel();
             }
         }
@@ -306,6 +337,7 @@ namespace DownloadMuck
             {
                 IsCancelled = true;
                 IsPaused = false;
+                CompletedSuccessfully = false;
                 _cts?.Cancel();
             }
         }
@@ -328,7 +360,10 @@ namespace DownloadMuck
 
         private async Task DownloadSingleStreamAsync(HttpResponseMessage initialResponse, CancellationToken token)
         {
-            initialResponse.EnsureSuccessStatusCode();
+            if (!initialResponse.IsSuccessStatusCode)
+                throw new HttpRequestException(
+                    $"Response status code does not indicate success: {(int)initialResponse.StatusCode} ({initialResponse.StatusCode}).");
+
             using Stream stream = await initialResponse.Content.ReadAsStreamAsync(token);
             using FileStream fileStream = new FileStream(_savePath, FileMode.Create, FileAccess.Write);
 
@@ -337,24 +372,36 @@ namespace DownloadMuck
             long totalDownloaded = 0;
             long? totalSize = initialResponse.Content.Headers.ContentLength;
 
-            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+            try
             {
-                token.ThrowIfCancellationRequested();
-                await fileStream.WriteAsync(buffer, 0, bytesRead, token);
-                totalDownloaded += bytesRead;
-
-                if (totalSize.HasValue && totalSize.Value > 0)
+                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
                 {
-                    double progress = (double)totalDownloaded / totalSize.Value * 100;
-                    ReportProgressThrottled(progress);
-                }
-            }
+                    token.ThrowIfCancellationRequested();
+                    await fileStream.WriteAsync(buffer, 0, bytesRead, token);
+                    totalDownloaded += bytesRead;
 
-            ProgressChanged?.Invoke(100);
-            SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
-            StatusChanged?.Invoke("İndirme Tamamlandı!");
-            IsDownloading = false;
-            IsPaused = false;
+                    if (totalSize.HasValue && totalSize.Value > 0)
+                    {
+                        double progress = (double)totalDownloaded / totalSize.Value * 100;
+                        ReportProgressThrottled(progress);
+                    }
+                }
+
+                ProgressChanged?.Invoke(100);
+                SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
+                StatusChanged?.Invoke("İndirme Tamamlandı!");
+                IsDownloading = false;
+                IsPaused = false;
+                CompletedSuccessfully = true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception) when (token.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(token);
+            }
         }
     }
 }
