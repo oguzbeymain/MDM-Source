@@ -78,13 +78,13 @@ namespace DownloadMuck
                         try
                         {
                             TxtUrl.Text = url;
-                            await StartDownloadProcess(url, filename, mime);
+                            await StartDownloadProcess(url, filename, mime, selectItem: false);
                         }
                         catch (Exception ex)
                         {
                             Debug.WriteLine($"Capture download error: {ex.Message}");
                         }
-                    });
+                    }, System.Windows.Threading.DispatcherPriority.Background);
                 });
                 _captureServer.Start();
             }
@@ -198,15 +198,24 @@ namespace DownloadMuck
 
         private void MenuDeleteFile_Click(object sender, RoutedEventArgs e)
         {
+            DeleteSelectedItems();
+        }
+
+        private void DeleteSelectedItems()
+        {
             var selectedItems = DgDownloads.SelectedItems.Cast<DownloadItem>().ToList();
             if (selectedItems.Count == 0) return;
 
             string message = selectedItems.Count == 1
-                ? $"'{selectedItems[0].FileName}' dosyası diskten ve listeden silinsin mi?"
-                : $"{selectedItems.Count} dosya diskten ve listeden silinsin mi?";
+                ? $"“{selectedItems[0].FileName}” kalıcı olarak silinsin mi?"
+                : $"{selectedItems.Count} öğe kalıcı olarak silinsin mi?";
 
-            var result = MessageBox.Show(message, "Silme Onayı", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (result != MessageBoxResult.Yes) return;
+            string detail = selectedItems.Count == 1
+                ? "Dosya listeden kaldırılır ve diskteki kopyası da silinir."
+                : "Seçili dosyalar listeden kaldırılır ve diskteki kopyaları da silinir.";
+
+            if (!ConfirmDialog.Show(this, "Silme onayı", message, detail))
+                return;
 
             foreach (DownloadItem selectedItem in selectedItems)
             {
@@ -324,10 +333,10 @@ namespace DownloadMuck
         private async void BtnDownload_Click(object sender, RoutedEventArgs e)
         {
             string url = TxtUrl.Text.Trim();
-            await StartDownloadProcess(url, "");
+            await StartDownloadProcess(url, "", selectItem: true);
         }
 
-        private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null)
+        private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true)
         {
             string saveFolder = TxtDefaultFolder.Text.Trim();
 
@@ -342,6 +351,7 @@ namespace DownloadMuck
                 Directory.CreateDirectory(saveFolder);
             }
 
+            // Dosya adi cozumunu await ile yap; HTTP I/O UI'yi bloklamaz
             string solvedFileName = await ResolveFileNameAsync(url, incomingFilename, mimeHint);
             string savePath = GetUniqueFilePath(saveFolder, solvedFileName);
 
@@ -358,17 +368,20 @@ namespace DownloadMuck
 
             DownloadList.Insert(0, item);
 
-            var engine = new DownloadEngine(url, savePath, threadCount: 8);
+            int activeCount = Math.Max(1, _engines.Count + 1);
+            int threadCount = activeCount >= 3 ? 4 : 8;
+            var engine = new DownloadEngine(url, savePath, threadCount: threadCount);
             _engines[item] = engine;
 
             engine.TotalSizeKnown += (totalBytes) =>
             {
-                Dispatcher.BeginInvoke(() => item.FileSize = FormatFileSize(totalBytes));
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                    () => item.FileSize = FormatFileSize(totalBytes));
             };
 
             engine.ProgressChanged += (progress) =>
             {
-                Dispatcher.BeginInvoke(() =>
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
                     if (engine.IsCancelled) return;
                     if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) return;
@@ -382,7 +395,7 @@ namespace DownloadMuck
 
             engine.StatusChanged += (status) =>
             {
-                Dispatcher.BeginInvoke(() =>
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, () =>
                 {
                     if (status.Contains("İptal", StringComparison.OrdinalIgnoreCase))
                     {
@@ -391,23 +404,38 @@ namespace DownloadMuck
                         item.CurrentSpeed = "";
                         item.IsDownloading = false;
                         item.ProgressValue = 0;
+                        UpdateTransportButtons();
                     }
                     else if (status.Contains('%'))
                     {
                         if (!engine.IsCancelled)
                             item.StatusText = status;
                     }
-                    else
+                    else if (status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
+                             || status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)
+                             || status.Contains("Hata", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.Status = status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
+                            ? "Duraklatıldı"
+                            : status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)
+                                ? "Tamamlandı"
+                                : status;
+                        UpdateTransportButtons();
+                    }
+                    else if (!status.StartsWith("İndiriliyor", StringComparison.OrdinalIgnoreCase)
+                             && !status.Contains("kanal", StringComparison.OrdinalIgnoreCase)
+                             && !status.Contains("Dosya bilgileri", StringComparison.OrdinalIgnoreCase)
+                             && !status.Contains("Tek kanal", StringComparison.OrdinalIgnoreCase))
                     {
                         item.Status = status;
+                        UpdateTransportButtons();
                     }
-                    UpdateTransportButtons();
                 });
             };
 
             engine.SpeedAndTimeChanged += (speed, time) =>
             {
-                Dispatcher.BeginInvoke(() =>
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
                     if (engine.IsCancelled) return;
                     if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) return;
@@ -415,12 +443,14 @@ namespace DownloadMuck
                 });
             };
 
+            if (selectItem)
+                DgDownloads.SelectedItem = item;
+
             UpdateTransportButtons();
-            DgDownloads.SelectedItem = item;
 
             try
             {
-                await engine.StartOrResumeDownloadAsync();
+                await engine.StartOrResumeDownloadAsync().ConfigureAwait(true);
             }
             catch (Exception ex)
             {
@@ -471,28 +501,30 @@ namespace DownloadMuck
             return $"{mb / 1024.0:F2} GB";
         }
 
-        private DownloadItem? ResolveControlTarget()
+        private List<(DownloadItem Item, DownloadEngine Engine)> GetSelectedEngines()
         {
-            if (DgDownloads.SelectedItem is DownloadItem selected && _engines.ContainsKey(selected))
-                return selected;
-
-            return DownloadList.FirstOrDefault(i => _engines.ContainsKey(i));
+            return DgDownloads.SelectedItems
+                .OfType<DownloadItem>()
+                .Where(i => _engines.ContainsKey(i))
+                .Select(i => (i, _engines[i]))
+                .ToList();
         }
 
         private void UpdateTransportButtons()
         {
-            var target = ResolveControlTarget();
-            if (target != null && _engines.TryGetValue(target, out var engine))
+            var selected = GetSelectedEngines();
+            bool hasSelection = selected.Count > 0;
+
+            BtnPauseResume.IsEnabled = hasSelection;
+            BtnCancel.IsEnabled = hasSelection;
+
+            if (hasSelection)
             {
-                BtnPauseResume.IsEnabled = true;
-                BtnCancel.IsEnabled = true;
-                BtnPauseResume.Content = engine.IsPaused ? "Devam Et" : "Duraklat";
+                bool anyDownloading = selected.Any(x => x.Engine.IsDownloading && !x.Engine.IsPaused);
+                BtnPauseResume.Content = anyDownloading ? "Duraklat" : "Devam Et";
             }
             else
             {
-                bool anyActive = _engines.Count > 0;
-                BtnPauseResume.IsEnabled = anyActive;
-                BtnCancel.IsEnabled = anyActive;
                 BtnPauseResume.Content = "Duraklat";
             }
 
@@ -512,6 +544,11 @@ namespace DownloadMuck
                 DgDownloads.SelectAll();
                 e.Handled = true;
             }
+            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                DeleteSelectedItems();
+                e.Handled = true;
+            }
         }
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -522,79 +559,106 @@ namespace DownloadMuck
                 DgDownloads.SelectAll();
                 e.Handled = true;
             }
+            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None
+                     && DgDownloads.SelectedItems.Count > 0
+                     && !(Keyboard.FocusedElement is TextBox))
+            {
+                DeleteSelectedItems();
+                e.Handled = true;
+            }
         }
 
         private async void BtnPauseResume_Click(object sender, RoutedEventArgs e)
         {
-            var target = ResolveControlTarget();
-            if (target == null || !_engines.TryGetValue(target, out var engine))
+            var selected = GetSelectedEngines();
+            if (selected.Count == 0) return;
+
+            bool anyDownloading = selected.Any(x => x.Engine.IsDownloading && !x.Engine.IsPaused);
+
+            if (anyDownloading)
+            {
+                foreach (var (item, engine) in selected)
+                {
+                    if (engine.IsDownloading && !engine.IsPaused)
+                    {
+                        engine.Pause();
+                        item.Status = "Duraklatıldı";
+                        item.IsDownloading = false;
+                        item.CurrentSpeed = "";
+                        item.StatusText = "";
+                    }
+                }
+                UpdateTransportButtons();
                 return;
-
-            if (engine.IsDownloading)
-            {
-                engine.Pause();
-                BtnPauseResume.Content = "Devam Et";
-                target.Status = "Duraklatıldı";
-                target.IsDownloading = false;
-                target.CurrentSpeed = "";
             }
-            else if (engine.IsPaused)
-            {
-                BtnPauseResume.Content = "Duraklat";
-                target.Status = "İndiriliyor";
-                target.IsDownloading = true;
-                try
-                {
-                    await engine.StartOrResumeDownloadAsync();
-                }
-                catch (Exception ex)
-                {
-                    target.Status = "Hata";
-                    MessageBox.Show($"Hata oluştu: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                finally
-                {
-                    if (engine.IsPaused && !engine.IsCancelled)
-                    {
-                        target.Status = "Duraklatıldı";
-                        target.IsDownloading = false;
-                    }
-                    else if (engine.IsCancelled)
-                    {
-                        target.Status = "İptal Edildi";
-                        target.ProgressValue = 0;
-                        target.IsDownloading = false;
-                        _engines.Remove(target);
-                    }
-                    else if (!engine.IsPaused)
-                    {
-                        target.Status = "Tamamlandı";
-                        target.IsDownloading = false;
-                        target.StatusText = "";
-                        target.CurrentSpeed = "";
-                        if (File.Exists(target.FilePath))
-                            target.FileSize = FormatFileSize(new FileInfo(target.FilePath).Length);
-                        _engines.Remove(target);
-                    }
 
-                    UpdateTransportButtons();
+            // Hepsi duraklatilmis veya devam edilebilir — secilenleri devam ettir
+            foreach (var (item, engine) in selected.Where(x => x.Engine.IsPaused).ToList())
+            {
+                item.Status = "İndiriliyor";
+                item.IsDownloading = true;
+                _ = ResumeDownloadAsync(item, engine);
+            }
+
+            UpdateTransportButtons();
+        }
+
+        private async Task ResumeDownloadAsync(DownloadItem target, DownloadEngine engine)
+        {
+            try
+            {
+                await engine.StartOrResumeDownloadAsync();
+            }
+            catch (Exception ex)
+            {
+                target.Status = "Hata";
+                MessageBox.Show($"Hata oluştu: {ex.Message}", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                if (engine.IsPaused && !engine.IsCancelled)
+                {
+                    target.Status = "Duraklatıldı";
+                    target.IsDownloading = false;
                 }
+                else if (engine.IsCancelled)
+                {
+                    target.Status = "İptal Edildi";
+                    target.ProgressValue = 0;
+                    target.IsDownloading = false;
+                    target.StatusText = "";
+                    _engines.Remove(target);
+                }
+                else if (!engine.IsPaused)
+                {
+                    target.Status = "Tamamlandı";
+                    target.IsDownloading = false;
+                    target.StatusText = "";
+                    target.CurrentSpeed = "";
+                    if (File.Exists(target.FilePath))
+                        target.FileSize = FormatFileSize(new FileInfo(target.FilePath).Length);
+                    _engines.Remove(target);
+                }
+
+                UpdateTransportButtons();
             }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
         {
-            var target = ResolveControlTarget();
-            if (target == null || !_engines.TryGetValue(target, out var engine))
-                return;
+            var selected = GetSelectedEngines();
+            if (selected.Count == 0) return;
 
-            target.Status = "İptal Edildi";
-            target.StatusText = "";
-            target.CurrentSpeed = "";
-            target.IsDownloading = false;
-            target.ProgressValue = 0;
+            foreach (var (target, engine) in selected)
+            {
+                target.Status = "İptal Edildi";
+                target.StatusText = "";
+                target.CurrentSpeed = "";
+                target.IsDownloading = false;
+                target.ProgressValue = 0;
+                engine.Cancel();
+            }
 
-            engine.Cancel();
             UpdateTransportButtons();
         }
 

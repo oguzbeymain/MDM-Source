@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Collections.Concurrent;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -9,6 +10,8 @@ namespace DownloadMuck
 {
     public static class IconHelper
     {
+        private static readonly ConcurrentDictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+
         [DllImport("shell32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
 
@@ -35,8 +38,18 @@ namespace DownloadMuck
 
         public static ImageSource? GetIconForExtension(string fileNameOrExtension)
         {
+            string ext = Path.GetExtension(fileNameOrExtension);
+            if (string.IsNullOrEmpty(ext))
+                ext = fileNameOrExtension.StartsWith('.') ? fileNameOrExtension : "." + fileNameOrExtension;
+
+            return Cache.GetOrAdd(ext, LoadIcon);
+        }
+
+        private static ImageSource? LoadIcon(string extension)
+        {
             SHFILEINFO shfi = new SHFILEINFO();
-            IntPtr hImg = SHGetFileInfo(fileNameOrExtension, FILE_ATTRIBUTE_NORMAL, ref shfi, (uint)Marshal.SizeOf(shfi), SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
+            SHGetFileInfo(extension, FILE_ATTRIBUTE_NORMAL, ref shfi, (uint)Marshal.SizeOf(shfi),
+                SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES);
 
             if (shfi.hIcon == IntPtr.Zero) return null;
 
@@ -44,6 +57,7 @@ namespace DownloadMuck
                 shfi.hIcon,
                 Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
+            icon.Freeze();
 
             DestroyIcon(shfi.hIcon);
             return icon;

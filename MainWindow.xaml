@@ -293,6 +293,9 @@
                               Foreground="White" CanUserSortColumns="True" AllowDrop="True"
                               CanUserResizeColumns="True" CanUserReorderColumns="True"
                               SelectionMode="Extended" SelectionUnit="FullRow"
+                              EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
                               MouseDoubleClick="DgDownloads_MouseDoubleClick" Drop="DgDownloads_Drop"
                               PreviewKeyDown="DgDownloads_PreviewKeyDown"
                               SelectionChanged="DgDownloads_SelectionChanged">

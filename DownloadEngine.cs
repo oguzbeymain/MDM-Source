@@ -228,7 +228,7 @@ namespace DownloadMuck
                     chunkResponse.EnsureSuccessStatusCode();
 
                     using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[65536];
                     int bytesRead;
 
                     while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
@@ -280,12 +280,13 @@ namespace DownloadMuck
 
         private void ReportProgressThrottled(double progress)
         {
-            int bucket = progress >= 100 ? int.MaxValue : (int)(progress * 5); // 0.2% adimlar
+            // ~0.5% veya 250ms — UI donmasini azaltir (coklu indirmede)
+            int bucket = progress >= 100 ? int.MaxValue : (int)(progress * 2);
             long now = Environment.TickCount64;
             int lastBucket = Volatile.Read(ref _lastProgressBucket);
             long lastTs = Interlocked.Read(ref _lastProgressReportTimestamp);
 
-            if (bucket != int.MaxValue && bucket == lastBucket && now - lastTs < 100)
+            if (bucket != int.MaxValue && bucket == lastBucket && now - lastTs < 250)
                 return;
 
             Volatile.Write(ref _lastProgressBucket, bucket);
@@ -299,7 +300,7 @@ namespace DownloadMuck
             using Stream stream = await initialResponse.Content.ReadAsStreamAsync(token);
             using FileStream fileStream = new FileStream(_savePath, FileMode.Create, FileAccess.Write);
 
-            byte[] buffer = new byte[8192];
+            byte[] buffer = new byte[65536];
             int bytesRead;
             long totalDownloaded = 0;
             long? totalSize = initialResponse.Content.Headers.ContentLength;
