@@ -11,7 +11,6 @@ namespace DownloadMuck
     {
         protected override void OnStartup(StartupEventArgs e)
         {
-            // UI thread ve arka plan hatalarinda uygulamayi ayaga tut
             DispatcherUnhandledException += (_, args) =>
             {
                 Debug.WriteLine($"UI exception: {args.Exception}");
@@ -38,29 +37,75 @@ namespace DownloadMuck
 
             base.OnStartup(e);
 
+            if (!SingleInstance.TryAcquire())
+            {
+                Shutdown();
+                return;
+            }
+
             bool launchedByUpdater = e.Args.Any(a =>
                 string.Equals(a, "--from-updater", StringComparison.OrdinalIgnoreCase));
+            bool startBackground = e.Args.Any(a =>
+                string.Equals(a, "--background", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
 
             string updaterPath = Path.Combine(AppContext.BaseDirectory, "MDM.Updater.exe");
             bool updaterExists = File.Exists(updaterPath);
 
             if (updaterExists && !launchedByUpdater && !IsDevelopmentBuild())
             {
-                Process.Start(new ProcessStartInfo
+                try
                 {
-                    FileName = updaterPath,
-                    WorkingDirectory = AppContext.BaseDirectory,
-                    UseShellExecute = true
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = updaterPath,
+                        WorkingDirectory = AppContext.BaseDirectory,
+                        UseShellExecute = true
+                    });
+                    SingleInstance.Release();
+                    Shutdown();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Updater baslatilamadi, ana uygulama aciliyor: {ex.Message}");
+                }
+            }
+
+            try
+            {
+                AutoStartHelper.EnsureRegistered();
+
+                var main = new MainWindow();
+                MainWindow = main;
+                main.Show();
+                if (startBackground)
+                    main.HideToTray();
+
+                SingleInstance.StartListening(() =>
+                {
+                    main.Dispatcher.BeginInvoke(() => main.ShowFromTray());
                 });
-                Shutdown();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Uygulama baslatilamadi:\n{ex.Message}",
+                    "MDM",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                SingleInstance.Release();
+                Shutdown(-1);
                 return;
             }
 
-            var main = new MainWindow();
-            MainWindow = main;
-            main.Show();
-
             _ = Task.Run(ExtensionInstaller.EnsureInstalled);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            SingleInstance.Release();
+            base.OnExit(e);
         }
 
         private static bool IsDevelopmentBuild()

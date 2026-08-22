@@ -90,18 +90,20 @@ namespace DownloadMuck
 
         private static void TryWritePortFile(int port)
         {
-            try
+            string text = port.ToString();
+            // Eski yol + ayarlar/eklenti klasörü (MuckDownloadManager)
+            foreach (string folder in new[] { "MDM", "MuckDownloadManager" })
             {
-                string dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "MDM");
-                Directory.CreateDirectory(dir);
-                File.WriteAllText(
-                    Path.Combine(dir, "capture_port.txt"),
-                    port.ToString(),
-                    Encoding.ASCII);
+                try
+                {
+                    string dir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        folder);
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(Path.Combine(dir, "capture_port.txt"), text, Encoding.ASCII);
+                }
+                catch { /* ignore */ }
             }
-            catch { /* ignore */ }
         }
 
         private async Task AcceptLoopAsync(CancellationToken token)

@@ -53,7 +53,7 @@
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
                         Margin="16,8,16,14">
-                <Button Content="Vazgeç" Width="78" Height="28" Margin="0,0,8,0"
+                <Button Content="Vazgeç" x:Name="BtnCancelLabel" Width="78" Height="28" Margin="0,0,8,0"
                         Cursor="Hand" Click="BtnCancel_Click" FontSize="12"
                         Foreground="#DDD" BorderThickness="0">
                     <Button.Template>
@@ -70,16 +70,17 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                <Button Content="Sil" Width="72" Height="28" Cursor="Hand" Click="BtnConfirm_Click"
-                        FontSize="12" FontWeight="SemiBold" Foreground="White" BorderThickness="0">
+                <Button x:Name="BtnConfirm" Content="Onayla" Width="72" Height="28" Cursor="Hand" Click="BtnConfirm_Click"
+                        FontSize="12" FontWeight="SemiBold" Foreground="White" BorderThickness="0"
+                        Background="#C62828">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="#C62828" CornerRadius="8">
+                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#E53935"/>
+                                    <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

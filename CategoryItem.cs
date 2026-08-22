@@ -70,6 +70,27 @@ namespace DownloadMuck
 
         public HashSet<string>? Extensions { get; set; }
 
+        /// <summary>Ozel kayit klasoru; bos ise Downloads altinda isimle olusturulur.</summary>
+        private string? _customFolderPath;
+        public string? CustomFolderPath
+        {
+            get => _customFolderPath;
+            set => SetField(ref _customFolderPath, value);
+        }
+
+        private int _fileCount;
+        public int FileCount
+        {
+            get => _fileCount;
+            set
+            {
+                if (!SetField(ref _fileCount, value)) return;
+                OnPropertyChanged(nameof(CountLabel));
+            }
+        }
+
+        public string CountLabel => FileCount > 0 ? FileCount.ToString() : "";
+
         public string DisplayLabel => $"{Icon}  {Name}";
 
         public bool HasChildren => Children.Count > 0;

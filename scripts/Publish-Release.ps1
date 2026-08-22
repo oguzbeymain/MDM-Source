@@ -60,8 +60,8 @@ $commonArgs = @(
     "-c", "Release",
     "-r", $Runtime,
     "--self-contained", "true",
-    "-p:PublishSingleFile=true",
-    "-p:IncludeNativeLibrariesForSelfExtract=true",
+    "-p:PublishSingleFile=false",
+    "-p:IncludeNativeLibrariesForSelfExtract=false",
     "-p:Version=$Version",
     "-p:InformationalVersion=$Version",
     "-o", $PublishDir

@@ -116,6 +116,13 @@ namespace DownloadMuck
             set => SetField(ref _categoryId, value);
         }
 
+        private string _url = "";
+        public string Url
+        {
+            get => _url;
+            set => SetField(ref _url, value);
+        }
+
         public bool IsPausedState =>
             Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase);
 
@@ -123,6 +130,15 @@ namespace DownloadMuck
             Status.Contains("Hata", StringComparison.OrdinalIgnoreCase);
 
         public bool CanPauseResume => IsDownloading || IsPausedState || IsErrorState;
+
+        public bool IsCompleted =>
+            Status.Contains("Tamamlandı", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsCancelled =>
+            Status.Contains("İptal", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Tamamlanan / iptal edilen satırlarda sağdaki aksiyon ikonları gizlenir.</summary>
+        public bool ShowRowActions => !IsCompleted && !IsCancelled;
 
         public string PauseResumeGlyph => (IsPausedState || IsErrorState) ? "▶" : "⏸";
 
@@ -141,6 +157,9 @@ namespace DownloadMuck
                 OnPropertyChanged(nameof(IsPausedState));
                 OnPropertyChanged(nameof(IsErrorState));
                 OnPropertyChanged(nameof(CanPauseResume));
+                OnPropertyChanged(nameof(IsCompleted));
+                OnPropertyChanged(nameof(IsCancelled));
+                OnPropertyChanged(nameof(ShowRowActions));
                 OnPropertyChanged(nameof(PauseResumeGlyph));
                 OnPropertyChanged(nameof(PauseResumeTip));
             }

@@ -6,11 +6,22 @@ namespace DownloadMuck
 {
     public partial class CategoryRulesDialog : Window
     {
-        public sealed class ExtOption
+        public sealed class ExtOption : System.ComponentModel.INotifyPropertyChanged
         {
+            private bool _isChecked;
             public string Ext { get; set; } = "";
             public string Label => Ext;
-            public bool IsChecked { get; set; }
+            public bool IsChecked
+            {
+                get => _isChecked;
+                set
+                {
+                    if (_isChecked == value) return;
+                    _isChecked = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsChecked)));
+                }
+            }
+            public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         }
 
         private readonly CategoryItem _category;
@@ -47,6 +58,27 @@ namespace DownloadMuck
             }
 
             LstExt.ItemsSource = _options;
+
+            if (category.IsBuiltin && CategoryStore.GetDefaultExtensions(category.Id) != null)
+                BtnResetDefaults.Visibility = Visibility.Visible;
+        }
+
+        private void BtnResetDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            var defaults = CategoryStore.GetDefaultExtensions(_category.Id);
+            if (defaults == null) return;
+
+            _options.Clear();
+            foreach (var ext in Presets)
+            {
+                _options.Add(new ExtOption
+                {
+                    Ext = ext,
+                    IsChecked = defaults.Contains(ext)
+                });
+            }
+            foreach (var extra in defaults.Where(d => !Presets.Contains(d, StringComparer.OrdinalIgnoreCase)))
+                _options.Add(new ExtOption { Ext = extra, IsChecked = true });
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)

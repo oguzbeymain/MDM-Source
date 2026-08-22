@@ -12,12 +12,14 @@ namespace DownloadMuck
     {
         private readonly MainWindow _host;
         private readonly string _url;
-        private readonly string _fileName;
+        private string _fileName;
         private DownloadItem? _item;
         private DownloadEngine? _engine;
         private bool _started;
 
         public DownloadItem? BoundItem => _item;
+        public string SessionUrl => _url;
+        public bool HasStarted => _started;
 
         public DownloadSessionWindow(MainWindow host, string url, string fileName, string defaultFolder, string sizeLabel)
         {
@@ -86,6 +88,10 @@ namespace DownloadMuck
             ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
             TxtUrl.ContextMenu = BuildEditMenu();
             TxtFolder.ContextMenu = BuildEditMenu();
+            TxtUrl.CaretBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            TxtUrl.SelectionBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            TxtFolder.CaretBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            TxtFolder.SelectionBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
             TxtUrl.IsReadOnly = true;
             DataObject.AddCopyingHandler(TxtUrl, (_, _) => { /* allow copy */ });
             TxtUrl.PreviewMouseDoubleClick += (_, e) =>
@@ -114,28 +120,68 @@ namespace DownloadMuck
             catch { /* ignore */ }
         }
 
+        /// <summary>Ağdan gelen dosya adı / boyut bilgisini oturum başlamadan günceller.</summary>
+        public void ApplyResolvedMeta(string fileName, string? sizeLabel)
+        {
+            if (_started) return;
+
+            if (!string.IsNullOrWhiteSpace(fileName) &&
+                !string.Equals(_fileName, fileName, StringComparison.Ordinal))
+            {
+                _fileName = fileName;
+                TxtFileName.Text = fileName;
+                TxtFileType.Text = FileNameHelper.FormatTypeLabel(fileName);
+                ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(sizeLabel) && sizeLabel != "-")
+                TxtSize.Text = sizeLabel;
+        }
+
+        public void ApplyDefaultFolderIfIdle(string folder)
+        {
+            if (_started || string.IsNullOrWhiteSpace(folder)) return;
+            TxtFolder.Text = folder;
+        }
+
+        public void RebindEngine(DownloadEngine engine)
+        {
+            _engine = engine;
+        }
+
         private static ContextMenu BuildEditMenu()
         {
-            var menu = new ContextMenu { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
-            menu.Template = CreateMenuTemplate();
-            void StyleItem(MenuItem mi)
+            var menu = new ContextMenu
             {
-                mi.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8));
-                mi.Background = Brushes.Transparent;
-                mi.Padding = new Thickness(12, 8, 12, 8);
-            }
-            var cut = new MenuItem { Header = "Kes", Command = ApplicationCommands.Cut };
-            var copy = new MenuItem { Header = "Kopyala", Command = ApplicationCommands.Copy };
-            var paste = new MenuItem { Header = "Yapıştır", Command = ApplicationCommands.Paste };
-            var selectAll = new MenuItem { Header = "Tümünü seç", Command = ApplicationCommands.SelectAll };
-            foreach (var mi in new[] { cut, copy, paste, selectAll }) StyleItem(mi);
-            menu.Items.Add(cut);
-            menu.Items.Add(copy);
-            menu.Items.Add(paste);
-            menu.Items.Add(new Separator());
-            menu.Items.Add(selectAll);
-            // Sag tikta kopyala her zaman gorunsun
-            copy.IsEnabled = true;
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FocusVisualStyle = null
+            };
+            menu.Template = CreateMenuTemplate();
+            var itemTemplate = CreateMenuItemTemplate();
+
+            MenuItem Make(string header, RoutedUICommand cmd) => new()
+            {
+                Header = header,
+                Command = cmd,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                Background = Brushes.Transparent,
+                FontSize = 11,
+                Padding = new Thickness(10, 5, 10, 5),
+                Height = 28,
+                FocusVisualStyle = null,
+                Template = itemTemplate
+            };
+
+            menu.Items.Add(Make("Kes", ApplicationCommands.Cut));
+            menu.Items.Add(Make("Kopyala", ApplicationCommands.Copy));
+            menu.Items.Add(Make("Yapıştır", ApplicationCommands.Paste));
+            var sepFactory = new FrameworkElementFactory(typeof(Border));
+            sepFactory.SetValue(Border.HeightProperty, 1.0);
+            sepFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            sepFactory.SetValue(Border.MarginProperty, new Thickness(6, 3, 6, 3));
+            menu.Items.Add(new Separator { Template = new ControlTemplate(typeof(Separator)) { VisualTree = sepFactory } });
+            menu.Items.Add(Make("Tümünü seç", ApplicationCommands.SelectAll));
             return menu;
         }
 
@@ -146,12 +192,40 @@ namespace DownloadMuck
             factory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C)));
             factory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
             factory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-            factory.SetValue(Border.PaddingProperty, new Thickness(6));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            factory.SetValue(Border.PaddingProperty, new Thickness(4));
             var panel = new FrameworkElementFactory(typeof(StackPanel));
             panel.SetValue(Panel.IsItemsHostProperty, true);
             factory.AppendChild(panel);
             template.VisualTree = factory;
+            return template;
+        }
+
+        private static ControlTemplate CreateMenuItemTemplate()
+        {
+            var template = new ControlTemplate(typeof(MenuItem));
+            var bd = new FrameworkElementFactory(typeof(Border));
+            bd.Name = "itemBorder";
+            bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(MenuItem.BackgroundProperty));
+            bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            bd.SetValue(Border.PaddingProperty, new TemplateBindingExtension(MenuItem.PaddingProperty));
+            bd.SetValue(Border.BorderThicknessProperty, new Thickness(0));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bd.AppendChild(cp);
+            template.VisualTree = bd;
+
+            var hi = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            hi.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "itemBorder"));
+            hi.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            template.Triggers.Add(hi);
+
+            var kf = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+            kf.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "itemBorder"));
+            kf.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            template.Triggers.Add(kf);
+
             return template;
         }
 
@@ -203,7 +277,7 @@ namespace DownloadMuck
             string folder = TxtFolder.Text.Trim();
             if (string.IsNullOrWhiteSpace(folder))
             {
-                MessageBox.Show("Kayıt klasörü seçin.", "Uyarı", MessageBoxButton.OK, MessageBoxImage.Warning);
+                InfoDialog.Show(_host, "Uyarı", "Kayıt klasörü seçin.");
                 return;
             }
 
@@ -330,11 +404,36 @@ namespace DownloadMuck
             Close();
         }
 
+        private Point _moveDragStart;
+
+        private void BtnMoveFile_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _moveDragStart = e.GetPosition(null);
+        }
+
+        private void BtnMoveFile_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || _item == null) return;
+            Point pos = e.GetPosition(null);
+            if (Math.Abs(pos.X - _moveDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(pos.Y - _moveDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+                return;
+
+            var list = new List<DownloadItem> { _item };
+            var data = new DataObject();
+            if (File.Exists(_item.FilePath))
+                data.SetData(DataFormats.FileDrop, new[] { _item.FilePath });
+            data.SetData("DownloadItems", list);
+            data.SetData("DownloadItem", _item);
+            DragDrop.DoDragDrop(BtnMoveFile, data, DragDropEffects.Copy | DragDropEffects.Move);
+            e.Handled = true;
+        }
+
         private void BtnOpenFile_Click(object sender, RoutedEventArgs e)
         {
             if (_item == null || !File.Exists(_item.FilePath)) return;
             try { Process.Start(new ProcessStartInfo(_item.FilePath) { UseShellExecute = true }); }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Hata", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { InfoDialog.Show(_host, "Hata", ex.Message); }
         }
 
         private void BtnOpenFolder_Click(object sender, RoutedEventArgs e)
@@ -352,7 +451,7 @@ namespace DownloadMuck
                         Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
                 }
             }
-            catch (Exception ex) { MessageBox.Show(ex.Message, "Hata", MessageBoxButton.OK, MessageBoxImage.Error); }
+            catch (Exception ex) { InfoDialog.Show(_host, "Hata", ex.Message); }
         }
 
         private void BtnDelete_Click(object sender, RoutedEventArgs e)
@@ -360,7 +459,8 @@ namespace DownloadMuck
             if (_item == null) return;
             if (!ConfirmDialog.Show(this, "Silme onayı",
                     $"“{_item.FileName}” silinsin mi?",
-                    "Dosya listeden ve diskten kaldırılır."))
+                    "Dosya listeden ve diskten kaldırılır.",
+                    confirmText: "Sil", danger: true))
                 return;
 
             _host.DeleteItemFromSession(_item);

@@ -38,6 +38,12 @@ namespace DownloadMuck
 
         public static void Show(Window? owner, string title, string message, string detail = "")
         {
+            if (Application.Current?.MainWindow is MainWindow)
+            {
+                AppModal.Info(title, message, detail);
+                return;
+            }
+
             var dlg = new InfoDialog(title, message, detail);
             if (owner != null) dlg.Owner = owner;
             dlg.ShowDialog();

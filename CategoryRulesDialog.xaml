@@ -91,38 +91,57 @@
                 </Grid>
             </Grid>
 
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="14,8,14,14">
-                <Button Content="İptal" Width="78" Height="30" Margin="0,0,8,0" Click="BtnCancel_Click"
-                        Cursor="Hand" Foreground="#CCC" BorderThickness="0" FontSize="12">
+            <Grid Grid.Row="2" Margin="14,8,14,14">
+                <Button x:Name="BtnResetDefaults" Content="Varsayılana dön" MinWidth="110" Height="30"
+                        HorizontalAlignment="Left" Click="BtnResetDefaults_Click" Cursor="Hand"
+                        Foreground="#CCC" BorderThickness="0" FontSize="11" Visibility="Collapsed">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="#2D2D2D" CornerRadius="8">
+                            <Border x:Name="bd" Background="#2D2D2D" CornerRadius="8" Padding="10,0">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
+                                    <Setter Property="Foreground" Value="#FF6B00"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                <Button Content="Kaydet" Width="78" Height="30" Click="BtnSave_Click"
-                        Cursor="Hand" Foreground="White" BorderThickness="0" FontSize="12" FontWeight="SemiBold">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bd" Background="#FF6B00" CornerRadius="8">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bd" Property="Background" Value="#FF8533"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
-            </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="İptal" Width="78" Height="30" Margin="0,0,8,0" Click="BtnCancel_Click"
+                            Cursor="Hand" Foreground="#CCC" BorderThickness="0" FontSize="12">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="bd" Background="#2D2D2D" CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button Content="Kaydet" Width="78" Height="30" Click="BtnSave_Click"
+                            Cursor="Hand" Foreground="White" BorderThickness="0" FontSize="12" FontWeight="SemiBold">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="bd" Background="#FF6B00" CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#FF8533"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Grid>
     </Border>
 </Window>

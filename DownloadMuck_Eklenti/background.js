@@ -1,7 +1,10 @@
-// DownloadMuck / MDM tarayici entegrasyonu v1.4
+// DownloadMuck / MDM tarayici entegrasyonu v1.6
 // Once masaustu uygulamasina ilet; BASARILI olursa tarayici indirmesini iptal et.
 
 const CANDIDATE_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
+const recentHandoffs = new Map(); // url -> timestamp
+const HANDOFF_DEBOUNCE_MS = 15000;
+const PROBE_TIMEOUT_MS = 900;
 
 async function disableBrowserDownloadUi() {
   try {
@@ -47,35 +50,73 @@ async function savePreferredPort(port) {
   } catch (_) { /* ignore */ }
 }
 
+async function postToEndpoint(endpoint, payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: payload,
+      signal: controller.signal
+    });
+    return response.ok;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function handoffToDesktop(url, filename, mime) {
   const payload = JSON.stringify({ url, filename, mime: mime || "" });
   const preferred = await getPreferredPort();
   const endpoints = buildEndpoints(preferred);
 
-  for (const endpoint of endpoints) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 600);
-
-      const response = await fetch(endpoint.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: payload,
-        signal: controller.signal
-      });
-
-      clearTimeout(timer);
-
-      if (response.ok) {
-        await savePreferredPort(endpoint.port);
-        console.log("MDM: handoff OK via", endpoint.url);
-        return true;
-      }
-    } catch (_) {
-      // sonraki porta gec
+  // Once tercih edilen portu hizli dene
+  if (preferred) {
+    for (const endpoint of endpoints.filter(e => e.port === preferred)) {
+      try {
+        if (await postToEndpoint(endpoint, payload, 1500)) {
+          await savePreferredPort(endpoint.port);
+          console.log("MDM: handoff OK via", endpoint.url);
+          return true;
+        }
+      } catch (_) { /* sonraki */ }
     }
   }
 
+  // Ayni porta cift istek atma (127.0.0.1 yeterli)
+  const pending = endpoints
+    .filter(e => e.url.includes("127.0.0.1"))
+    .map(async (endpoint) => {
+    try {
+      if (await postToEndpoint(endpoint, payload, PROBE_TIMEOUT_MS)) {
+        return endpoint;
+      }
+    } catch (_) { /* ignore */ }
+    return null;
+  });
+
+  const results = await Promise.all(pending);
+  const hit = results.find(Boolean);
+  if (hit) {
+    await savePreferredPort(hit.port);
+    console.log("MDM: handoff OK via", hit.url);
+    return true;
+  }
+
+  return false;
+}
+
+function shouldSkipHandoff(url) {
+  const now = Date.now();
+  const last = recentHandoffs.get(url);
+  if (last && now - last < HANDOFF_DEBOUNCE_MS) {
+    console.log("MDM: debounce skip", url);
+    return true;
+  }
+  for (const [k, t] of recentHandoffs) {
+    if (now - t > HANDOFF_DEBOUNCE_MS * 2) recentHandoffs.delete(k);
+  }
   return false;
 }
 
@@ -94,7 +135,6 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
     return;
   }
 
-  // Shelf/UI kapali kalsin
   disableBrowserDownloadUi();
 
   const url = downloadItem.finalUrl || downloadItem.url || "";
@@ -106,20 +146,26 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
     return;
   }
 
+  // Ayni URL kisa surede tekrar gelirse (redirect/retry) yeni pencere acma
+  if (shouldSkipHandoff(url)) {
+    try { await chrome.downloads.cancel(downloadItem.id); } catch (_) { /* ignore */ }
+    try { await chrome.downloads.erase({ id: downloadItem.id }); } catch (_) { /* ignore */ }
+    return;
+  }
+
   const fullPath = downloadItem.filename || "";
   const rawFileName = fullPath.split(/[/\\]/).pop() || "download";
   const mime = downloadItem.mime || "";
 
-  // Once uygulamaya ilet — basariliysa hemen sil (bildirim/raf azalir)
   const accepted = await handoffToDesktop(url, rawFileName, mime);
 
   if (accepted) {
+    recentHandoffs.set(url, Date.now());
     try { await chrome.downloads.cancel(downloadItem.id); } catch (_) { /* ignore */ }
     try { await chrome.downloads.erase({ id: downloadItem.id }); } catch (_) { /* ignore */ }
     console.log("MDM: indirme masaustu uygulamasina aktarildi:", rawFileName);
     return;
   }
 
-  // Uygulama yok — tarayici indirsin (pause etmedik, zaten devam ediyor)
   console.warn("MDM: masaustu uygulamaya ulasilamadi, tarayici indirmesi suruyor.");
 });
