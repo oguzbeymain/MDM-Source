@@ -56,7 +56,10 @@ namespace DownloadMuck
                 MainWindow = main;
                 main.Show();
                 if (startBackground)
+                {
+                    main.BeginBackgroundCaptureQuiet();
                     main.HideToTray();
+                }
 
                 SingleInstance.StartListening(
                     onShowRequested: () => main.Dispatcher.BeginInvoke(() => main.ShowFromTray()),

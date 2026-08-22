@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace DownloadMuck
 {
@@ -84,24 +85,21 @@ namespace DownloadMuck
                 var hwnd = new WindowInteropHelper(window).Handle;
                 if (hwnd == IntPtr.Zero) return;
 
-                // DWM state transition'ları AÇIK (zorla kapalı değil)
                 int transitionsDisabled = 0;
                 DwmSetWindowAttribute(hwnd, DwmwaTransitionsForceDisabled, ref transitionsDisabled, sizeof(int));
 
-                // Standart overlapped stiller — DWM animasyonu için gerekli
                 int style = GetWindowLong(hwnd, GwlStyle);
                 style |= WsCaption | WsThickFrame | WsMinimizeBox | WsMaximizeBox | WsSysMenu;
                 SetWindowLong(hwnd, GwlStyle, style);
                 SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoZOrder | SwpFrameChanged);
 
-                // Win11 yuvarlak köşe (Win10'da no-op / fail → kare, DWM için doğru)
                 int pref = DwmWcpRound;
                 DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref pref, sizeof(int));
             }
             catch { /* ignore */ }
         }
 
-        public static void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
+        private static void WmGetMinMaxInfo(Window window, IntPtr hwnd, IntPtr lParam)
         {
             var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
             IntPtr mon = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
@@ -120,17 +118,36 @@ namespace DownloadMuck
             mmi.ptMaxTrackSize.X = mmi.ptMaxSize.X;
             mmi.ptMaxTrackSize.Y = mmi.ptMaxSize.Y;
 
-            Marshal.StructureToPtr(mmi, lParam, false);
-        }
-
-        public static IntPtr HookWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-        {
-            if (msg == WM_GETMINMAXINFO)
+            // WPF MinWidth/MinHeight — DPI ile fiziksel piksele çevir
+            // (handled=true ile varsayılan min track silindiği için zorunlu)
+            double dpiX = 96, dpiY = 96;
+            try
             {
-                WmGetMinMaxInfo(hwnd, lParam);
-                handled = true;
+                var src = PresentationSource.FromVisual(window);
+                if (src?.CompositionTarget != null)
+                {
+                    Matrix m = src.CompositionTarget.TransformToDevice;
+                    dpiX = 96 * m.M11;
+                    dpiY = 96 * m.M22;
+                }
             }
-            return IntPtr.Zero;
+            catch { /* ignore */ }
+
+            double minW = window.MinWidth;
+            double minH = window.MinHeight;
+            if (double.IsNaN(minW) || minW <= 0) minW = 880;
+            if (double.IsNaN(minH) || minH <= 0) minH = 480;
+
+            mmi.ptMinTrackSize.X = Math.Max(200, (int)Math.Ceiling(minW * dpiX / 96.0));
+            mmi.ptMinTrackSize.Y = Math.Max(200, (int)Math.Ceiling(minH * dpiY / 96.0));
+
+            // Min, max'tan büyük olmasın
+            if (mmi.ptMinTrackSize.X > mmi.ptMaxTrackSize.X)
+                mmi.ptMinTrackSize.X = mmi.ptMaxTrackSize.X;
+            if (mmi.ptMinTrackSize.Y > mmi.ptMaxTrackSize.Y)
+                mmi.ptMinTrackSize.Y = mmi.ptMaxTrackSize.Y;
+
+            Marshal.StructureToPtr(mmi, lParam, false);
         }
 
         public static void Attach(Window window)
@@ -139,7 +156,17 @@ namespace DownloadMuck
             {
                 var hwnd = new WindowInteropHelper(window).Handle;
                 if (hwnd == IntPtr.Zero) return;
-                HwndSource.FromHwnd(hwnd)?.AddHook(HookWndProc);
+
+                HwndSource.FromHwnd(hwnd)?.AddHook((IntPtr h, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+                {
+                    if (msg == WM_GETMINMAXINFO)
+                    {
+                        WmGetMinMaxInfo(window, h, lParam);
+                        handled = true;
+                    }
+                    return IntPtr.Zero;
+                });
+
                 ApplyDwmNativeChrome(window);
             };
         }

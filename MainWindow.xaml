@@ -4,17 +4,18 @@
         xmlns:local="clr-namespace:DownloadMuck"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="MuckDownloadManager" Height="600" Width="980"
-        MinHeight="380" MinWidth="640"
+        MinHeight="520" MinWidth="920"
         Background="#121212" Foreground="#E0E0E0"
         WindowStartupLocation="CenterScreen" WindowStyle="SingleBorderWindow"
         AllowsTransparency="False" ResizeMode="CanResize"
         FontFamily="Segoe UI"
         Icon="pack://application:,,,/Assets/mdm.ico"
         PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewMouseLeftButtonDown="Window_PreviewMouseLeftButtonDown"
         SizeChanged="MainWindow_SizeChanged">
 
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="28"
+        <shell:WindowChrome CaptionHeight="34"
                             ResizeBorderThickness="4"
                             GlassFrameThickness="0"
                             CornerRadius="0"
@@ -149,7 +150,7 @@
             <Setter Property="Foreground" Value="#888888"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Width" Value="40"/>
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="Height" Value="34"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -193,7 +194,7 @@
             <Setter Property="Foreground" Value="#888888"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Width" Value="40"/>
-            <Setter Property="Height" Value="28"/>
+            <Setter Property="Height" Value="34"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -851,7 +852,7 @@
     <Border x:Name="RootChrome" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="0" Background="#121212" ClipToBounds="True">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="28"/>
+                <RowDefinition x:Name="TitleBarRow" Height="34"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
@@ -867,13 +868,12 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Orientation="Horizontal" Margin="12,0,8,0" VerticalAlignment="Center">
-                        <Border Width="6" Height="12" Background="{StaticResource OrangeAccent}" CornerRadius="3" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Margin="14,0,8,0" VerticalAlignment="Center">
                         <Image Source="pack://application:,,,/Assets/mdm-logo.png" Width="18" Height="18"
                                Margin="0,0,8,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-                        <TextBlock Text="MuckDownloadManager" Foreground="#AAAAAA" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="MuckDownloadManager" Foreground="#AAAAAA" FontSize="12" FontWeight="SemiBold"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="TxtVersion" Text="" Foreground="#666666" FontSize="10" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TxtVersion" Text="" Foreground="#666666" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -891,9 +891,9 @@
             <Border x:Name="ContentChrome" Grid.Row="1" Background="#121212" CornerRadius="0" ClipToBounds="True">
                 <Grid x:Name="MainSplitGrid" Margin="0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition x:Name="SidebarCol" Width="180" MinWidth="100" MaxWidth="280"/>
+                        <ColumnDefinition x:Name="SidebarCol" Width="200" MinWidth="160" MaxWidth="280"/>
                         <ColumnDefinition x:Name="SplitterCol" Width="4"/>
-                        <ColumnDefinition Width="*" MinWidth="280"/>
+                        <ColumnDefinition Width="*" MinWidth="480"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Sol kategori paneli -->
@@ -1120,9 +1120,22 @@
                                     </Button>
                                 </StackPanel>
 
-                                <Border Grid.Column="1" Background="#252525" BorderBrush="#333" BorderThickness="1"
+                                <Border x:Name="SearchBoxBorder" Grid.Column="1" Background="#252525"
                                         CornerRadius="6" Height="30" Margin="4,0,6,0"
-                                        HorizontalAlignment="Stretch">
+                                        HorizontalAlignment="Stretch"
+                                        SnapsToDevicePixels="True">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="#333333"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#FF6B00"/>
+                                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <Grid>
                                         <TextBlock Text="Search" Foreground="#666" Margin="10,0,28,0"
                                                    VerticalAlignment="Center" FontSize="12"
@@ -1139,7 +1152,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <TextBox x:Name="TxtSearch" Background="Transparent" BorderThickness="0"
-                                                 Foreground="White" CaretBrush="White" FontSize="12"
+                                                 Foreground="White" CaretBrush="#FF6B00" FontSize="12"
                                                  VerticalContentAlignment="Center" Padding="10,0,28,0"
                                                  TextChanged="TxtSearch_TextChanged"
                                                  PreviewKeyDown="TxtSearch_PreviewKeyDown"/>
@@ -1592,85 +1605,97 @@
 
             <!-- Uygulama içi karartmalı modal popup -->
             <Border x:Name="ModalOverlay" Grid.Row="0" Grid.RowSpan="2"
-                    Background="#A8000000" Visibility="Collapsed" Panel.ZIndex="1000"
-                    IsHitTestVisible="True" PreviewKeyDown="ModalOverlay_PreviewKeyDown">
-                <Border x:Name="ModalCard" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1"
-                        CornerRadius="12" MinWidth="340" MaxWidth="440" Margin="24">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="28" ShadowDepth="0" Opacity="0.55" Color="#000"/>
-                    </Border.Effect>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="34"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Border Background="#222" CornerRadius="12,12,0,0">
-                            <Grid>
-                                <TextBlock x:Name="ModalTitle" Text="" Margin="14,0,40,0"
-                                           VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12" Foreground="#EEE"/>
-                                <Button x:Name="ModalCloseBtn" HorizontalAlignment="Right" Width="36" Height="34"
-                                        Content="✕" Click="ModalClose_Click" Cursor="Hand"
-                                        Foreground="#AAA" BorderThickness="0" Background="Transparent" FontSize="11">
+                    Background="#CC000000" Visibility="Collapsed" Panel.ZIndex="1000"
+                    IsHitTestVisible="True" PreviewKeyDown="ModalOverlay_PreviewKeyDown"
+                    UseLayoutRounding="True" SnapsToDevicePixels="True">
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+                    <!-- Gölge ayrı katmanda — kart metni bulanıklaşmasın -->
+                    <Border Background="#1B1B1B" CornerRadius="12" Margin="6" Opacity="0.01">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.45" Color="#000"/>
+                        </Border.Effect>
+                    </Border>
+                    <Border x:Name="ModalCard" Background="#1E1E1E" BorderBrush="#3A3A3A" BorderThickness="1"
+                            CornerRadius="12" MinWidth="360" MaxWidth="460"
+                            UseLayoutRounding="True" SnapsToDevicePixels="True"
+                            TextOptions.TextFormattingMode="Display"
+                            TextOptions.TextRenderingMode="ClearType">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="38"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Background="#242424" CornerRadius="12,12,0,0">
+                                <Grid>
+                                    <TextBlock x:Name="ModalTitle" Text="" Margin="16,0,44,0"
+                                               VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"
+                                               Foreground="#F2F2F2"
+                                               TextOptions.TextFormattingMode="Display"/>
+                                    <Button x:Name="ModalCloseBtn" HorizontalAlignment="Right" Width="40" Height="38"
+                                            Content="✕" Click="ModalClose_Click" Cursor="Hand"
+                                            Foreground="#BBB" BorderThickness="0" Background="Transparent" FontSize="12">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="bd" Background="Transparent" CornerRadius="0,11,0,0">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="bd" Property="Background" Value="#E53935"/>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+                            </Border>
+                            <StackPanel Grid.Row="1" Margin="18,16,18,8">
+                                <TextBlock x:Name="ModalMessage" Text="" TextWrapping="Wrap"
+                                           FontSize="14" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,0,0,10"
+                                           TextOptions.TextFormattingMode="Display"/>
+                                <TextBlock x:Name="ModalDetail" Text="" TextWrapping="Wrap"
+                                           FontSize="12" Foreground="#B0B0B0" LineHeight="18"
+                                           TextOptions.TextFormattingMode="Display"/>
+                            </StackPanel>
+                            <StackPanel x:Name="ModalButtons" Grid.Row="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" Margin="18,8,18,16">
+                                <Button x:Name="ModalCancelBtn" Content="Vazgeç" MinWidth="84" Height="32" Margin="0,0,8,0"
+                                        Click="ModalCancel_Click" Cursor="Hand" Foreground="#EEE" BorderThickness="0" FontSize="12">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="bd" Background="Transparent" CornerRadius="0,11,0,0">
+                                            <Border x:Name="bd" Background="#2F2F2F" CornerRadius="8" Padding="12,0">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="bd" Property="Background" Value="#E53935"/>
-                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
                                 </Button>
-                            </Grid>
-                        </Border>
-                        <StackPanel Grid.Row="1" Margin="16,14,16,6">
-                            <TextBlock x:Name="ModalMessage" Text="" TextWrapping="Wrap"
-                                       FontSize="13" FontWeight="SemiBold" Foreground="#EEE" Margin="0,0,0,8"/>
-                            <TextBlock x:Name="ModalDetail" Text="" TextWrapping="Wrap"
-                                       FontSize="11" Foreground="#888" LineHeight="16"/>
-                        </StackPanel>
-                        <StackPanel x:Name="ModalButtons" Grid.Row="2" Orientation="Horizontal"
-                                    HorizontalAlignment="Right" Margin="16,8,16,14">
-                            <Button x:Name="ModalCancelBtn" Content="Vazgeç" MinWidth="78" Height="30" Margin="0,0,8,0"
-                                    Click="ModalCancel_Click" Cursor="Hand" Foreground="#DDD" BorderThickness="0" FontSize="12">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="bd" Background="#2A2A2A" CornerRadius="8" Padding="12,0">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                            <Button x:Name="ModalConfirmBtn" Content="Onayla" MinWidth="78" Height="30"
-                                    Click="ModalConfirm_Click" Cursor="Hand" Foreground="White" BorderThickness="0"
-                                    FontSize="12" FontWeight="SemiBold">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,0">
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                                <Button x:Name="ModalConfirmBtn" Content="Onayla" MinWidth="84" Height="32"
+                                        Click="ModalConfirm_Click" Cursor="Hand" Foreground="White" BorderThickness="0"
+                                        FontSize="12" FontWeight="SemiBold">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="12,0">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="bd" Property="Opacity" Value="0.92"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
             </Border>
 
             <!-- Ayarlar — uygulamaya sabit, arka plan karartmalı popup -->

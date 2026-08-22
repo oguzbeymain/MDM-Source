@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 
 namespace DownloadMuck
@@ -123,6 +124,22 @@ namespace DownloadMuck
             stack.Children.Add(openBtn);
             stack.Children.Add(exitBtn);
 
+            // Gölge ayrı — metin bulanık olmasın
+            var shadow = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
+                CornerRadius = new CornerRadius(10),
+                Margin = new Thickness(4),
+                Opacity = 0.01,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 14,
+                    ShadowDepth = 0,
+                    Opacity = 0.5,
+                    Color = Colors.Black
+                }
+            };
+
             var chrome = new Border
             {
                 Background = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
@@ -130,14 +147,13 @@ namespace DownloadMuck
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(10),
                 Child = stack,
-                Effect = new DropShadowEffect
-                {
-                    BlurRadius = 16,
-                    ShadowDepth = 0,
-                    Opacity = 0.55,
-                    Color = Colors.Black
-                }
+                UseLayoutRounding = true,
+                SnapsToDevicePixels = true
             };
+
+            var root = new Grid();
+            root.Children.Add(shadow);
+            root.Children.Add(chrome);
 
             _menuWindow = new Window
             {
@@ -148,14 +164,22 @@ namespace DownloadMuck
                 Topmost = true,
                 ResizeMode = ResizeMode.NoResize,
                 SizeToContent = SizeToContent.WidthAndHeight,
-                Content = chrome,
+                Content = root,
                 Left = pt.X - 8,
-                Top = pt.Y - 8
+                Top = pt.Y - 8,
+                Opacity = 0,
+                UseLayoutRounding = true
             };
 
             _menuWindow.Deactivated += (_, _) => CloseMenu();
             _menuWindow.Show();
             _menuWindow.Activate();
+
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            _menuWindow.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
         private static Button CreateMenuButton(string text, Action onClick)
@@ -194,6 +218,7 @@ namespace DownloadMuck
                 VisualTree = new FrameworkElementFactory(typeof(ContentPresenter))
             };
 
+            // Anlık hover (animasyonsuz) — sadece menü açılış fade kalır
             border.MouseEnter += (_, _) =>
             {
                 border.Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A));
@@ -214,8 +239,17 @@ namespace DownloadMuck
             {
                 if (_menuWindow != null)
                 {
-                    _menuWindow.Close();
+                    var win = _menuWindow;
                     _menuWindow = null;
+                    var fade = new DoubleAnimation(win.Opacity, 0, TimeSpan.FromMilliseconds(90))
+                    {
+                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+                    };
+                    fade.Completed += (_, _) =>
+                    {
+                        try { win.Close(); } catch { /* ignore */ }
+                    };
+                    win.BeginAnimation(UIElement.OpacityProperty, fade);
                 }
             }
             catch { /* ignore */ }
@@ -260,7 +294,15 @@ namespace DownloadMuck
         {
             if (_disposed) return;
             _disposed = true;
-            CloseMenu();
+            try
+            {
+                if (_menuWindow != null)
+                {
+                    _menuWindow.Close();
+                    _menuWindow = null;
+                }
+            }
+            catch { /* ignore */ }
             try
             {
                 if (_added)

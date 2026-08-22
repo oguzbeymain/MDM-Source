@@ -24,7 +24,6 @@ namespace DownloadMuck
                 TxtDetail.Visibility = Visibility.Visible;
             }
 
-            // Buton metinleri (XAML varsayılan Sil/Vazgeç)
             if (FindName("BtnConfirm") is System.Windows.Controls.Button conf)
             {
                 conf.Content = confirmText;
@@ -34,7 +33,6 @@ namespace DownloadMuck
             if (FindName("BtnCancelLabel") is System.Windows.Controls.Button cancel)
                 cancel.Content = cancelText;
 
-            Owner = Application.Current?.MainWindow;
             PreviewKeyDown += (_, e) =>
             {
                 if (e.Key == Key.Escape) { Confirmed = false; Close(); }
@@ -59,15 +57,33 @@ namespace DownloadMuck
             Close();
         }
 
+        /// <param name="forceFloating">
+        /// true: her zaman ayrı pencere (mini indirme ekranı gibi).
+        /// false: owner MainWindow ise uygulama içi karartmalı modal.
+        /// </param>
         public static bool Show(Window? owner, string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "Vazgeç", bool danger = false)
+            string confirmText = "Onayla", string cancelText = "Vazgeç", bool danger = false,
+            bool forceFloating = false)
         {
-            // Tercihen ana pencere içi karartmalı popup
-            if (Application.Current?.MainWindow is MainWindow)
+            bool useAppModal = !forceFloating && (
+                owner is MainWindow ||
+                (owner == null && Application.Current?.MainWindow is MainWindow));
+
+            if (useAppModal)
                 return AppModal.Confirm(title, message, detail, confirmText, cancelText, danger);
 
             var dlg = new ConfirmDialog(title, message, detail, confirmText, cancelText, danger);
-            if (owner != null) dlg.Owner = owner;
+            if (owner != null && owner.IsLoaded)
+            {
+                dlg.Owner = owner;
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+
+            dlg.Topmost = true;
             dlg.ShowDialog();
             return dlg.Confirmed;
         }

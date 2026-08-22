@@ -67,6 +67,7 @@ namespace DownloadMuck
         private bool _sidebarUserSized;
         private bool _exitRequested;
         private bool _trayTipShown;
+        private DateTime _captureQuietUntilUtc = DateTime.MinValue;
 
         public MainWindow()
         {
@@ -245,6 +246,15 @@ namespace DownloadMuck
         {
             // App.OnStartup HideToTray çağırır; geriye dönük uyumluluk
             HideToTray();
+        }
+
+        /// <summary>
+        /// Windows açılışında tarayıcı eski indirmeleri yeniden yakalar.
+        /// Bu süre boyunca eklentiden gelen yakalamalar oturum penceresi açmaz.
+        /// </summary>
+        public void BeginBackgroundCaptureQuiet(int seconds = 25)
+        {
+            _captureQuietUntilUtc = DateTime.UtcNow.AddSeconds(Math.Max(1, seconds));
         }
 
         // --- Uygulama içi karartmalı modal ---
@@ -1825,7 +1835,14 @@ namespace DownloadMuck
         private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (!IsLoaded) return;
-            ApplyResponsiveLayout(e.NewSize.Width);
+
+            // Yedek sınır: native min track kaçsa bile WPF tarafında tut
+            if (e.NewSize.Width > 0 && e.NewSize.Width < MinWidth)
+                Width = MinWidth;
+            if (e.NewSize.Height > 0 && e.NewSize.Height < MinHeight)
+                Height = MinHeight;
+
+            ApplyResponsiveLayout(ActualWidth);
         }
 
         private void MainSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
@@ -1838,22 +1855,32 @@ namespace DownloadMuck
         {
             if (SidebarCol == null || ContentInner == null || DgDownloads == null) return;
 
-            double outer = windowWidth < 760 ? 4 : 8;
-            SidebarPanel.Margin = new Thickness(outer, outer, 0, outer);
-            ContentPanel.Margin = new Thickness(2, outer, outer, outer);
+            double windowHeight = ActualHeight > 0 ? ActualHeight : 600;
+            bool shortScreen = windowHeight < 800;
 
-            double pad = windowWidth < 760 ? 6 : 10;
+            // Kısa ekranlarda (ör. 1360x768) üst boşluğu boğma — title bar nefes alsın
+            double outer = shortScreen
+                ? (windowWidth < 760 ? 6 : 8)
+                : (windowWidth < 760 ? 4 : 8);
+            double topOuter = shortScreen ? Math.Max(outer, 8) : outer;
+
+            SidebarPanel.Margin = new Thickness(outer, topOuter, 0, outer);
+            ContentPanel.Margin = new Thickness(2, topOuter, outer, outer);
+
+            double pad = shortScreen ? 8 : (windowWidth < 760 ? 6 : 10);
             ContentInner.Margin = new Thickness(pad);
             SidebarInner.Margin = new Thickness(pad * 0.8, pad, pad * 0.8, pad * 0.8);
+
+            if (TitleBarRow != null)
+                TitleBarRow.Height = new GridLength(34);
 
             if (!_sidebarUserSized)
             {
                 double target = windowWidth switch
                 {
-                    < 680 => 110,
-                    < 780 => 130,
-                    < 920 => 155,
-                    _ => 180
+                    < 960 => 168,
+                    < 1100 => 188,
+                    _ => 200
                 };
                 target = SafeClamp(target, SidebarCol.MinWidth, SidebarCol.MaxWidth);
                 if (Math.Abs(SidebarCol.Width.Value - target) > 0.5 || !SidebarCol.Width.IsAbsolute)
@@ -2110,6 +2137,34 @@ namespace DownloadMuck
 
         private Rect GetCurrentWorkArea() => MonitorWorkArea.Get(this);
 
+        private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!TxtSearch.IsKeyboardFocusWithin) return;
+            if (e.OriginalSource is DependencyObject src && IsUnderElement(src, SearchBoxBorder))
+                return;
+
+            ClearSearchFocus();
+        }
+
+        private static bool IsUnderElement(DependencyObject? src, DependencyObject? ancestor)
+        {
+            while (src != null)
+            {
+                if (ReferenceEquals(src, ancestor)) return true;
+                src = VisualTreeHelper.GetParent(src) ??
+                      (src is FrameworkElement fe ? fe.Parent as DependencyObject : null);
+            }
+            return false;
+        }
+
+        private void ClearSearchFocus()
+        {
+            if (!TxtSearch.IsKeyboardFocusWithin) return;
+            Keyboard.ClearFocus();
+            FocusManager.SetFocusedElement(this, DgDownloads);
+            Keyboard.Focus(DgDownloads);
+        }
+
         private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
         {
             _searchText = TxtSearch.Text?.Trim() ?? "";
@@ -2118,11 +2173,17 @@ namespace DownloadMuck
 
         private void TxtSearch_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Key == Key.Escape)
+            {
+                ClearSearchFocus();
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 TxtSearch.SelectAll();
                 e.Handled = true;
-                return;
             }
         }
 
@@ -2596,10 +2657,17 @@ namespace DownloadMuck
             }
 
             string urlKey = NormalizeCaptureUrl(url);
+            bool fromCapture = !selectItem;
 
             // Aynı URL için kısa sürede tekrar pencere açma (eklenti spam / redirect)
             lock (_captureGate)
             {
+                if (fromCapture && DateTime.UtcNow < _captureQuietUntilUtc)
+                {
+                    Debug.WriteLine($"Capture quiet (boot replay): {urlKey}");
+                    return;
+                }
+
                 if (_recentCaptureUrls.TryGetValue(urlKey, out DateTime last)
                     && DateTime.UtcNow - last < CaptureDebounce)
                 {
@@ -2630,17 +2698,24 @@ namespace DownloadMuck
                     }
                 }
 
-                // Listede aynı URL ile aktif/bekleyen indirme varsa yeni pencere açma
+                // Listede aynı URL varsa eklenti yakalaması yeni pencere açmasın
+                // (Chrome açılışında eski indirmeler tekrar gelir).
                 foreach (var item in DownloadList)
                 {
                     string u = item.Url;
                     if (string.IsNullOrWhiteSpace(u))
                         _itemUrls.TryGetValue(item, out u!);
                     if (NormalizeCaptureUrl(u) != urlKey) continue;
-                    if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) continue;
 
                     _recentCaptureUrls[urlKey] = DateTime.UtcNow;
+                    if (fromCapture)
+                    {
+                        Debug.WriteLine($"Capture already in list: {urlKey}");
+                        return;
+                    }
+
+                    if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) continue;
                     ShowSessionForItem(item);
                     return;
                 }

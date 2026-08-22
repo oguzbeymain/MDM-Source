@@ -403,6 +403,18 @@ namespace DownloadMuck
                 return;
             }
 
+            bool ok = ConfirmDialog.Show(
+                this,
+                "İptal onayı",
+                "İndirme iptal edilsin mi?",
+                $"“{_item.FileName}” durdurulur. Eksik dosya diskte kalabilir.",
+                confirmText: "İptal et",
+                cancelText: "Vazgeç",
+                danger: true,
+                forceFloating: true);
+
+            if (!ok) return;
+
             _host.CancelFromSession(_item, _engine);
             TxtStatus.Text = "İptal edildi";
             BtnPause.IsEnabled = false;
@@ -463,13 +475,30 @@ namespace DownloadMuck
         private void BtnDelete_Click(object sender, RoutedEventArgs e)
         {
             if (_item == null) return;
-            if (!ConfirmDialog.Show(this, "Silme onayı",
-                    $"“{_item.FileName}” silinsin mi?",
-                    "Dosya listeden ve diskten kaldırılır.",
-                    confirmText: "Sil", danger: true))
-                return;
 
-            _host.DeleteItemFromSession(_item);
+            // Mini ekrana özel onay — ana uygulamadaki modal'a gitmez
+            bool ok = ConfirmDialog.Show(
+                this,
+                "Silme onayı",
+                $"“{_item.FileName}” silinsin mi?",
+                "Bu indirme listeden ve diskten kaldırılır.",
+                confirmText: "Sil",
+                cancelText: "Vazgeç",
+                danger: true,
+                forceFloating: true);
+
+            if (!ok) return;
+
+            try
+            {
+                _host.DeleteItemFromSession(_item);
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(this, "Silinemedi", ex.Message);
+                return;
+            }
+
             Close();
         }
 

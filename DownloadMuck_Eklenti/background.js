@@ -1,10 +1,15 @@
-// DownloadMuck / MDM tarayici entegrasyonu v1.6
+// DownloadMuck / MDM tarayici entegrasyonu v1.7
 // Once masaustu uygulamasina ilet; BASARILI olursa tarayici indirmesini iptal et.
+// Chrome/Edge acilista eski indirmeleri onCreated ile tekrar firlatir — bunlari yut.
 
 const CANDIDATE_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
 const recentHandoffs = new Map(); // url -> timestamp
 const HANDOFF_DEBOUNCE_MS = 15000;
 const PROBE_TIMEOUT_MS = 900;
+const STARTUP_GUARD_MS = 15000;
+const MAX_FRESH_AGE_MS = 8000;
+
+let startupGuardUntil = 0;
 
 async function disableBrowserDownloadUi() {
   try {
@@ -127,8 +132,31 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  startupGuardUntil = Date.now() + STARTUP_GUARD_MS;
   disableBrowserDownloadUi();
 });
+
+function isSessionRestoreReplay(downloadItem) {
+  const now = Date.now();
+  const started = downloadItem.startTime ? Date.parse(downloadItem.startTime) : NaN;
+  const ageMs = Number.isNaN(started) ? 0 : now - started;
+
+  // Tarayicinin geri yukledigi kesilmis / duraklatilmis kayitlar
+  if (downloadItem.state === "interrupted" || downloadItem.paused === true) {
+    return true;
+  }
+  if ((downloadItem.bytesReceived || 0) > 0) {
+    return true;
+  }
+  if (ageMs > MAX_FRESH_AGE_MS) {
+    return true;
+  }
+  // Profil yeni acildi: sadece taze, sifir baytlik tiklamalari ilet
+  if (now < startupGuardUntil && ageMs > 2500) {
+    return true;
+  }
+  return false;
+}
 
 chrome.downloads.onCreated.addListener(async (downloadItem) => {
   if (downloadItem.byExtensionId === chrome.runtime.id) {
@@ -143,6 +171,12 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
   }
 
   if (url.startsWith("blob:") || url.startsWith("data:")) {
+    return;
+  }
+
+  // Windows/tarayici acilisi: eski indirme listesini MDM oturum penceresine cevirme
+  if (isSessionRestoreReplay(downloadItem)) {
+    console.log("MDM: oturum geri yukleme atlandi", url);
     return;
   }
 

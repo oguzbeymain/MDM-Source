@@ -38,6 +38,14 @@ namespace DownloadMuck
 
         public static void Show(Window? owner, string title, string message, string detail = "")
         {
+            // Mini indirme vb. pencereler kendi üzerinde açsın
+            if (owner is not null and not MainWindow)
+            {
+                var floating = new InfoDialog(title, message, detail) { Owner = owner, Topmost = true };
+                floating.ShowDialog();
+                return;
+            }
+
             if (Application.Current?.MainWindow is MainWindow)
             {
                 AppModal.Info(title, message, detail);
