@@ -7,7 +7,8 @@
         WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ResizeMode="NoResize"
         FontFamily="Segoe UI" ShowInTaskbar="True"
-        Topmost="False" ShowActivated="True">
+        Topmost="False" ShowActivated="True"
+        Icon="pack://application:,,,/Assets/mdm.ico">
 
     <Grid Margin="8">
         <!-- Golge (clip disinda) -->
@@ -110,6 +111,10 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <TextBox x:Name="TxtFolder" FontSize="11" Height="28" VerticalContentAlignment="Center"
                                  Background="#252525" Foreground="White" BorderBrush="#333" BorderThickness="1">
                             <TextBox.Template>
@@ -153,6 +158,27 @@
                                             </MultiTrigger.Conditions>
                                             <Setter TargetName="bd" Property="Background" Value="#3D3D3D"/>
                                         </MultiTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="1" x:Name="BtnMoveFile" Content="↕"
+                                Width="28" Height="18" Margin="6,4,0,0" HorizontalAlignment="Center"
+                                Visibility="Collapsed"
+                                Cursor="SizeAll" PreviewMouseLeftButtonDown="BtnMoveFile_PreviewMouseLeftButtonDown"
+                                PreviewMouseMove="BtnMoveFile_PreviewMouseMove"
+                                FontSize="10" Foreground="#777" BorderThickness="0" Padding="0"
+                                ToolTip="Basılı tutup sürükleyerek taşı">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="bd" Background="Transparent" CornerRadius="4">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
+                                            <Setter Property="Foreground" Value="#BBB"/>
+                                        </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Button.Template>
@@ -301,25 +327,6 @@
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter TargetName="bd" Property="Background" Value="#FF8533"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
-                        <Button x:Name="BtnMoveFile" Content="↕ Taşı" Width="72" Height="30" Margin="0,0,6,0"
-                                Cursor="SizeAll" PreviewMouseLeftButtonDown="BtnMoveFile_PreviewMouseLeftButtonDown"
-                                PreviewMouseMove="BtnMoveFile_PreviewMouseMove"
-                                FontWeight="SemiBold" FontSize="12"
-                                Foreground="#EEE" BorderThickness="0"
-                                ToolTip="Basılı tutup sürükleyerek taşı (Explorer veya kategori)">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="bd" Background="#2D2D2D" CornerRadius="9">
-                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="bd" Property="Background" Value="#404040"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

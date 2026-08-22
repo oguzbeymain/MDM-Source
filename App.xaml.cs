@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -37,39 +36,16 @@ namespace DownloadMuck
 
             base.OnStartup(e);
 
-            if (!SingleInstance.TryAcquire())
-            {
-                Shutdown();
-                return;
-            }
-
-            bool launchedByUpdater = e.Args.Any(a =>
-                string.Equals(a, "--from-updater", StringComparison.OrdinalIgnoreCase));
             bool startBackground = e.Args.Any(a =>
                 string.Equals(a, "--background", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
 
-            string updaterPath = Path.Combine(AppContext.BaseDirectory, "MDM.Updater.exe");
-            bool updaterExists = File.Exists(updaterPath);
-
-            if (updaterExists && !launchedByUpdater && !IsDevelopmentBuild())
+            // Güncelleme artık açılışta değil; Ayarlar → Güncelleme'den denetlenir.
+            if (!SingleInstance.TryAcquire())
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = updaterPath,
-                        WorkingDirectory = AppContext.BaseDirectory,
-                        UseShellExecute = true
-                    });
-                    SingleInstance.Release();
-                    Shutdown();
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Updater baslatilamadi, ana uygulama aciliyor: {ex.Message}");
-                }
+                SingleInstance.RequestShow();
+                Shutdown();
+                return;
             }
 
             try
@@ -82,10 +58,9 @@ namespace DownloadMuck
                 if (startBackground)
                     main.HideToTray();
 
-                SingleInstance.StartListening(() =>
-                {
-                    main.Dispatcher.BeginInvoke(() => main.ShowFromTray());
-                });
+                SingleInstance.StartListening(
+                    onShowRequested: () => main.Dispatcher.BeginInvoke(() => main.ShowFromTray()),
+                    onExitRequested: () => main.Dispatcher.BeginInvoke(() => main.ExitForUpdate()));
             }
             catch (Exception ex)
             {
@@ -106,14 +81,6 @@ namespace DownloadMuck
         {
             SingleInstance.Release();
             base.OnExit(e);
-        }
-
-        private static bool IsDevelopmentBuild()
-        {
-            if (Debugger.IsAttached) return true;
-            string baseDir = AppContext.BaseDirectory;
-            return baseDir.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}Debug{Path.DirectorySeparatorChar}",
-                StringComparison.OrdinalIgnoreCase);
         }
     }
 }

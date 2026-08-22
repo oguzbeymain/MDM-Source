@@ -54,6 +54,7 @@ namespace DownloadMuck
             {
                 PanelActive.Visibility = Visibility.Collapsed;
                 PanelDone.Visibility = Visibility.Visible;
+                BtnMoveFile.Visibility = Visibility.Visible;
             }
             else if (engine != null && engine.IsPaused)
             {
@@ -325,6 +326,7 @@ namespace DownloadMuck
                 TxtStatus.Text = "İndirme tamamlandı";
                 PanelActive.Visibility = Visibility.Collapsed;
                 PanelDone.Visibility = Visibility.Visible;
+                BtnMoveFile.Visibility = Visibility.Visible;
                 SetFolderPassive(true);
             }
             else if (_item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase))
@@ -334,6 +336,7 @@ namespace DownloadMuck
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = true;
                 BtnStart.IsEnabled = false;
+                BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
             }
             else if (_item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
@@ -345,6 +348,7 @@ namespace DownloadMuck
                 BtnStart.Opacity = 1;
                 BtnStart.Content = "Devam Et";
                 BtnCancelDl.IsEnabled = true;
+                BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
                 PanelActive.Visibility = Visibility.Visible;
                 PanelDone.Visibility = Visibility.Collapsed;
@@ -359,12 +363,14 @@ namespace DownloadMuck
                 BtnStart.Opacity = 0.55;
                 BtnStart.Content = "Başlat";
                 BtnCancelDl.IsEnabled = true;
+                BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
                 PanelActive.Visibility = Visibility.Visible;
                 PanelDone.Visibility = Visibility.Collapsed;
             }
             else
             {
+                BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(_started);
             }
         }

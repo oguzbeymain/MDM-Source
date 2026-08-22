@@ -2,19 +2,32 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
-using System.Windows.Input;
+using System.Windows.Controls;
 using Microsoft.Win32;
 
 namespace DownloadMuck
 {
-    public partial class SettingsDialog : Window
+    public partial class SettingsDialog : UserControl
     {
-        private readonly AppSettings _settings;
+        private AppSettings _settings = new();
+        private string _currentDefaultFolder = "";
+        private CancellationTokenSource? _updateCts;
+        private bool _updateBusy;
 
-        public SettingsDialog(AppSettings settings, string currentDefaultFolder)
+        public event Action? Cancelled;
+        public event Action? Saved;
+        /// <summary>Güncelleme uygulanacak; ana pencere ExitForUpdate çağırmalı.</summary>
+        public event Action? UpdateApplying;
+
+        public SettingsDialog()
         {
             InitializeComponent();
+        }
+
+        public void Load(AppSettings settings, string currentDefaultFolder, string? initialTab = null)
+        {
             _settings = settings;
+            _currentDefaultFolder = currentDefaultFolder;
 
             TxtFolder.Text = string.IsNullOrWhiteSpace(settings.DefaultDownloadFolder)
                 ? currentDefaultFolder
@@ -26,17 +39,54 @@ namespace DownloadMuck
             TxtExtPath.Text = ExtensionInstaller.InstallRoot;
             string ver = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
             TxtVersion.Text = $"Sürüm {ver}";
+            TxtUpdateCurrent.Text = $"Yüklü sürüm: v{UpdateService.CurrentVersionText}";
+            if (!_updateBusy)
+                TxtUpdateStatus.Text = "";
+
+            SelectTab(initialTab ?? "general");
         }
 
-        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
+        public void SelectTab(string tab)
         {
-            if (e.ChangedButton == MouseButton.Left) DragMove();
+            switch ((tab ?? "").Trim().ToLowerInvariant())
+            {
+                case "extension":
+                case "eklenti":
+                    NavExtension.IsChecked = true;
+                    break;
+                case "update":
+                case "guncelleme":
+                case "güncelleme":
+                    NavUpdate.IsChecked = true;
+                    break;
+                case "about":
+                case "hakkinda":
+                    NavAbout.IsChecked = true;
+                    break;
+                default:
+                    NavGeneral.IsChecked = true;
+                    break;
+            }
+            ApplyNavVisibility();
+        }
+
+        private void Nav_Checked(object sender, RoutedEventArgs e) => ApplyNavVisibility();
+
+        private void ApplyNavVisibility()
+        {
+            if (PanelGeneral == null) return;
+            PanelGeneral.Visibility = NavGeneral.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PanelExtension.Visibility = NavExtension.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PanelUpdate.Visibility = NavUpdate.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            PanelAbout.Visibility = NavAbout.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
         {
             ChkAutoStartMin.IsEnabled = ChkAutoStart.IsChecked == true;
         }
+
+        private Window? OwnerWindow => Window.GetWindow(this);
 
         private void BtnBrowse_Click(object sender, RoutedEventArgs e)
         {
@@ -52,12 +102,12 @@ namespace DownloadMuck
             try
             {
                 ExtensionInstaller.EnsureInstalled();
-                InfoDialog.Show(this, "Eklenti", "Hazır.",
+                InfoDialog.Show(OwnerWindow, "Eklenti", "Hazır.",
                     "Tarayıcıdaki eklenti bu klasörü kullanıyor:\n" + ExtensionInstaller.InstallRoot);
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Eklenti", "İşlem başarısız.", ex.Message);
+                InfoDialog.Show(OwnerWindow, "Eklenti", "İşlem başarısız.", ex.Message);
             }
         }
 
@@ -74,7 +124,45 @@ namespace DownloadMuck
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Klasör", "Açılamadı.", ex.Message);
+                InfoDialog.Show(OwnerWindow, "Klasör", "Açılamadı.", ex.Message);
+            }
+        }
+
+        private async void BtnCheckUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_updateBusy) return;
+            _updateBusy = true;
+            BtnCheckUpdate.IsEnabled = false;
+            _updateCts = new CancellationTokenSource();
+            var progress = new Progress<string>(msg => TxtUpdateStatus.Text = msg);
+
+            try
+            {
+                var result = await UpdateService.CheckAndApplyAsync(progress, _updateCts.Token);
+                TxtUpdateStatus.Text = result.Message;
+
+                if (result.Applying)
+                {
+                    UpdateApplying?.Invoke();
+                    return;
+                }
+
+                if (result.HadError)
+                    InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", result.Message);
+                else if (result.IsUpToDate)
+                    InfoDialog.Show(OwnerWindow, "Güncelleme", "Güncelsiniz.", result.Message);
+            }
+            catch (Exception ex)
+            {
+                TxtUpdateStatus.Text = ex.Message;
+                InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", ex.Message);
+            }
+            finally
+            {
+                _updateBusy = false;
+                BtnCheckUpdate.IsEnabled = true;
+                _updateCts?.Dispose();
+                _updateCts = null;
             }
         }
 
@@ -83,14 +171,14 @@ namespace DownloadMuck
             string folder = (TxtFolder.Text ?? "").Trim();
             if (string.IsNullOrWhiteSpace(folder))
             {
-                InfoDialog.Show(this, "Klasör", "Geçerli bir indirme klasörü girin.");
+                InfoDialog.Show(OwnerWindow, "Klasör", "Geçerli bir indirme klasörü girin.");
                 return;
             }
 
             try { Directory.CreateDirectory(folder); }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Klasör", "Klasör oluşturulamadı.", ex.Message);
+                InfoDialog.Show(OwnerWindow, "Klasör", "Klasör oluşturulamadı.", ex.Message);
                 return;
             }
 
@@ -105,9 +193,9 @@ namespace DownloadMuck
             else
                 AutoStartHelper.Disable();
 
-            DialogResult = true;
+            Saved?.Invoke();
         }
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+        private void BtnCancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
     }
 }

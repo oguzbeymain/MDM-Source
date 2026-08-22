@@ -11,6 +11,7 @@
     <InformationalVersion>1.0.26</InformationalVersion>
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MDM</AssemblyTitle>
+    <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
     <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
@@ -18,6 +19,10 @@
     <Page Remove="MDM.Updater\**" />
     <EmbeddedResource Remove="MDM.Updater\**" />
     <None Remove="MDM.Updater\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\mdm.ico" />
+    <Resource Include="Assets\mdm-logo.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="DownloadMuck_Eklenti\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="DownloadMuck_Eklenti" />

@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Windows;
-using System.Windows.Input;
+using System.Windows.Controls;
 
 namespace DownloadMuck
 {
-    public partial class CategoryRulesDialog : Window
+    public partial class CategoryRulesDialog : UserControl
     {
         public sealed class ExtOption : System.ComponentModel.INotifyPropertyChanged
         {
@@ -24,8 +24,11 @@ namespace DownloadMuck
             public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         }
 
-        private readonly CategoryItem _category;
+        private CategoryItem? _category;
         private readonly ObservableCollection<ExtOption> _options = new();
+
+        public event Action? Cancelled;
+        public event Action? Saved;
 
         private static readonly string[] Presets =
         {
@@ -36,12 +39,19 @@ namespace DownloadMuck
             "json", "xml", "html", "css", "js", "ts", "dll", "bin"
         };
 
-        public CategoryRulesDialog(CategoryItem category)
+        public CategoryRulesDialog()
         {
             InitializeComponent();
+            LstExt.ItemsSource = _options;
+        }
+
+        public void Load(CategoryItem category)
+        {
             _category = category;
             TxtTitle.Text = $"{category.DisplayLabel} — dosya türleri";
+            TxtCustom.Clear();
 
+            _options.Clear();
             var existing = category.Extensions ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var ext in Presets)
             {
@@ -53,18 +63,16 @@ namespace DownloadMuck
             }
 
             foreach (var extra in existing.Where(e => !Presets.Contains(e, StringComparer.OrdinalIgnoreCase)))
-            {
                 _options.Add(new ExtOption { Ext = extra, IsChecked = true });
-            }
 
-            LstExt.ItemsSource = _options;
-
-            if (category.IsBuiltin && CategoryStore.GetDefaultExtensions(category.Id) != null)
-                BtnResetDefaults.Visibility = Visibility.Visible;
+            BtnResetDefaults.Visibility = category.IsBuiltin && CategoryStore.GetDefaultExtensions(category.Id) != null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void BtnResetDefaults_Click(object sender, RoutedEventArgs e)
         {
+            if (_category == null) return;
             var defaults = CategoryStore.GetDefaultExtensions(_category.Id);
             if (defaults == null) return;
 
@@ -81,11 +89,6 @@ namespace DownloadMuck
                 _options.Add(new ExtOption { Ext = extra, IsChecked = true });
         }
 
-        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ChangedButton == MouseButton.Left) DragMove();
-        }
-
         private void BtnAddCustom_Click(object sender, RoutedEventArgs e)
         {
             string raw = (TxtCustom.Text ?? "").Trim().TrimStart('.').ToLowerInvariant();
@@ -94,7 +97,6 @@ namespace DownloadMuck
             {
                 var hit = _options.First(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase));
                 hit.IsChecked = true;
-                LstExt.Items.Refresh();
             }
             else
             {
@@ -105,14 +107,15 @@ namespace DownloadMuck
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
+            if (_category == null) return;
             var set = _options.Where(o => o.IsChecked)
                 .Select(o => o.Ext.Trim().TrimStart('.').ToLowerInvariant())
-                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .Where(x => !string.IsNullOrWhiteSpace(x))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             _category.Extensions = set.Count > 0 ? set : null;
-            DialogResult = true;
+            Saved?.Invoke();
         }
 
-        private void BtnCancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+        private void BtnCancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
     }
 }

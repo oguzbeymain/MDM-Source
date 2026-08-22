@@ -56,7 +56,7 @@ namespace DownloadMuck
             ImageSource icon = Imaging.CreateBitmapSourceFromHIcon(
                 shfi.hIcon,
                 Int32Rect.Empty,
-                BitmapSizeOptions.FromEmptyOptions());
+                BitmapSizeOptions.FromWidthAndHeight(16, 16));
             icon.Freeze();
 
             DestroyIcon(shfi.hIcon);

@@ -13,5 +13,6 @@
     <AssemblyTitle>MDM.Updater</AssemblyTitle>
     <RootNamespace>MDM.Updater</RootNamespace>
     <AssemblyName>MDM.Updater</AssemblyName>
+    <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
   </PropertyGroup>
 </Project>

@@ -3,59 +3,68 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading;
 
-namespace MDM.Updater
+namespace DownloadMuck
 {
-    public sealed class UpdateResult
+    public sealed class UpdateCheckResult
     {
-        public bool ApplyingUpdate { get; init; }
+        public bool IsUpToDate { get; init; }
+        public bool UpdateAvailable { get; init; }
+        public bool Applying { get; init; }
         public bool HadError { get; init; }
-        public string? Message { get; init; }
+        public string Message { get; init; } = "";
+        public string? RemoteVersion { get; init; }
     }
 
-    public static class AppUpdater
+    /// <summary>
+    /// Uygulama içi güncelleme denetimi — açılışta değil, ayarlardan tetiklenir.
+    /// </summary>
+    public static class UpdateService
     {
         public const string ReleasesLatestUrl = "https://api.github.com/repos/oguzbeymain/MDM-App/releases/latest";
-        public const string MainExeName = "DownloadMuck.exe";
-        public const string UpdaterExeName = "MDM.Updater.exe";
 
         private static readonly HttpClient Http = CreateClient();
 
         private static HttpClient CreateClient()
         {
             var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MDM-Updater", "1.0"));
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MDM", "1.0"));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             return client;
         }
 
-        public static string GetInstallDirectory()
+        public static string CurrentVersionText
         {
-            return AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            get
+            {
+                var v = Assembly.GetExecutingAssembly().GetName().Version;
+                return v == null ? "?" : $"{v.Major}.{v.Minor}.{v.Build}";
+            }
         }
 
-        public static async Task<UpdateResult> CheckAndApplyAsync(
+        public static async Task<UpdateCheckResult> CheckAndApplyAsync(
             IProgress<string>? status = null,
             CancellationToken cancellationToken = default)
         {
-            string appDir = GetInstallDirectory();
-            string mainExe = Path.Combine(appDir, MainExeName);
-
-            Version current = GetInstalledMainVersion(mainExe);
-            status?.Report($"Mevcut surum: v{current}");
+            string appDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            Version current = Normalize(Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0));
 
             try
             {
-                status?.Report("GitHub uzerinden guncelleme kontrol ediliyor...");
+                status?.Report("Güncelleme kontrol ediliyor…");
 
                 using var response = await Http.GetAsync(ReleasesLatestUrl, cancellationToken);
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    return new UpdateResult { Message = "Henuz yayinlanmis surum yok." };
+                    return new UpdateCheckResult
+                    {
+                        IsUpToDate = true,
+                        Message = "Henüz yayınlanmış sürüm yok."
+                    };
                 }
 
                 response.EnsureSuccessStatusCode();
@@ -66,28 +75,33 @@ namespace MDM.Updater
                 Version? remote = ParseVersion(tagName);
                 if (remote == null)
                 {
-                    return new UpdateResult
+                    return new UpdateCheckResult
                     {
                         HadError = true,
-                        Message = $"Surum etiketi okunamadi: {tagName}"
+                        Message = $"Sürüm etiketi okunamadı: {tagName}"
                     };
                 }
 
                 if (remote <= current)
                 {
-                    return new UpdateResult { Message = $"Guncel (v{current}). Uygulama aciliyor..." };
+                    return new UpdateCheckResult
+                    {
+                        IsUpToDate = true,
+                        Message = $"Uygulama güncel (v{current.Major}.{current.Minor}.{current.Build})."
+                    };
                 }
 
                 if (!TryPickAsset(doc.RootElement, out string assetName, out string downloadUrl))
                 {
-                    return new UpdateResult
+                    return new UpdateCheckResult
                     {
                         HadError = true,
-                        Message = "Release paketinde .zip/.exe bulunamadi."
+                        Message = "Yayın paketinde .zip/.exe bulunamadı."
                     };
                 }
 
-                status?.Report($"Yeni surum: v{remote} — indiriliyor...");
+                string remoteText = $"{remote.Major}.{remote.Minor}.{remote.Build}";
+                status?.Report($"v{remoteText} indiriliyor…");
 
                 string tempRoot = Path.Combine(Path.GetTempPath(), "MDM-Update", Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(tempRoot);
@@ -100,7 +114,7 @@ namespace MDM.Updater
                 string payloadDir;
                 if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    status?.Report("Paket aciliyor...");
+                    status?.Report("Paket açılıyor…");
                     ZipFile.ExtractToDirectory(downloadPath, extractDir, overwriteFiles: true);
                     payloadDir = FindPayloadDirectory(extractDir);
                 }
@@ -111,111 +125,54 @@ namespace MDM.Updater
                     payloadDir = extractDir;
                 }
 
-                if (!File.Exists(Path.Combine(payloadDir, MainExeName)) &&
+                if (!File.Exists(Path.Combine(payloadDir, "DownloadMuck.exe")) &&
                     Directory.GetFiles(payloadDir, "*.exe").Length == 0)
                 {
-                    return new UpdateResult
+                    return new UpdateCheckResult
                     {
                         HadError = true,
-                        Message = "Pakette DownloadMuck.exe bulunamadi."
+                        Message = "Pakette DownloadMuck.exe bulunamadı."
                     };
                 }
 
-                // Ana uygulama calisiyorsa kapat
-                status?.Report("Eski surum kapatiliyor...");
-                KillMainAppProcesses(appDir);
-
-                status?.Report("Dosyalar guncelleniyor...");
+                status?.Report("Güncelleme uygulanıyor, uygulama yeniden başlatılacak…");
                 ScheduleApplyAndRestart(appDir, payloadDir);
 
-                return new UpdateResult
+                return new UpdateCheckResult
                 {
-                    ApplyingUpdate = true,
-                    Message = $"v{remote} kuruluyor, yeniden baslatilacak..."
+                    UpdateAvailable = true,
+                    Applying = true,
+                    RemoteVersion = remoteText,
+                    Message = $"v{remoteText} kuruluyor. Uygulama kapanıp yeniden açılacak."
                 };
+            }
+            catch (OperationCanceledException)
+            {
+                return new UpdateCheckResult { HadError = true, Message = "İşlem iptal edildi." };
             }
             catch (Exception ex)
             {
-                return new UpdateResult
-                {
-                    HadError = true,
-                    Message = $"Guncelleme basarisiz: {ex.Message}"
-                };
+                return new UpdateCheckResult { HadError = true, Message = ex.Message };
             }
-        }
-
-        private static Version GetInstalledMainVersion(string mainExePath)
-        {
-            try
-            {
-                if (File.Exists(mainExePath))
-                {
-                    var info = FileVersionInfo.GetVersionInfo(mainExePath);
-                    string? raw = info.ProductVersion ?? info.FileVersion;
-                    if (!string.IsNullOrWhiteSpace(raw))
-                    {
-                        string cleaned = raw.Split('+')[0].Split(' ')[0].Trim().TrimStart('v', 'V');
-                        Match match = Regex.Match(cleaned, @"^\d+(\.\d+){1,3}");
-                        if (match.Success && Version.TryParse(match.Value, out var parsed))
-                            return Normalize(parsed);
-                    }
-                }
-            }
-            catch { }
-
-            return new Version(0, 0, 0, 0);
-        }
-
-        private static void KillMainAppProcesses(string appDir)
-        {
-            // Yol kontrolu olmadan tum DownloadMuck sureclerini kapat (MainModule erisimi sikca basarisiz)
-            foreach (Process process in Process.GetProcessesByName("DownloadMuck"))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(8000);
-                }
-                catch { /* ignore */ }
-            }
-
-            try
-            {
-                using var kill = Process.Start(new ProcessStartInfo
-                {
-                    FileName = "taskkill",
-                    Arguments = "/IM DownloadMuck.exe /F /T",
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                });
-                kill?.WaitForExit(5000);
-            }
-            catch { /* ignore */ }
-
-            // Dosya kilitlerinin dusmesi icin kisa bekle
-            Thread.Sleep(800);
         }
 
         private static void ScheduleApplyAndRestart(string appDir, string payloadDir)
         {
             string scriptPath = Path.Combine(Path.GetTempPath(), $"MDM-Apply-{Guid.NewGuid():N}.cmd");
-            int updaterPid = Environment.ProcessId;
-            string mainExe = Path.Combine(appDir, MainExeName);
-            string updaterExe = Path.Combine(appDir, UpdaterExeName);
+            int pid = Environment.ProcessId;
+            string mainExe = Path.Combine(appDir, "DownloadMuck.exe");
 
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
             sb.AppendLine("setlocal");
             sb.AppendLine(":wait");
-            sb.AppendLine($"tasklist /FI \"PID eq {updaterPid}\" | find \"{updaterPid}\" >nul");
+            sb.AppendLine($"tasklist /FI \"PID eq {pid}\" | find \"{pid}\" >nul");
             sb.AppendLine("if not errorlevel 1 (");
             sb.AppendLine("  timeout /t 1 /nobreak >nul");
             sb.AppendLine("  goto wait");
             sb.AppendLine(")");
-            // Kalan MDM sureclerini zorla kapat
             sb.AppendLine("taskkill /IM DownloadMuck.exe /F /T >nul 2>&1");
-            sb.AppendLine("timeout /t 2 /nobreak >nul");
+            sb.AppendLine("timeout /t 1 /nobreak >nul");
             sb.AppendLine("set RETRIES=0");
             sb.AppendLine(":copy");
             sb.AppendLine($"xcopy /E /Y /I \"{payloadDir}\\*\" \"{appDir}\\\" >nul");
@@ -227,16 +184,11 @@ namespace MDM.Updater
             sb.AppendLine("    goto copy");
             sb.AppendLine("  )");
             sb.AppendLine(")");
-            sb.AppendLine($"if exist \"{mainExe}\" (");
-            sb.AppendLine($"  start \"\" \"{mainExe}\" --from-updater");
-            sb.AppendLine(") else if exist \"" + updaterExe + "\" (");
-            sb.AppendLine($"  start \"\" \"{updaterExe}\"");
-            sb.AppendLine(")");
+            sb.AppendLine($"if exist \"{mainExe}\" start \"\" \"{mainExe}\" --from-updater");
             sb.AppendLine("endlocal");
             sb.AppendLine("del \"%~f0\"");
 
             File.WriteAllText(scriptPath, sb.ToString(), Encoding.ASCII);
-
             Process.Start(new ProcessStartInfo
             {
                 FileName = scriptPath,
@@ -301,9 +253,9 @@ namespace MDM.Updater
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                 readTotal += read;
                 if (total is > 0)
-                    status?.Report($"Indiriliyor... %{readTotal * 100.0 / total.Value:F0}");
+                    status?.Report($"İndiriliyor… %{readTotal * 100.0 / total.Value:F0}");
                 else
-                    status?.Report($"Indiriliyor... {readTotal / (1024.0 * 1024.0):F1} MB");
+                    status?.Report($"İndiriliyor… {readTotal / (1024.0 * 1024.0):F1} MB");
             }
         }
 
@@ -317,7 +269,7 @@ namespace MDM.Updater
 
             foreach (string dir in subDirs)
             {
-                if (Directory.EnumerateFiles(dir, "*.exe", SearchOption.TopDirectoryOnly).Any())
+                if (File.Exists(Path.Combine(dir, "DownloadMuck.exe")))
                     return dir;
             }
 

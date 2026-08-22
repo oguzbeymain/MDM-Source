@@ -1,13 +1,18 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
 
 namespace DownloadMuck
 {
-    /// <summary>Win32 NotifyIcon — WinForms bağımlılığı olmadan gizli simgeler.</summary>
+    /// <summary>Win32 NotifyIcon + koyu WPF tepsi menüsü.</summary>
     public sealed class TrayIconService : IDisposable
     {
-        private const int WmTrayCallback = 0x8001; // WM_APP + 1
+        private const int WmTrayCallback = 0x8001;
         private const uint NimAdd = 0x00000000;
         private const uint NimModify = 0x00000001;
         private const uint NimDelete = 0x00000002;
@@ -18,14 +23,6 @@ namespace DownloadMuck
         private const int WmLButtonUp = 0x0202;
         private const int WmLButtonDblClk = 0x0203;
         private const int WmRButtonUp = 0x0205;
-        private const int WmCommand = 0x0111;
-        private const uint TpmLeftAlign = 0x0000;
-        private const uint TpmRightButton = 0x0002;
-        private const uint TpmReturnCmd = 0x0100;
-        private const uint MfString = 0x00000000;
-        private const uint MfSeparator = 0x00000800;
-        private const int IdOpen = 1001;
-        private const int IdExit = 1002;
 
         private readonly HwndSource _source;
         private NOTIFYICONDATA _data;
@@ -35,6 +32,7 @@ namespace DownloadMuck
         private IntPtr _iconHandle;
         private bool _iconFromExe;
         private bool _ownsIcon;
+        private Window? _menuWindow;
 
         public event Action? OpenRequested;
         public event Action? ExitRequested;
@@ -77,7 +75,7 @@ namespace DownloadMuck
                 _data.uFlags = NifMessage | NifIcon | NifTip | NifInfo;
                 _data.szInfoTitle = "MDM arka planda";
                 _data.szInfo = "Gizli simgelerde çalışmaya devam ediyor. Çıkmak için tepsi menüsünden «Çıkış».";
-                _data.dwInfoFlags = 1; // NIIF_INFO
+                _data.dwInfoFlags = 1;
                 Shell_NotifyIcon(NimModify, ref _data);
                 _data.uFlags = NifMessage | NifIcon | NifTip;
             }
@@ -91,47 +89,136 @@ namespace DownloadMuck
                 int mouseMsg = lParam.ToInt32() & 0xFFFF;
                 if (mouseMsg == WmLButtonUp || mouseMsg == WmLButtonDblClk)
                 {
+                    CloseMenu();
                     OpenRequested?.Invoke();
                     handled = true;
                 }
                 else if (mouseMsg == WmRButtonUp)
                 {
-                    ShowContextMenu();
+                    Application.Current?.Dispatcher.BeginInvoke(ShowDarkContextMenu);
                     handled = true;
                 }
-            }
-            else if (msg == WmCommand)
-            {
-                int id = wParam.ToInt32() & 0xFFFF;
-                if (id == IdOpen) OpenRequested?.Invoke();
-                else if (id == IdExit) ExitRequested?.Invoke();
-                handled = true;
             }
 
             return IntPtr.Zero;
         }
 
-        private void ShowContextMenu()
+        private void ShowDarkContextMenu()
         {
-            IntPtr menu = CreatePopupMenu();
-            if (menu == IntPtr.Zero) return;
-
-            AppendMenu(menu, MfString, (UIntPtr)IdOpen, "MDM'yi aç");
-            AppendMenu(menu, MfSeparator, UIntPtr.Zero, null);
-            AppendMenu(menu, MfString, (UIntPtr)IdExit, "Çıkış");
-
+            CloseMenu();
             GetCursorPos(out POINT pt);
-            SetForegroundWindow(_source.Handle);
-            uint cmd = (uint)TrackPopupMenuEx(
-                menu,
-                TpmLeftAlign | TpmRightButton | TpmReturnCmd,
-                pt.X, pt.Y,
-                _source.Handle,
-                IntPtr.Zero);
-            DestroyMenu(menu);
 
-            if (cmd == IdOpen) OpenRequested?.Invoke();
-            else if (cmd == IdExit) ExitRequested?.Invoke();
+            var openBtn = CreateMenuButton("MDM'yi aç", () =>
+            {
+                CloseMenu();
+                OpenRequested?.Invoke();
+            });
+            var exitBtn = CreateMenuButton("Çıkış", () =>
+            {
+                CloseMenu();
+                ExitRequested?.Invoke();
+            });
+
+            var stack = new StackPanel { Margin = new Thickness(6) };
+            stack.Children.Add(openBtn);
+            stack.Children.Add(exitBtn);
+
+            var chrome = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Child = stack,
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 16,
+                    ShadowDepth = 0,
+                    Opacity = 0.55,
+                    Color = Colors.Black
+                }
+            };
+
+            _menuWindow = new Window
+            {
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                Background = Brushes.Transparent,
+                ShowInTaskbar = false,
+                Topmost = true,
+                ResizeMode = ResizeMode.NoResize,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                Content = chrome,
+                Left = pt.X - 8,
+                Top = pt.Y - 8
+            };
+
+            _menuWindow.Deactivated += (_, _) => CloseMenu();
+            _menuWindow.Show();
+            _menuWindow.Activate();
+        }
+
+        private static Button CreateMenuButton(string text, Action onClick)
+        {
+            var label = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+                Margin = new Thickness(10, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var border = new Border
+            {
+                Background = Brushes.Transparent,
+                CornerRadius = new CornerRadius(7),
+                Height = 32,
+                Child = label
+            };
+
+            var btn = new Button
+            {
+                Content = border,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 1, 0, 1),
+                MinWidth = 148,
+                Cursor = Cursors.Hand,
+                Focusable = false,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+            btn.Template = new ControlTemplate(typeof(Button))
+            {
+                VisualTree = new FrameworkElementFactory(typeof(ContentPresenter))
+            };
+
+            border.MouseEnter += (_, _) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A));
+                label.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            };
+            border.MouseLeave += (_, _) =>
+            {
+                border.Background = Brushes.Transparent;
+                label.Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8));
+            };
+            btn.Click += (_, _) => onClick();
+            return btn;
+        }
+
+        private void CloseMenu()
+        {
+            try
+            {
+                if (_menuWindow != null)
+                {
+                    _menuWindow.Close();
+                    _menuWindow = null;
+                }
+            }
+            catch { /* ignore */ }
         }
 
         private IntPtr LoadAppIcon()
@@ -166,13 +253,14 @@ namespace DownloadMuck
             catch { /* ignore */ }
 
             _iconFromExe = false;
-            return LoadIcon(IntPtr.Zero, (IntPtr)32512); // IDI_APPLICATION
+            return LoadIcon(IntPtr.Zero, (IntPtr)32512);
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+            CloseMenu();
             try
             {
                 if (_added)
@@ -233,22 +321,7 @@ namespace DownloadMuck
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyIcon(IntPtr hIcon);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern IntPtr CreatePopupMenu();
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern bool AppendMenu(IntPtr hMenu, uint uFlags, UIntPtr uIDNewItem, string? lpNewItem);
-
-        [DllImport("user32.dll")]
-        private static extern bool DestroyMenu(IntPtr hMenu);
-
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT lpPoint);
-
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        private static extern int TrackPopupMenuEx(IntPtr hmenu, uint fuFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
     }
 }

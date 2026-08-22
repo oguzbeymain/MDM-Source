@@ -64,6 +64,7 @@ namespace DownloadMuck
         private Point? _titleDragStart;
         private bool _titleDragRestoring;
         private TrayIconService? _tray;
+        private bool _sidebarUserSized;
         private bool _exitRequested;
         private bool _trayTipShown;
 
@@ -111,6 +112,12 @@ namespace DownloadMuck
             Loaded += MainWindow_Loaded;
             NativeWindowChrome.Attach(this);
             InitTray();
+
+            SettingsPanel.Saved += OnSettingsSaved;
+            SettingsPanel.Cancelled += CloseSettingsOverlay;
+            SettingsPanel.UpdateApplying += OnSettingsUpdateApplying;
+            RulesPanel.Saved += OnRulesSaved;
+            RulesPanel.Cancelled += CloseRulesOverlay;
         }
 
         private void InitTray()
@@ -169,8 +176,34 @@ namespace DownloadMuck
             Close();
         }
 
+        /// <summary>Updater yeni sürüm kurmadan önce eski örneği kapatır.</summary>
+        public void ExitForUpdate()
+        {
+            _exitRequested = true;
+            try
+            {
+                foreach (var kv in _engines.ToList())
+                {
+                    try
+                    {
+                        if (kv.Value.IsDownloading && !kv.Value.IsPaused)
+                            kv.Value.Pause();
+                    }
+                    catch { /* ignore */ }
+                }
+                PersistDownloadHistory();
+            }
+            catch { /* ignore */ }
+
+            try { _captureServer?.Stop(); } catch { /* ignore */ }
+            try { _tray?.Dispose(); } catch { /* ignore */ }
+            _tray = null;
+            Application.Current.Shutdown();
+        }
+
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            ApplyResponsiveLayout(ActualWidth);
             Dispatcher.BeginInvoke(() =>
             {
                 try
@@ -825,32 +858,75 @@ namespace DownloadMuck
                 return;
             }
 
-            var dlg = new CategoryRulesDialog(cat) { Owner = this };
-            if (dlg.ShowDialog() == true)
+            OpenRulesOverlay(cat);
+        }
+
+        private CategoryItem? _rulesCategory;
+
+        private void OpenRulesOverlay(CategoryItem cat)
+        {
+            _rulesCategory = cat;
+            RulesPanel.Load(cat);
+            RulesOverlay.Visibility = Visibility.Visible;
+            RulesOverlay.Focusable = true;
+            Keyboard.Focus(RulesOverlay);
+        }
+
+        private void CloseRulesOverlay()
+        {
+            RulesOverlay.Visibility = Visibility.Collapsed;
+            _rulesCategory = null;
+        }
+
+        private void OnRulesSaved()
+        {
+            var cat = _rulesCategory;
+            if (cat == null)
             {
-                CategoryStore.Save(Categories);
-                // Sadece bu kategoriye bagli / kurala yeni dusen oge'leri guncelle — manuel tasimalari koru
-                foreach (var item in DownloadList)
+                CloseRulesOverlay();
+                return;
+            }
+
+            CategoryStore.Save(Categories);
+            foreach (var item in DownloadList)
+            {
+                string resolved = ResolveCategoryForNewFile(item.FileName);
+                if (item.CategoryId == cat.Id)
                 {
-                    string resolved = ResolveCategoryForNewFile(item.FileName);
-                    if (item.CategoryId == cat.Id)
-                    {
-                        if (resolved != cat.Id)
-                            item.CategoryId = resolved;
-                        continue;
-                    }
-
-                    if (resolved != cat.Id) continue;
-
-                    var current = CategoryStore.FindById(Categories, item.CategoryId);
-                    bool autoBucket = item.CategoryId == "All"
-                        || (current?.IsBuiltin == true && current.Id != "All");
-                    if (autoBucket)
+                    if (resolved != cat.Id)
                         item.CategoryId = resolved;
+                    continue;
                 }
-                _downloadView?.Refresh();
-                RefreshCategoryCounts();
-                QueueHistorySave();
+
+                if (resolved != cat.Id) continue;
+
+                var current = CategoryStore.FindById(Categories, item.CategoryId);
+                bool autoBucket = item.CategoryId == "All"
+                    || (current?.IsBuiltin == true && current.Id != "All");
+                if (autoBucket)
+                    item.CategoryId = resolved;
+            }
+            _downloadView?.Refresh();
+            RefreshCategoryCounts();
+            QueueHistorySave();
+            CloseRulesOverlay();
+        }
+
+        private void RulesOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource == RulesOverlay)
+            {
+                CloseRulesOverlay();
+                e.Handled = true;
+            }
+        }
+
+        private void RulesOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseRulesOverlay();
+                e.Handled = true;
             }
         }
 
@@ -1734,10 +1810,115 @@ namespace DownloadMuck
         private void ListPanelBorder_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (sender is not Border border) return;
-            double r = _isPseudoMaximized ? 0 : 14;
+            const double r = 12;
             border.Clip = new RectangleGeometry(
-                new Rect(0, 0, border.ActualWidth, border.ActualHeight),
+                new Rect(0, 0, Math.Max(0, border.ActualWidth), Math.Max(0, border.ActualHeight)),
                 r, r);
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void DgDownloads_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (!IsLoaded) return;
+            ApplyResponsiveLayout(e.NewSize.Width);
+        }
+
+        private void MainSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        {
+            _sidebarUserSized = true;
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void ApplyResponsiveLayout(double windowWidth)
+        {
+            if (SidebarCol == null || ContentInner == null || DgDownloads == null) return;
+
+            double outer = windowWidth < 760 ? 4 : 8;
+            SidebarPanel.Margin = new Thickness(outer, outer, 0, outer);
+            ContentPanel.Margin = new Thickness(2, outer, outer, outer);
+
+            double pad = windowWidth < 760 ? 6 : 10;
+            ContentInner.Margin = new Thickness(pad);
+            SidebarInner.Margin = new Thickness(pad * 0.8, pad, pad * 0.8, pad * 0.8);
+
+            if (!_sidebarUserSized)
+            {
+                double target = windowWidth switch
+                {
+                    < 680 => 110,
+                    < 780 => 130,
+                    < 920 => 155,
+                    _ => 180
+                };
+                target = SafeClamp(target, SidebarCol.MinWidth, SidebarCol.MaxWidth);
+                if (Math.Abs(SidebarCol.Width.Value - target) > 0.5 || !SidebarCol.Width.IsAbsolute)
+                    SidebarCol.Width = new GridLength(target);
+            }
+            else
+            {
+                double maxSidebar = SafeClamp(windowWidth - 280, SidebarCol.MinWidth, SidebarCol.MaxWidth);
+                if (SidebarCol.ActualWidth > maxSidebar + 2)
+                    SidebarCol.Width = new GridLength(maxSidebar);
+            }
+
+            bool compact = windowWidth < 900;
+            var labelVis = compact ? Visibility.Collapsed : Visibility.Visible;
+            LblToolbarNew.Visibility = labelVis;
+            LblToolbarDelete.Visibility = labelVis;
+            LblToolbarOpen.Visibility = labelVis;
+            LblToolbarFolder.Visibility = labelVis;
+
+            if (SearchCol != null)
+            {
+                double sw = windowWidth switch
+                {
+                    < 700 => 88,
+                    < 820 => 120,
+                    < 980 => 150,
+                    _ => 180
+                };
+                SearchCol.Width = new GridLength(sw);
+            }
+
+            double gridW = DgDownloads.ActualWidth;
+            if (gridW < 40)
+                gridW = Math.Max(120, windowWidth - SidebarCol.Width.Value - 48);
+
+            if (ColFileName != null)
+            {
+                ColType.Visibility = gridW < 560 ? Visibility.Collapsed : Visibility.Visible;
+                ColDate.Visibility = gridW < 680 ? Visibility.Collapsed : Visibility.Visible;
+                ColSize.Visibility = gridW < 420 ? Visibility.Collapsed : Visibility.Visible;
+                ColActions.Visibility = gridW < 360 ? Visibility.Collapsed : Visibility.Visible;
+                ColStatus.Visibility = gridW < 280 ? Visibility.Collapsed : Visibility.Visible;
+
+                double reserved = 40;
+                if (ColActions.Visibility == Visibility.Visible) reserved += 76;
+                if (ColStatus.Visibility == Visibility.Visible) reserved += 100;
+                if (ColSize.Visibility == Visibility.Visible) reserved += 56;
+                if (ColType.Visibility == Visibility.Visible) reserved += 40;
+                if (ColDate.Visibility == Visibility.Visible) reserved += 90;
+
+                double fileMin = Math.Max(64, Math.Min(160, gridW - reserved - 8));
+                ColFileName.MinWidth = fileMin;
+                ColFileName.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+
+                if (ColStatus.Visibility == Visibility.Visible)
+                {
+                    ColStatus.MinWidth = Math.Max(72, Math.Min(120, gridW * 0.28));
+                    ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                }
+
+                if (ColSize.Visibility == Visibility.Visible)
+                    ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+
+                ColActions.Width = new DataGridLength(gridW < 480 ? 72 : 84);
+            }
         }
 
         private static double SafeClamp(double value, double min, double max)
@@ -1916,12 +2097,15 @@ namespace DownloadMuck
             TitleBarChrome.CornerRadius = new CornerRadius(0);
             ContentChrome.CornerRadius = new CornerRadius(0);
             RootChrome.BorderThickness = max ? new Thickness(0) : new Thickness(1);
+            // Tam ekranda da liste paneli oval kalsın
             if (ListPanelBorder.ActualWidth > 0)
             {
+                const double r = 12;
                 ListPanelBorder.Clip = new RectangleGeometry(
                     new Rect(0, 0, ListPanelBorder.ActualWidth, ListPanelBorder.ActualHeight),
-                    max ? 0 : 14, max ? 0 : 14);
+                    r, r);
             }
+            ApplyResponsiveLayout(ActualWidth);
         }
 
         private Rect GetCurrentWorkArea() => MonitorWorkArea.Get(this);
@@ -1949,110 +2133,62 @@ namespace DownloadMuck
             await StartDownloadProcess(dlg.Url, "", selectItem: true);
         }
 
-        private void ToolbarSettings_Click(object sender, RoutedEventArgs e)
+        private void ToolbarSettings_Click(object sender, RoutedEventArgs e) => OpenSettingsOverlay();
+
+        private void OpenSettingsOverlay(string? tab = null)
         {
-            if (sender is not FrameworkElement fe) return;
-
             var settings = AppSettingsStore.Load();
-            var menu = new ContextMenu
-            {
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                FocusVisualStyle = null,
-                PlacementTarget = fe,
-                Placement = PlacementMode.Bottom
-            };
-            menu.Template = CreateDarkMenuTemplate();
-
-            MenuItem Make(string header, RoutedEventHandler? click = null, bool checkable = false, bool isChecked = false)
-            {
-                var mi = new MenuItem
-                {
-                    Header = header,
-                    IsCheckable = checkable,
-                    IsChecked = isChecked,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-                    Background = Brushes.Transparent,
-                    FontSize = 11,
-                    Padding = new Thickness(10, 5, 10, 5),
-                    Height = 28,
-                    FocusVisualStyle = null,
-                    Template = CreateDarkMenuItemTemplate()
-                };
-                if (click != null) mi.Click += click;
-                return mi;
-            }
-
-            var openAll = Make("Tüm ayarlar…", (_, _) => OpenSettingsDialog());
-            openAll.FontWeight = FontWeights.SemiBold;
-            openAll.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
-            menu.Items.Add(openAll);
-            menu.Items.Add(new Separator());
-
-            var autoStart = Make("Windows ile birlikte başlat", checkable: true, isChecked: settings.AutoStart);
-            autoStart.Click += (_, _) =>
-            {
-                settings.AutoStart = autoStart.IsChecked;
-                if (settings.AutoStart)
-                    AutoStartHelper.Enable(settings.AutoStartMinimized);
-                else
-                    AutoStartHelper.Disable();
-                AppSettingsStore.Save(settings);
-            };
-            menu.Items.Add(autoStart);
-            menu.Items.Add(new Separator());
-
-            menu.Items.Add(Make("Varsayılan klasörü aç", (_, _) =>
-            {
-                try
-                {
-                    Directory.CreateDirectory(_defaultFolder);
-                    Process.Start(new ProcessStartInfo(_defaultFolder) { UseShellExecute = true });
-                }
-                catch (Exception ex) { InfoDialog.Show(this, "Klasör", "Açılamadı.", ex.Message); }
-            }));
-
-            menu.Items.Add(Make("Eklenti klasörünü aç", (_, _) =>
-            {
-                try
-                {
-                    string dir = ExtensionInstaller.InstallRoot;
-                    if (!Directory.Exists(dir))
-                    {
-                        InfoDialog.Show(this, "Eklenti", "Eklenti klasörü bulunamadı.", dir);
-                        return;
-                    }
-                    Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
-                }
-                catch (Exception ex) { InfoDialog.Show(this, "Eklenti", "Klasör açılamadı.", ex.Message); }
-            }));
-
-            menu.Items.Add(new Separator());
-            var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            string verText = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "";
-            menu.Items.Add(Make($"Hakkında  ·  {verText}", (_, _) =>
-            {
-                InfoDialog.Show(this, "MuckDownloadManager",
-                    $"Sürüm {verText}",
-                    "İndirmeleri kategorilere ayıran masaüstü indirme yöneticisi.");
-            }));
-
-            menu.IsOpen = true;
+            SettingsPanel.Load(settings, _defaultFolder, tab);
+            SettingsOverlay.Visibility = Visibility.Visible;
+            SettingsOverlay.Focusable = true;
+            Keyboard.Focus(SettingsOverlay);
         }
 
-        private void OpenSettingsDialog()
+        private void CloseSettingsOverlay()
+        {
+            SettingsOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void OnSettingsSaved()
         {
             var settings = AppSettingsStore.Load();
-            var dlg = new SettingsDialog(settings, _defaultFolder) { Owner = this };
-            if (dlg.ShowDialog() != true) return;
-
-            settings = AppSettingsStore.Load();
             if (!string.IsNullOrWhiteSpace(settings.DefaultDownloadFolder))
             {
                 _defaultFolder = settings.DefaultDownloadFolder;
                 try { Directory.CreateDirectory(_defaultFolder); } catch { /* ignore */ }
                 CategoryStore.EnsureDiskFolders(Categories, _defaultFolder);
             }
+            CloseSettingsOverlay();
+        }
+
+        private void OnSettingsUpdateApplying()
+        {
+            CloseSettingsOverlay();
+            ExitForUpdate();
+        }
+
+        private void SettingsOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource == SettingsOverlay)
+            {
+                CloseSettingsOverlay();
+                e.Handled = true;
+            }
+        }
+
+        private void SettingsOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseSettingsOverlay();
+                e.Handled = true;
+            }
+        }
+
+        private void OverlayCard_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Kart tıklaması arka plana yayılmasın
+            e.Handled = true;
         }
 
         private List<DownloadItem> GetToolbarTargets()
