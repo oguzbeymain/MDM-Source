@@ -9,6 +9,13 @@ namespace DownloadMuck
     {
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        private string _id = Guid.NewGuid().ToString("N")[..12];
+        public string Id
+        {
+            get => _id;
+            set => SetField(ref _id, string.IsNullOrWhiteSpace(value) ? _id : value);
+        }
+
         private string _fileName = "";
         public string FileName
         {
@@ -69,7 +76,12 @@ namespace DownloadMuck
                 {
                     IsDownloading = value.Contains("İndiriliyor")
                         || value.Contains("Dosya bilgileri")
-                        || value.Contains("Tek kanaldan");
+                        || value.Contains("Tek kanaldan")
+                        || value.Contains("Torrent")
+                        || value.Contains("Magnet")
+                        || value.Contains("Ağ")
+                        || value.Contains("bekleniyor")
+                        || value.Contains("devam");
                 }
             }
         }

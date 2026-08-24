@@ -12,6 +12,36 @@ namespace DownloadMuck
         public string ListDensity { get; set; } = "Medium";
         public string ListSort { get; set; } = "Date";
         public bool DeleteFilesFromDisk { get; set; } = true;
+        public bool AutoExtractArchives { get; set; }
+        public bool DeleteArchiveAfterExtract { get; set; }
+        public bool ScheduleEnabled { get; set; }
+        public int ScheduleStartHour { get; set; }
+        public int ScheduleEndHour { get; set; }
+        public bool RemoteApiLan { get; set; }
+        public string RemoteApiToken { get; set; } = "";
+        public int CrawlDepth { get; set; } = 1;
+        public bool PreferHttp3 { get; set; } = true;
+        public bool SkipDuplicateUrls { get; set; } = true;
+        public string SkipExtensions { get; set; } = "";
+        public string SkipUrlContains { get; set; } = "";
+        public string SkipDomains { get; set; } = "";
+        public string SkipUrlRegex { get; set; } = "";
+        public string SkipMimeContains { get; set; } = "";
+        public int SkipMinSizeMb { get; set; }
+        public int SkipMaxSizeMb { get; set; }
+        public string RenamePattern { get; set; } = "{name}{ext}";
+        public int SpeedLimitKBps { get; set; }
+        public int MaxConcurrentDownloads { get; set; }
+        public int HttpMaxChannels { get; set; }
+        public bool NotifyOnComplete { get; set; } = true;
+        public int TorrentListenPort { get; set; } = 6881;
+        public bool TorrentDht { get; set; } = true;
+        public bool TorrentLocalPeers { get; set; } = true;
+        public bool TorrentPortForward { get; set; } = true;
+        public double TorrentSeedRatio { get; set; }
+        public bool TorrentSequential { get; set; }
+        public int TorrentMaxConnections { get; set; } = 120;
+        public bool AutoReconnect { get; set; } = true;
     }
 
     public static class AppSettingsStore

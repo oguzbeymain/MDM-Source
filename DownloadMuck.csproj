@@ -12,17 +12,28 @@
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MDM</AssemblyTitle>
     <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
-    <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**;DownloadMuck.Tests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="MDM.Updater\**" />
     <Page Remove="MDM.Updater\**" />
     <EmbeddedResource Remove="MDM.Updater\**" />
     <None Remove="MDM.Updater\**" />
+    <Compile Remove="DownloadMuck.Tests\**" />
+    <None Remove="DownloadMuck.Tests\**" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\mdm.ico" />
     <Resource Include="Assets\mdm-logo.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentFTP" Version="52.1.0" />
+    <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="SharpCompress" Version="0.40.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DownloadMuck.Tests" />
   </ItemGroup>
   <ItemGroup>
     <None Include="DownloadMuck_Eklenti\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="DownloadMuck_Eklenti" />

@@ -14,7 +14,7 @@ namespace DownloadMuck
         private readonly string _url;
         private string _fileName;
         private DownloadItem? _item;
-        private DownloadEngine? _engine;
+        private ITransferBackend? _engine;
         private bool _started;
 
         public DownloadItem? BoundItem => _item;
@@ -31,7 +31,7 @@ namespace DownloadMuck
         }
 
         /// <summary>Mevcut indirmeye bagli oturum (cift tik).</summary>
-        public DownloadSessionWindow(MainWindow host, DownloadItem item, DownloadEngine? engine, string url)
+        public DownloadSessionWindow(MainWindow host, DownloadItem item, ITransferBackend? engine, string url)
         {
             InitializeComponent();
             _host = host;
@@ -168,7 +168,7 @@ namespace DownloadMuck
             TxtFolder.Text = folder;
         }
 
-        public void RebindEngine(DownloadEngine engine)
+        public void RebindEngine(ITransferBackend engine)
         {
             _engine = engine;
         }
@@ -319,6 +319,16 @@ namespace DownloadMuck
             TxtStatus.Text = "İndiriliyor...";
 
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder);
+            if (run == null)
+            {
+                _started = false;
+                BtnStart.IsEnabled = true;
+                BtnStart.Opacity = 1;
+                BtnPause.IsEnabled = false;
+                SetFolderPassive(false);
+                TxtStatus.Text = "Kural nedeniyle eklenmedi";
+                return;
+            }
             _item = run.Item;
             _engine = run.Engine;
             _host.RegisterSessionWindow(_item, this);
@@ -375,6 +385,34 @@ namespace DownloadMuck
             {
                 TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = "Duraklatıldı";
+                BtnPause.IsEnabled = false;
+                BtnStart.IsEnabled = true;
+                BtnStart.Opacity = 1;
+                BtnStart.Content = "Devam Et";
+                BtnCancelDl.IsEnabled = true;
+                BtnMoveFile.Visibility = Visibility.Collapsed;
+                SetFolderPassive(true);
+                PanelActive.Visibility = Visibility.Visible;
+                PanelDone.Visibility = Visibility.Collapsed;
+            }
+            else if (_item.Status.Contains("Kuyrukta", StringComparison.OrdinalIgnoreCase))
+            {
+                TxtStatus.Visibility = Visibility.Visible;
+                TxtStatus.Text = "Kuyrukta bekleniyor...";
+                BtnPause.IsEnabled = false;
+                BtnStart.IsEnabled = false;
+                BtnStart.Opacity = 0.55;
+                BtnStart.Content = "Başlat";
+                BtnCancelDl.IsEnabled = true;
+                BtnMoveFile.Visibility = Visibility.Collapsed;
+                SetFolderPassive(true);
+                PanelActive.Visibility = Visibility.Visible;
+                PanelDone.Visibility = Visibility.Collapsed;
+            }
+            else if (_item.IsErrorState)
+            {
+                TxtStatus.Visibility = Visibility.Visible;
+                TxtStatus.Text = string.IsNullOrWhiteSpace(_item.Status) ? "Torrent hatası" : _item.Status;
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;

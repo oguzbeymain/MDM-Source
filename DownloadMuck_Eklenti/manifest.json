@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MDM Integration",
-  "version": "1.8",
+  "version": "1.9",
   "description": "MuckDownloadManager (MDM) masaustu indirme yoneticisi entegrasyonu",
   "permissions": [
     "downloads",
@@ -23,6 +23,13 @@
     "http://localhost:27182/*",
     "http://localhost:38472/*",
     "http://localhost:6800/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["magnet.js"],
+      "run_at": "document_start"
+    }
   ],
   "background": {
     "service_worker": "background.js"

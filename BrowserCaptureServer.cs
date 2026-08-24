@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 
 namespace DownloadMuck
@@ -18,6 +17,9 @@ namespace DownloadMuck
         public static readonly int[] CandidatePorts = { 18680, 18681, 18682, 18700, 27182, 38472, 6800 };
 
         private readonly Action<string, string, string> _onDownloadRequested;
+        private readonly bool _lan;
+        private readonly string _token;
+        private readonly IRemoteJobHost? _jobs;
         private TcpListener? _listener;
         private CancellationTokenSource? _cts;
         private Task? _loopTask;
@@ -26,9 +28,16 @@ namespace DownloadMuck
         public int ActivePort { get; private set; }
         public string? LastError { get; private set; }
 
-        public BrowserCaptureServer(Action<string, string, string> onDownloadRequested)
+        public BrowserCaptureServer(
+            Action<string, string, string> onDownloadRequested,
+            bool lan = false,
+            string? token = null,
+            IRemoteJobHost? jobs = null)
         {
             _onDownloadRequested = onDownloadRequested;
+            _lan = lan;
+            _token = token ?? "";
+            _jobs = jobs;
         }
 
         public void Start()
@@ -42,7 +51,7 @@ namespace DownloadMuck
                 try
                 {
                     _cts = new CancellationTokenSource();
-                    var listener = new TcpListener(IPAddress.Loopback, port);
+                    var listener = new TcpListener(_lan ? IPAddress.Any : IPAddress.Loopback, port);
                     listener.Start();
 
                     _listener = listener;
@@ -139,12 +148,17 @@ namespace DownloadMuck
                     string? requestLine = await reader.ReadLineAsync();
                     if (string.IsNullOrWhiteSpace(requestLine))
                     {
-                        await WriteResponseAsync(stream, 400, "Bad Request");
+                        await WriteResponseAsync(stream, RemoteApiResult.Text(400, "Bad Request"));
                         return;
                     }
 
                     string method = requestLine.Split(' ')[0].ToUpperInvariant();
+                    string path = "/";
+                    var parts = requestLine.Split(' ');
+                    if (parts.Length > 1)
+                        path = parts[1];
                     int contentLength = 0;
+                    string auth = "";
 
                     while (true)
                     {
@@ -153,25 +167,24 @@ namespace DownloadMuck
 
                         if (header.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                             _ = int.TryParse(header.Substring("Content-Length:".Length).Trim(), out contentLength);
+                        if (header.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
+                            auth = header.Substring("Authorization:".Length).Trim();
+                    }
+
+                    if (contentLength > 512_000)
+                    {
+                        await WriteResponseAsync(stream, RemoteApiResult.Text(413, "Payload too large"));
+                        return;
                     }
 
                     if (method == "OPTIONS")
                     {
-                        await WriteResponseAsync(stream, 200, "OK");
+                        await WriteResponseAsync(stream, RemoteApiResult.Text(200, "OK"));
                         return;
                     }
 
-                    if (method == "GET")
-                    {
-                        await WriteResponseAsync(stream, 200, $"MDM capture ready on {ActivePort}");
-                        return;
-                    }
-
-                    if (method != "POST")
-                    {
-                        await WriteResponseAsync(stream, 405, "Method Not Allowed");
-                        return;
-                    }
+                    bool isLoopback = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.Equals(IPAddress.Loopback) == true
+                        || ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.Equals(IPAddress.IPv6Loopback) == true;
 
                     char[] bodyBuffer = new char[Math.Max(contentLength, 0)];
                     int read = 0;
@@ -183,25 +196,9 @@ namespace DownloadMuck
                     }
 
                     string json = new string(bodyBuffer, 0, read);
-                    string url = "";
-                    string filename = "";
-                    string mime = "";
-
-                    if (!string.IsNullOrWhiteSpace(json))
-                    {
-                        using JsonDocument doc = JsonDocument.Parse(json);
-                        if (doc.RootElement.TryGetProperty("url", out JsonElement urlEl))
-                            url = urlEl.GetString() ?? "";
-                        if (doc.RootElement.TryGetProperty("filename", out JsonElement nameEl))
-                            filename = FileNameHelper.DecodeDisplayName(nameEl.GetString() ?? "");
-                        if (doc.RootElement.TryGetProperty("mime", out JsonElement mimeEl))
-                            mime = mimeEl.GetString() ?? "";
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(url))
-                        _onDownloadRequested(url, filename, mime);
-
-                    await WriteResponseAsync(stream, 200, "OK");
+                    var result = RemoteApiRouter.Route(
+                        method, path, json, isLoopback, auth, _lan, _token, _onDownloadRequested, _jobs);
+                    await WriteResponseAsync(stream, result);
                 }
                 catch (Exception ex)
                 {
@@ -210,23 +207,27 @@ namespace DownloadMuck
             }
         }
 
-        private static async Task WriteResponseAsync(NetworkStream stream, int statusCode, string body)
+        private static async Task WriteResponseAsync(NetworkStream stream, RemoteApiResult result)
         {
+            int statusCode = result.Status;
             string reason = statusCode switch
             {
                 200 => "OK",
-                400 => "Bad Request",
+                202 => "Accepted",
+                401 => "Unauthorized",
+                404 => "Not Found",
                 405 => "Method Not Allowed",
+                413 => "Payload Too Large",
                 _ => "Error"
             };
 
-            byte[] bodyBytes = Encoding.UTF8.GetBytes(body);
+            byte[] bodyBytes = Encoding.UTF8.GetBytes(result.Body ?? "");
             var sb = new StringBuilder();
             sb.Append($"HTTP/1.1 {statusCode} {reason}\r\n");
             sb.Append("Access-Control-Allow-Origin: *\r\n");
             sb.Append("Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n");
-            sb.Append("Access-Control-Allow-Headers: Content-Type, Accept\r\n");
-            sb.Append("Content-Type: text/plain; charset=utf-8\r\n");
+            sb.Append("Access-Control-Allow-Headers: Content-Type, Accept, Authorization\r\n");
+            sb.Append($"Content-Type: {result.ContentType}\r\n");
             sb.Append($"Content-Length: {bodyBytes.Length}\r\n");
             sb.Append("Connection: close\r\n");
             sb.Append("\r\n");

@@ -138,6 +138,18 @@ namespace DownloadMuck
         {
             try
             {
+                if (url.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+                {
+                    Match dn = Regex.Match(url, @"[?&]dn=([^&]+)", RegexOptions.IgnoreCase);
+                    if (dn.Success)
+                    {
+                        string decoded = DecodeDisplayName(Uri.UnescapeDataString(dn.Groups[1].Value.Replace('+', ' ')));
+                        if (!string.IsNullOrWhiteSpace(decoded))
+                            return decoded;
+                    }
+                    return "torrent";
+                }
+
                 var uri = new Uri(url);
                 foreach (string key in new[] { "filename", "file", "name", "title", "response-content-disposition" })
                 {

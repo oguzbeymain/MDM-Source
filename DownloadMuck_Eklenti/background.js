@@ -1,4 +1,4 @@
-// DownloadMuck / MDM tarayici entegrasyonu v1.8
+// DownloadMuck / MDM tarayici entegrasyonu v1.9
 // Once masaustu uygulamasina ilet; BASARILI olursa tarayici indirmesini iptal et.
 // Chrome/Edge acilista eski indirmeleri onCreated ile tekrar firlatir — bunlari yut.
 
@@ -167,7 +167,7 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
   disableBrowserDownloadUi();
 
   const url = downloadItem.finalUrl || downloadItem.url || "";
-  if (!/^https?:\/\//i.test(url)) {
+  if (!/^https?:\/\//i.test(url) && !/^magnet:/i.test(url)) {
     return;
   }
 
@@ -203,4 +203,20 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
   }
 
   console.warn("MDM: masaustu uygulamaya ulasilamadi, tarayici indirmesi suruyor.");
+});
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || msg.type !== "mdm-handoff" || !msg.url) {
+    return;
+  }
+  const url = String(msg.url);
+  if (shouldSkipHandoff(url)) {
+    sendResponse({ ok: true });
+    return true;
+  }
+  handoffToDesktop(url, msg.filename || "", "").then((ok) => {
+    if (ok) recentHandoffs.set(url, Date.now());
+    sendResponse({ ok: !!ok });
+  }).catch(() => sendResponse({ ok: false }));
+  return true;
 });

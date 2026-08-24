@@ -24,11 +24,13 @@ namespace DownloadMuck
                     if (string.IsNullOrEmpty(url)) url = i.Url;
                     string status = i.Status;
                     // Acik indirmeleri yeniden acilista duraklatilmis say
-                    if (i.IsDownloading || status.Contains("İndiriliyor", StringComparison.OrdinalIgnoreCase))
+                    if (i.IsDownloading || status.Contains("İndiriliyor", StringComparison.OrdinalIgnoreCase)
+                        || status.Contains("Kuyrukta", StringComparison.OrdinalIgnoreCase))
                         status = "Duraklatıldı";
 
                     return new DownloadDto
                     {
+                        Id = string.IsNullOrWhiteSpace(i.Id) ? Guid.NewGuid().ToString("N")[..12] : i.Id,
                         FileName = i.FileName,
                         FilePath = i.FilePath,
                         FileSize = i.FileSize,
@@ -61,6 +63,7 @@ namespace DownloadMuck
                 {
                     var item = new DownloadItem
                     {
+                        Id = string.IsNullOrWhiteSpace(d.Id) ? Guid.NewGuid().ToString("N")[..12] : d.Id,
                         FileName = d.FileName,
                         FilePath = d.FilePath,
                         FileSize = string.IsNullOrWhiteSpace(d.FileSize) ? "-" : d.FileSize,
@@ -113,6 +116,7 @@ namespace DownloadMuck
 
         private sealed class DownloadDto
         {
+            public string Id { get; set; } = "";
             public string FileName { get; set; } = "";
             public string FilePath { get; set; } = "";
             public string FileSize { get; set; } = "-";

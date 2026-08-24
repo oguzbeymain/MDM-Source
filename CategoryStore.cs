@@ -63,7 +63,7 @@ namespace DownloadMuck
                 "Audio" => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     { "mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus" },
                 "Archives" => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    { "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "cab" },
+                    { "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "iso", "cab", "torrent" },
                 "Images" => new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     { "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "tif", "tiff", "heic", "avif", "jfif" },
                 "Apps" => new HashSet<string>(StringComparer.OrdinalIgnoreCase)

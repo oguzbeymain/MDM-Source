@@ -113,6 +113,9 @@
                         <RadioButton x:Name="NavExtension" Content="Tarayıcı eklentisi" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
+                        <RadioButton x:Name="NavAdvanced" Content="Gelişmiş" GroupName="SettingsNav"
+                                     Style="{StaticResource SettingsNavButton}"
+                                     Checked="Nav_Checked"/>
                         <RadioButton x:Name="NavUpdate" Content="Güncelleme" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
@@ -149,6 +152,10 @@
                                               Foreground="#E0E0E0" FontSize="12" Cursor="Hand"/>
                                     <TextBlock Text="Kapalıysa öğe yalnızca listeden çıkar; indirme klasöründeki dosya durur."
                                                Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="22,6,0,0"/>
+                                    <CheckBox x:Name="ChkAutoExtract" Content="Arşivi indirdikten sonra aç"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,12,0,0" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkDeleteArchive" Content="Açtıktan sonra arşiv dosyasını sil"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,10,0,0" Cursor="Hand"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -166,6 +173,135 @@
                                 <Button Content="Klasörü aç"
                                         Click="BtnOpenExtFolder_Click" Style="{StaticResource SoftButton}"/>
                             </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="PanelAdvanced" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Zamanlayıcı ve uzak denetim" Foreground="#BBB" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="12">
+                                <StackPanel>
+                                    <CheckBox x:Name="ChkSchedule" Content="Yalnızca bu saatler arasında indir"
+                                              Foreground="#E0E0E0" FontSize="12" Cursor="Hand"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <TextBlock Text="Başlangıç saati" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtSchedStart" Width="40" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="Bitiş" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                                        <TextBox x:Name="TxtSchedEnd" Width="40" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Aynı saat = her zaman açık. 22 ve 6 gece penceresidir."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,12"/>
+                                    <TextBlock Text="Tarama derinliği (0–3)" Foreground="#999" FontSize="11" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="TxtCrawlDepth" Width="40" Height="28" HorizontalAlignment="Left" Text="1"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="6,0"/>
+                                    <CheckBox x:Name="ChkRemoteLan" Content="REST API’yi LAN’dan dinle (token gerekir)"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,14,0,8" Cursor="Hand"/>
+                                    <TextBlock Text="API token" Foreground="#999" FontSize="11" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="TxtApiToken" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"/>
+                                    <CheckBox x:Name="ChkHttp3" Content="HTTPS’te HTTP/3 dene (olmazsa 2 / 1.1)"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,14,0,8" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkAutoReconnect" Content="Ağ düşünce otomatik devam et"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkNotifyDone" Content="İndirme bitince ses çal"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                        <TextBlock Text="Hız limiti KB/s" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtSpeedLimit" Width="56" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="(0 = sınırsız)" Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="Eşzamanlı indirme" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtMaxConcurrent" Width="40" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="(0 = sınırsız, fazlası kuyruk)" Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="HTTP kanal (0=otomatik)" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtHttpChannels" Width="40" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Torrent" Foreground="#999" FontSize="11" Margin="0,8,0,8"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="Dinleme portu" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtTorrentPort" Width="56" Height="28" Text="6881"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkTorrentDht" Content="DHT (trackersız magnet)"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkTorrentLpd" Content="Yerel eş keşfi"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkTorrentUpnp" Content="UPnP / NAT-PMP port yönlendirme"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkTorrentSeq" Content="Sıralı indir (önce ilk dosya)"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="Paylaşım oranı" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtTorrentSeed" Width="48" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="(0 = indince dur)" Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkSkipDup" Content="Aynı URL’yi ikinci kez ekleme"
+                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                    <TextBlock Text="Atlanan uzantılar (virgülle)" Foreground="#999" FontSize="11" Margin="0,4,0,6"/>
+                                    <TextBox x:Name="TxtSkipExt" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"
+                                             ToolTip="Örn: exe, scr, bat"/>
+                                    <TextBlock Text="URL’de geçenleri atla" Foreground="#999" FontSize="11" Margin="0,8,0,6"/>
+                                    <TextBox x:Name="TxtSkipUrl" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"/>
+                                    <TextBlock Text="Atlanan alan adları (virgülle)" Foreground="#999" FontSize="11" Margin="0,8,0,6"/>
+                                    <TextBox x:Name="TxtSkipDomains" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"
+                                             ToolTip="Örn: ads.example.com, tracker.net"/>
+                                    <TextBlock Text="URL regex (boş = kapalı)" Foreground="#999" FontSize="11" Margin="0,8,0,6"/>
+                                    <TextBox x:Name="TxtSkipRegex" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"/>
+                                    <TextBlock Text="Atlanan MIME (virgülle, örn: video/, audio/)" Foreground="#999" FontSize="11" Margin="0,8,0,6"/>
+                                    <TextBox x:Name="TxtSkipMime" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                                        <TextBlock Text="Min MB" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="TxtSkipMinMb" Width="48" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="Max MB" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                                        <TextBox x:Name="TxtSkipMaxMb" Width="48" Height="28" Text="0"
+                                                 Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                                 VerticalContentAlignment="Center" Padding="6,0"/>
+                                        <TextBlock Text="(0 = kapalı)" Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Yeniden adlandır {name} {ext} {date} {host}" Foreground="#999" FontSize="11" Margin="0,8,0,6"/>
+                                    <TextBox x:Name="TxtRename" Height="28"
+                                             Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
+                                             VerticalContentAlignment="Center" Padding="8,0"/>
+                                    <TextBlock Text="CLI: download URL  |  --add URL  |  --grab SAYFA  |  --list  |  --pause|--resume|--cancel ID"
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,8"/>
+                                    <TextBlock Text="! Video siteleri (YouTube vb.) — harici çıkarıcı yok, şimdilik kapalı"
+                                               Foreground="#C9A227" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,4"/>
+                                    <TextBlock Text="! Tarayıcıdaki gömülü stream yakalama — test edilmesi zor, şimdilik kapalı"
+                                               Foreground="#C9A227" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                    <TextBlock Text="! Mobil / web uzaktan kumanda uygulaması — şimdilik yalnızca LAN REST"
+                                               Foreground="#C9A227" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
 

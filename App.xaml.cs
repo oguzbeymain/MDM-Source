@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -40,10 +41,22 @@ namespace DownloadMuck
                 string.Equals(a, "--background", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
 
-            // Güncelleme artık açılışta değil; Ayarlar → Güncelleme'den denetlenir.
+            string verb = "";
+            string cliValue = "";
+            if (CliArgs.TryParseVerb(e.Args, out verb, out cliValue))
+            {
+                if (verb is "add" or "grab")
+                    IpcInbox.Enqueue(cliValue, verb == "grab");
+                else if (verb is "pause" or "resume" or "cancel")
+                    IpcInbox.EnqueueAction(verb, cliValue);
+            }
+
             if (!SingleInstance.TryAcquire())
             {
-                SingleInstance.RequestShow();
+                if (CliArgs.IsRemoteQuery(verb))
+                    RunCliRemote(verb, cliValue);
+                else
+                    SingleInstance.RequestShow();
                 Shutdown();
                 return;
             }
@@ -78,11 +91,38 @@ namespace DownloadMuck
             }
 
             _ = Task.Run(ExtensionInstaller.EnsureInstalled);
+            NetworkWatcher.Shared.Start();
+        }
+
+        private static void RunCliRemote(string verb, string value)
+        {
+            try
+            {
+                string method = "GET";
+                string path = "/jobs";
+                string? body = null;
+                if (verb == "pause" || verb == "resume" || verb == "cancel")
+                {
+                    method = "POST";
+                    path = $"/jobs/{Uri.EscapeDataString(value)}/{verb}";
+                }
+
+                var (status, text) = CliRemote.CallAsync(method, path, body).GetAwaiter().GetResult();
+                string outPath = Path.Combine(AppSettingsStore.StoreDir, "cli-last.json");
+                Directory.CreateDirectory(AppSettingsStore.StoreDir);
+                File.WriteAllText(outPath, $"{{\"status\":{status},\"body\":{System.Text.Json.JsonSerializer.Serialize(text)}}}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"CLI remote: {ex.Message}");
+            }
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
             SingleInstance.Release();
+            try { NetworkWatcher.Shared.Stop(); } catch { /* ignore */ }
+            try { TorrentEngineHost.Shutdown(); } catch { /* ignore */ }
             base.OnExit(e);
         }
     }

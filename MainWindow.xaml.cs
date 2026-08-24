@@ -25,7 +25,7 @@ namespace DownloadMuck
     public partial class MainWindow : Window
     {
         private BrowserCaptureServer? _captureServer;
-        private readonly Dictionary<DownloadItem, DownloadEngine> _engines = new();
+        private readonly Dictionary<DownloadItem, ITransferBackend> _engines = new();
         private readonly Dictionary<DownloadItem, DownloadSessionWindow> _sessionWindows = new();
         private readonly HashSet<string> _pendingSessionUrls = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _recentCaptureUrls = new(StringComparer.OrdinalIgnoreCase);
@@ -208,6 +208,7 @@ namespace DownloadMuck
             catch { /* ignore */ }
 
             try { _captureServer?.Stop(); } catch { /* ignore */ }
+            try { TorrentEngineHost.Shutdown(); } catch { /* ignore */ }
             try { _tray?.Dispose(); } catch { /* ignore */ }
             _tray = null;
             Application.Current.Shutdown();
@@ -222,6 +223,12 @@ namespace DownloadMuck
                 {
                     AutoStartHelper.EnsureRegistered();
                     AutoResumeIncompleteDownloads();
+                    try
+                    {
+                        PluginRegistry.LoadFromFolder(Path.Combine(AppSettingsStore.StoreDir, "plugins"));
+                    }
+                    catch { /* ignore */ }
+                    _ = DrainIpcLoopAsync();
                 }
                 catch (Exception ex) { Debug.WriteLine($"Startup tasks: {ex.Message}"); }
             }, DispatcherPriority.Background);
@@ -249,6 +256,7 @@ namespace DownloadMuck
             }
             PersistDownloadHistory();
             try { _captureServer?.Stop(); } catch { /* ignore */ }
+            try { TorrentEngineHost.Shutdown(); } catch { /* ignore */ }
             try { _tray?.Dispose(); } catch { /* ignore */ }
             _tray = null;
         }
@@ -395,7 +403,7 @@ namespace DownloadMuck
 
                 if (!_engines.ContainsKey(item))
                 {
-                    var engine = new DownloadEngine(url, item.FilePath, threadCount: 8);
+                    var engine = TransferFactory.Create(url, item.FilePath, threadCount: DownloadQueue.HttpChannels());
                     _engines[item] = engine;
                     WireEngineEvents(item, engine);
                     _itemUrls[item] = url;
@@ -416,8 +424,13 @@ namespace DownloadMuck
                 if (string.IsNullOrWhiteSpace(item.FilePath))
                     continue;
 
+                string url = item.Url;
+                if (string.IsNullOrWhiteSpace(url))
+                    _itemUrls.TryGetValue(item, out url!);
+
                 string statePath = item.FilePath + ".mdmstate";
-                if (!File.Exists(statePath))
+                bool torrentJob = UrlClassifier.Classify(url) is TransferKind.Magnet or TransferKind.Torrent;
+                if (!File.Exists(statePath) && !torrentJob)
                     continue; // State yoksa otomatik başlatma — döngü/yeniden indirme riski
 
                 if (!_engines.TryGetValue(item, out var engine))
@@ -529,7 +542,7 @@ namespace DownloadMuck
                             Debug.WriteLine($"Capture download error: {ex.Message}");
                         }
                     }, System.Windows.Threading.DispatcherPriority.Background);
-                });
+                }, AppSettingsStore.Load().RemoteApiLan, AppSettingsStore.Load().RemoteApiToken, new WindowJobHost(this));
                 _captureServer.Start();
             }
             catch (Exception ex)
@@ -2201,7 +2214,136 @@ namespace DownloadMuck
         {
             var dlg = new NewUrlDialog { Owner = this };
             if (dlg.ShowDialog() != true) return;
-            await StartDownloadProcess(dlg.Url, "", selectItem: true);
+
+            var urls = dlg.Urls;
+            if (dlg.GrabLinks)
+            {
+                string page = urls.Count > 0 ? urls[0] : dlg.Url;
+                if (string.IsNullOrWhiteSpace(page))
+                {
+                    InfoDialog.Show(this, "LinkGrabber", "Taranacak sayfa adresini yapıştırın.");
+                    return;
+                }
+                await GrabAndEnqueueAsync(page);
+                return;
+            }
+            if (urls.Count == 0)
+            {
+                var kind = UrlClassifier.Classify(dlg.Url);
+                InfoDialog.Show(this, "Yeni indirme", UrlClassifier.UnsupportedMessage(kind));
+                return;
+            }
+
+            if (urls.Count == 1)
+            {
+                await StartDownloadProcess(urls[0], "", selectItem: true);
+                return;
+            }
+
+            for (int i = 0; i < urls.Count; i++)
+            {
+                string url = urls[i];
+                string name = BuildQuickFileName(url, "", null);
+                string categoryId = ResolveCategoryForNewFile(name);
+                string folder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+                if (string.IsNullOrWhiteSpace(folder))
+                    folder = _defaultFolder;
+                BeginDownloadFromSession(url, name, folder, notify: false);
+            }
+        }
+
+        private async Task DrainIpcLoopAsync()
+        {
+            while (true)
+            {
+                try
+                {
+                    foreach (var cmd in IpcInbox.Drain())
+                    {
+                        string action = string.IsNullOrWhiteSpace(cmd.Action)
+                            ? (cmd.Grab ? "grab" : "add")
+                            : cmd.Action.ToLowerInvariant();
+                        if (action == "grab")
+                            await GrabAndEnqueueAsync(cmd.Url);
+                        else if (action == "pause")
+                            PauseJobById(cmd.Url);
+                        else if (action == "resume")
+                            ResumeJobById(cmd.Url);
+                        else if (action == "cancel")
+                            CancelJobById(cmd.Url);
+                        else
+                            await StartDownloadProcess(cmd.Url, "", selectItem: true);
+                    }
+                }
+                catch (Exception ex) { Debug.WriteLine($"IPC: {ex.Message}"); }
+                await Task.Delay(1000);
+            }
+        }
+
+        public async Task GrabAndEnqueueAsync(string pageUrl)
+        {
+            try
+            {
+                var settings = AppSettingsStore.Load();
+                var links = await LinkGrabberService.FetchLinksAsync(
+                    pageUrl, settings.CrawlDepth, 30, CancellationToken.None);
+                if (links.Count == 0)
+                {
+                    InfoDialog.Show(this, "LinkGrabber", "Sayfada indirilebilir dosya bulunamadı.");
+                    return;
+                }
+
+                int added = 0;
+                foreach (string url in links)
+                {
+                    string name = BuildQuickFileName(url, "", null);
+                    string categoryId = ResolveCategoryForNewFile(name);
+                    string folder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+                    if (string.IsNullOrWhiteSpace(folder))
+                        folder = _defaultFolder;
+                    if (BeginDownloadFromSession(url, name, folder, notify: false) != null)
+                        added++;
+                }
+                if (added == 0)
+                    InfoDialog.Show(this, "LinkGrabber", "Bulunan bağlantılar kurallara takıldı veya zaten listede.");
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(this, "LinkGrabber", "Sayfa taranamadı.", ex.Message);
+            }
+        }
+
+        private void TryAutoExtract(DownloadItem item)
+        {
+            var settings = AppSettingsStore.Load();
+            if (!settings.AutoExtractArchives || !ArchiveExtractor.IsArchive(item.FilePath))
+                return;
+            try
+            {
+                if (ArchiveExtractor.LooksEncrypted(item.FilePath))
+                {
+                    var dlg = new PromptDialog("Arşiv şifresi", "Bu arşiv şifreli. Şifreyi girin:");
+                    dlg.Owner = this;
+                    if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.ResultText))
+                    {
+                        item.StatusText = "Şifreli arşiv atlandı";
+                        return;
+                    }
+                    ArchiveExtractor.Extract(item.FilePath, settings.DeleteArchiveAfterExtract, dlg.ResultText);
+                    return;
+                }
+
+                ArchiveExtractor.Extract(item.FilePath, settings.DeleteArchiveAfterExtract);
+            }
+            catch (ArchivePasswordRequiredException)
+            {
+                item.StatusText = "Şifreli arşiv atlandı";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Extract: {ex.Message}");
+                item.StatusText = "Arşiv açılamadı";
+            }
         }
 
         private void ToolbarSettings_Click(object sender, RoutedEventArgs e) => OpenSettingsOverlay();
@@ -2230,6 +2372,8 @@ namespace DownloadMuck
                 CategoryStore.EnsureDiskFolders(Categories, _defaultFolder);
             }
             CloseSettingsOverlay();
+            StartBrowserCaptureServer();
+            TorrentEngineHost.ReloadIfIdle();
         }
 
         private void OnSettingsUpdateApplying()
@@ -2805,9 +2949,9 @@ namespace DownloadMuck
 
         private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true)
         {
-            if (string.IsNullOrEmpty(url) || !url.StartsWith("http"))
+            if (string.IsNullOrEmpty(url) || !UrlClassifier.CanDownloadNow(UrlClassifier.Classify(url)))
             {
-                InfoDialog.Show(this, "Uyarı", "Lütfen geçerli bir indirme bağlantısı girin!");
+                InfoDialog.Show(this, "Uyarı", UrlClassifier.UnsupportedMessage(UrlClassifier.Classify(url)));
                 return;
             }
 
@@ -2942,10 +3086,21 @@ namespace DownloadMuck
         private async Task<(string FileName, string SizeLabel)> ResolveMetaAsync(
             string url, string suggestedName, string? mimeHint)
         {
+            string decodedSuggested = FileNameHelper.DecodeDisplayName(suggestedName);
+            var kind = UrlClassifier.Classify(url);
+            if (kind is TransferKind.Magnet or TransferKind.Torrent)
+            {
+                var peek = await TorrentPeek.TryDescribeAsync(url).ConfigureAwait(false);
+                string name = peek != null && !string.IsNullOrWhiteSpace(peek.Name)
+                    ? peek.Name
+                    : FileNameHelper.ChooseDisplayName(null, decodedSuggested, FileNameHelper.TryFileNameFromUrl(url), mimeHint);
+                string size = peek is { Size: > 0 } ? FormatFileSize(peek.Size) : "—";
+                return (name, size);
+            }
+
             string? contentType = null;
             string? fromHeader = null;
             long? contentLength = null;
-            string decodedSuggested = FileNameHelper.DecodeDisplayName(suggestedName);
 
             try
             {
@@ -3022,7 +3177,7 @@ namespace DownloadMuck
             if (string.IsNullOrWhiteSpace(url))
                 return;
 
-            var engine = new DownloadEngine(url, newPath, threadCount: 8);
+            var engine = TransferFactory.Create(url, newPath, threadCount: DownloadQueue.HttpChannels());
             _engines[item] = engine;
             WireEngineEvents(item, engine);
 
@@ -3033,16 +3188,19 @@ namespace DownloadMuck
         private static string NormalizeCaptureUrl(string? url)
         {
             if (string.IsNullOrWhiteSpace(url)) return "";
+            string t = url.Trim();
+            if (t.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+                return t;
             try
             {
-                var uri = new Uri(url.Trim());
+                var uri = new Uri(t);
                 // Query'deki geçici token'ları koru ama trailing slash / fragment temizle
                 string path = uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
                 return path + (string.IsNullOrEmpty(uri.Query) ? "" : uri.Query);
             }
             catch
             {
-                return url.Trim();
+                return t;
             }
         }
 
@@ -3105,11 +3263,20 @@ namespace DownloadMuck
         public sealed class DownloadRun
         {
             public required DownloadItem Item { get; init; }
-            public required DownloadEngine Engine { get; init; }
+            public required ITransferBackend Engine { get; init; }
         }
 
-        public DownloadRun BeginDownloadFromSession(string url, string fileName, string folder)
+        public DownloadRun? BeginDownloadFromSession(string url, string fileName, string folder, bool notify = true)
         {
+            var settings = AppSettingsStore.Load();
+            fileName = SmartRules.ApplyRename(fileName, url, DateTime.Now, settings.RenamePattern);
+            if (SmartRules.ShouldSkip(url, fileName, settings, ActiveUrls(), out string why))
+            {
+                if (notify)
+                    InfoDialog.Show(this, "Kural", why);
+                return null;
+            }
+
             // Uzantıya göre native kategori klasörü (rar→Arşivler, mp3→Sesler, …)
             string categoryId = ResolveCategoryForNewFile(fileName);
             string autoFolder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
@@ -3133,11 +3300,12 @@ namespace DownloadMuck
 
             var item = new DownloadItem
             {
+                Id = Guid.NewGuid().ToString("N")[..12],
                 FileName = finalFileName,
                 FilePath = savePath,
                 FileType = FileNameHelper.FormatTypeLabel(finalFileName),
                 DateAdded = DateTime.Now,
-                Status = "İndiriliyor",
+                Status = "Hazır",
                 FileIcon = IconHelper.GetIconForExtension(finalFileName, _listIconPx),
                 CategoryId = categoryId,
                 Url = url
@@ -3147,16 +3315,154 @@ namespace DownloadMuck
             _itemUrls[item] = url;
             QueueHistorySave();
 
-            int activeCount = Math.Max(1, _engines.Count + 1);
-            int threadCount = activeCount >= 3 ? 4 : 8;
-            var engine = new DownloadEngine(url, savePath, threadCount: threadCount);
+            int threadCount = DownloadQueue.HttpChannels(settings);
+            var engine = TransferFactory.Create(url, savePath, threadCount: threadCount);
             _engines[item] = engine;
 
             WireEngineEvents(item, engine);
             UpdateTransportButtons();
 
-            _ = RunEngineAsync(item, engine);
+            if (DownloadQueue.IsFull(CountActiveDownloads(), settings.MaxConcurrentDownloads))
+            {
+                item.Status = "Kuyrukta";
+                item.IsDownloading = false;
+            }
+            else
+            {
+                item.Status = "İndiriliyor";
+                item.IsDownloading = true;
+                _ = RunEngineAsync(item, engine);
+            }
             return new DownloadRun { Item = item, Engine = engine };
+        }
+
+        private IEnumerable<string> ActiveUrls()
+        {
+            foreach (var item in DownloadList)
+            {
+                if (item.IsCompleted || item.IsCancelled)
+                    continue;
+                string u = item.Url;
+                if (string.IsNullOrWhiteSpace(u))
+                    _itemUrls.TryGetValue(item, out u!);
+                if (!string.IsNullOrWhiteSpace(u))
+                    yield return u;
+            }
+        }
+
+        internal IReadOnlyList<RemoteJobDto> SnapshotJobs()
+        {
+            var list = new List<RemoteJobDto>(DownloadList.Count);
+            foreach (var item in DownloadList)
+            {
+                string u = item.Url;
+                if (string.IsNullOrWhiteSpace(u))
+                    _itemUrls.TryGetValue(item, out u!);
+                list.Add(new RemoteJobDto
+                {
+                    Id = item.Id,
+                    Url = u ?? "",
+                    FileName = item.FileName,
+                    Status = item.Status,
+                    Progress = item.ProgressValue,
+                    Speed = item.CurrentSpeed ?? ""
+                });
+            }
+            return list;
+        }
+
+        internal string? EnqueueFromApi(string url, string? filename)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !UrlClassifier.CanDownloadNow(UrlClassifier.Classify(url)))
+                return null;
+            string name = BuildQuickFileName(url, filename ?? "", null);
+            string folder = _defaultFolder;
+            try
+            {
+                string categoryId = ResolveCategoryForNewFile(name);
+                folder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+            }
+            catch { /* keep default */ }
+            if (string.IsNullOrWhiteSpace(folder))
+                folder = _defaultFolder;
+            var run = BeginDownloadFromSession(url, name, folder, notify: false);
+            return run?.Item.Id;
+        }
+
+        internal bool PauseJobById(string id)
+        {
+            var item = FindJob(id);
+            if (item == null || !_engines.TryGetValue(item, out var engine))
+                return false;
+            PauseFromSession(item, engine);
+            return true;
+        }
+
+        internal bool ResumeJobById(string id)
+        {
+            var item = FindJob(id);
+            if (item == null)
+                return false;
+            if (!_engines.TryGetValue(item, out var engine))
+            {
+                string url = item.Url;
+                if (string.IsNullOrWhiteSpace(url))
+                    _itemUrls.TryGetValue(item, out url!);
+                if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(item.FilePath))
+                    return false;
+                engine = TransferFactory.Create(url, item.FilePath, threadCount: DownloadQueue.HttpChannels());
+                _engines[item] = engine;
+                WireEngineEvents(item, engine);
+            }
+            _ = ResumeFromSessionAsync(item, engine);
+            return true;
+        }
+
+        internal bool CancelJobById(string id)
+        {
+            var item = FindJob(id);
+            if (item == null)
+                return false;
+            if (_engines.TryGetValue(item, out var engine))
+                CancelFromSession(item, engine);
+            else
+            {
+                item.Status = "İptal Edildi";
+                item.IsDownloading = false;
+            }
+            return true;
+        }
+
+        private DownloadItem? FindJob(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+            return DownloadList.FirstOrDefault(i =>
+                string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(i.Url, id, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(i.FileName, id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private sealed class WindowJobHost : IRemoteJobHost
+        {
+            private readonly MainWindow _w;
+            public WindowJobHost(MainWindow w) => _w = w;
+
+            private T OnUi<T>(Func<T> fn)
+            {
+                if (_w.Dispatcher.CheckAccess())
+                    return fn();
+                return _w.Dispatcher.Invoke(fn, DispatcherPriority.Normal);
+            }
+
+            public IReadOnlyList<RemoteJobDto> ListJobs() => OnUi(_w.SnapshotJobs);
+            public RemoteJobDto? GetJob(string id)
+                => OnUi(() => _w.SnapshotJobs().FirstOrDefault(j =>
+                    string.Equals(j.Id, id, StringComparison.OrdinalIgnoreCase)));
+            public string? AddJob(string url, string? filename) => OnUi(() => _w.EnqueueFromApi(url, filename));
+            public bool Pause(string id) => OnUi(() => _w.PauseJobById(id));
+            public bool Resume(string id) => OnUi(() => _w.ResumeJobById(id));
+            public bool Cancel(string id) => OnUi(() => _w.CancelJobById(id));
         }
 
         private string ResolveCategoryForNewFile(string fileName)
@@ -3189,7 +3495,7 @@ namespace DownloadMuck
             return "All";
         }
 
-        public void PauseFromSession(DownloadItem item, DownloadEngine engine)
+        public void PauseFromSession(DownloadItem item, ITransferBackend engine)
         {
             if (engine.IsDownloading && !engine.IsPaused)
             {
@@ -3211,7 +3517,7 @@ namespace DownloadMuck
             }
         }
 
-        public async Task ResumeFromSessionAsync(DownloadItem item, DownloadEngine engine)
+        public async Task ResumeFromSessionAsync(DownloadItem item, ITransferBackend engine)
         {
             item.Status = "İndiriliyor";
             item.IsDownloading = true;
@@ -3220,7 +3526,7 @@ namespace DownloadMuck
             await RunEngineAsync(item, engine);
         }
 
-        public void CancelFromSession(DownloadItem item, DownloadEngine engine)
+        public void CancelFromSession(DownloadItem item, ITransferBackend engine)
         {
             item.Status = "İptal Edildi";
             item.StatusText = "";
@@ -3257,12 +3563,30 @@ namespace DownloadMuck
             QueueHistorySave();
         }
 
-        private void WireEngineEvents(DownloadItem item, DownloadEngine engine)
+        private void WireEngineEvents(DownloadItem item, ITransferBackend engine)
         {
             engine.TotalSizeKnown += (totalBytes) =>
             {
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
-                    () => SetItemFileSize(item, totalBytes));
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    SetItemFileSize(item, totalBytes);
+                    TrySkipBySize(item, engine, totalBytes);
+                });
+            };
+
+            engine.OutputResolved += (fileName, path) =>
+            {
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    if (string.IsNullOrWhiteSpace(fileName))
+                        return;
+                    item.FileName = fileName;
+                    item.FileType = FileNameHelper.FormatTypeLabel(fileName);
+                    item.FileIcon = IconHelper.GetIconForExtension(fileName, _listIconPx);
+                    if (!string.IsNullOrWhiteSpace(path))
+                        item.FilePath = path;
+                    QueueHistorySave();
+                });
             };
 
             engine.ProgressChanged += (progress) =>
@@ -3350,10 +3674,25 @@ namespace DownloadMuck
             };
         }
 
-        private async Task RunEngineAsync(DownloadItem item, DownloadEngine engine)
+        private async Task RunEngineAsync(DownloadItem item, ITransferBackend engine)
         {
             try
             {
+                var settings = AppSettingsStore.Load();
+                if (settings.ScheduleEnabled
+                    && !SchedulerGate.IsInsideWindow(DateTime.Now, settings.ScheduleStartHour, settings.ScheduleEndHour))
+                {
+                    item.Status = "Zamanlandı";
+                    item.IsDownloading = false;
+                    while (!engine.IsCancelled
+                           && !SchedulerGate.IsInsideWindow(DateTime.Now, settings.ScheduleStartHour, settings.ScheduleEndHour))
+                        await Task.Delay(8000).ConfigureAwait(true);
+                    if (engine.IsCancelled)
+                        return;
+                    item.Status = "İndiriliyor";
+                    item.IsDownloading = true;
+                }
+
                 await engine.StartOrResumeDownloadAsync().ConfigureAwait(true);
             }
             catch (Exception ex)
@@ -3368,12 +3707,11 @@ namespace DownloadMuck
             }
             finally
             {
-                if (engine.IsPaused && !engine.IsCancelled)
+                if (item.Status.Contains("Kural", StringComparison.OrdinalIgnoreCase))
                 {
-                    item.Status = "Duraklatıldı";
                     item.IsDownloading = false;
                     item.CurrentSpeed = "";
-                    item.StatusText = "";
+                    _engines.Remove(item);
                 }
                 else if (engine.IsCancelled)
                 {
@@ -3388,7 +3726,14 @@ namespace DownloadMuck
                 {
                     item.IsDownloading = false;
                     item.CurrentSpeed = "";
-                    // engine tutulur
+                    // engine tutulur — Devam Et ile devam
+                }
+                else if (engine.IsPaused)
+                {
+                    item.Status = "Duraklatıldı";
+                    item.IsDownloading = false;
+                    item.CurrentSpeed = "";
+                    item.StatusText = "";
                 }
                 else if (engine.CompletedSuccessfully)
                 {
@@ -3399,14 +3744,9 @@ namespace DownloadMuck
                     item.ProgressValue = 100;
                     if (File.Exists(item.FilePath))
                         SetItemFileSize(item, new FileInfo(item.FilePath).Length);
+                    TryAutoExtract(item);
                     _engines.Remove(item);
-                }
-                else if (engine.IsPaused)
-                {
-                    item.Status = "Duraklatıldı";
-                    item.IsDownloading = false;
-                    item.CurrentSpeed = "";
-                    item.StatusText = "";
+                    CompleteNotify.PlayIfEnabled();
                 }
                 else
                 {
@@ -3418,6 +3758,55 @@ namespace DownloadMuck
                 }
 
                 UpdateTransportButtons();
+                TryStartNextQueued();
+            }
+        }
+
+        private int CountActiveDownloads()
+        {
+            int n = 0;
+            foreach (var kv in _engines)
+            {
+                if (kv.Value.IsDownloading && !kv.Value.IsPaused && !kv.Value.IsCancelled)
+                    n++;
+            }
+            return n;
+        }
+
+        private void TryStartNextQueued()
+        {
+            var settings = AppSettingsStore.Load();
+            while (!DownloadQueue.IsFull(CountActiveDownloads(), settings.MaxConcurrentDownloads))
+            {
+                var next = DownloadList.FirstOrDefault(i =>
+                    i.Status.Contains("Kuyrukta", StringComparison.OrdinalIgnoreCase)
+                    && _engines.ContainsKey(i));
+                if (next == null)
+                    return;
+                if (!_engines.TryGetValue(next, out var engine))
+                    return;
+                next.Status = "İndiriliyor";
+                next.IsDownloading = true;
+                _ = RunEngineAsync(next, engine);
+            }
+        }
+
+        private void TrySkipBySize(DownloadItem item, ITransferBackend engine, long totalBytes)
+        {
+            if (totalBytes <= 0 || engine.IsCancelled || engine.CompletedSuccessfully)
+                return;
+            var settings = AppSettingsStore.Load();
+            if (settings.SkipMinSizeMb <= 0 && settings.SkipMaxSizeMb <= 0)
+                return;
+            string url = item.Url;
+            if (string.IsNullOrWhiteSpace(url))
+                _itemUrls.TryGetValue(item, out url!);
+            if (SmartRules.ShouldSkip(url ?? "", item.FileName, settings, Array.Empty<string>(), out string why, totalBytes))
+            {
+                item.Status = "Kural — " + why;
+                item.IsDownloading = false;
+                item.CurrentSpeed = "";
+                engine.Cancel();
             }
         }
 
@@ -3431,7 +3820,7 @@ namespace DownloadMuck
             return $"{mb / 1024.0:F2} GB";
         }
 
-        private List<(DownloadItem Item, DownloadEngine Engine)> GetSelectedEngines()
+        private List<(DownloadItem Item, ITransferBackend Engine)> GetSelectedEngines()
         {
             return DgDownloads.SelectedItems
                 .OfType<DownloadItem>()
@@ -3520,7 +3909,7 @@ namespace DownloadMuck
             UpdateTransportButtons();
         }
 
-        private async Task ResumeDownloadAsync(DownloadItem target, DownloadEngine engine)
+        private async Task ResumeDownloadAsync(DownloadItem target, ITransferBackend engine)
         {
             try
             {
@@ -3535,12 +3924,7 @@ namespace DownloadMuck
             }
             finally
             {
-                if (engine.IsPaused && !engine.IsCancelled)
-                {
-                    target.Status = "Duraklatıldı";
-                    target.IsDownloading = false;
-                }
-                else if (engine.IsCancelled)
+                if (engine.IsCancelled)
                 {
                     target.Status = "İptal Edildi";
                     target.ProgressValue = 0;
@@ -3550,6 +3934,11 @@ namespace DownloadMuck
                 }
                 else if (target.Status.Contains("Hata", StringComparison.OrdinalIgnoreCase))
                 {
+                    target.IsDownloading = false;
+                }
+                else if (engine.IsPaused)
+                {
+                    target.Status = "Duraklatıldı";
                     target.IsDownloading = false;
                 }
                 else if (engine.CompletedSuccessfully)
@@ -3894,6 +4283,7 @@ namespace DownloadMuck
         {
             base.OnClosed(e);
             _captureServer?.Stop();
+            TorrentEngineHost.Shutdown();
         }
     }
 }
