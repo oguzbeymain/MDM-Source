@@ -30,7 +30,11 @@ namespace DownloadMuck
         private readonly HashSet<string> _pendingSessionUrls = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _recentCaptureUrls = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _captureGate = new();
-        private static readonly TimeSpan CaptureDebounce = TimeSpan.FromSeconds(12);
+        private static readonly TimeSpan CaptureDebounce = TimeSpan.FromMilliseconds(900);
+        private const double ActionColumnWidth = 100;
+        private string _listDensity = "Medium";
+        private string _listSort = "Date";
+        private int _listIconPx = 22;
         private readonly Dictionary<DownloadItem, string> _itemUrls = new();
         public ObservableCollection<DownloadItem> DownloadList { get; set; } = new ObservableCollection<DownloadItem>();
         private ICollectionView? _downloadView;
@@ -88,6 +92,10 @@ namespace DownloadMuck
 
             _downloadView = CollectionViewSource.GetDefaultView(DownloadList);
             _downloadView.Filter = FilterByCategory;
+            if (_downloadView is ICollectionViewLiveShaping live)
+            {
+                live.IsLiveSorting = true;
+            }
             DgDownloads.ItemsSource = _downloadView;
             DgDownloads.GiveFeedback += DgDownloads_GiveFeedback;
             DgDownloads.PreviewGiveFeedback += DgDownloads_GiveFeedback;
@@ -95,6 +103,9 @@ namespace DownloadMuck
 
             LoadDownloadHistory();
             RestorePendingDownloads();
+            ApplyListDensity(appSettings.ListDensity);
+            ApplyListSort(appSettings.ListSort);
+            SyncListViewMenuChecks();
             DownloadList.CollectionChanged += (_, _) =>
             {
                 RefreshCategoryCounts();
@@ -1921,12 +1932,14 @@ namespace DownloadMuck
                 ColType.Visibility = gridW < 560 ? Visibility.Collapsed : Visibility.Visible;
                 ColDate.Visibility = gridW < 680 ? Visibility.Collapsed : Visibility.Visible;
                 ColSize.Visibility = gridW < 420 ? Visibility.Collapsed : Visibility.Visible;
-                ColActions.Visibility = gridW < 360 ? Visibility.Collapsed : Visibility.Visible;
                 ColStatus.Visibility = gridW < 280 ? Visibility.Collapsed : Visibility.Visible;
+                ColActions.Visibility = Visibility.Visible;
+                ColActions.MinWidth = ActionColumnWidth;
+                ColActions.MaxWidth = ActionColumnWidth;
+                ColActions.Width = new DataGridLength(ActionColumnWidth);
 
-                double reserved = 40;
-                if (ColActions.Visibility == Visibility.Visible) reserved += 76;
-                if (ColStatus.Visibility == Visibility.Visible) reserved += 100;
+                double reserved = 40 + ActionColumnWidth;
+                if (ColStatus.Visibility == Visibility.Visible) reserved += 120;
                 if (ColSize.Visibility == Visibility.Visible) reserved += 56;
                 if (ColType.Visibility == Visibility.Visible) reserved += 40;
                 if (ColDate.Visibility == Visibility.Visible) reserved += 90;
@@ -1937,14 +1950,12 @@ namespace DownloadMuck
 
                 if (ColStatus.Visibility == Visibility.Visible)
                 {
-                    ColStatus.MinWidth = Math.Max(72, Math.Min(120, gridW * 0.28));
+                    ColStatus.MinWidth = Math.Max(120, Math.Min(180, gridW * 0.26));
                     ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
                 }
 
                 if (ColSize.Visibility == Visibility.Visible)
                     ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
-
-                ColActions.Width = new DataGridLength(gridW < 480 ? 72 : 84);
             }
         }
 
@@ -1958,7 +1969,7 @@ namespace DownloadMuck
 
         private void BtnMinimize_Click(object sender, RoutedEventArgs e)
         {
-            HideToTray();
+            NativeWindowChrome.MinimizeToTaskbar(this);
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e)
@@ -1971,6 +1982,10 @@ namespace DownloadMuck
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
+            if (e.OriginalSource is System.Windows.Controls.Button)
+                return;
+            if (e.OriginalSource is FrameworkElement fe && fe.TemplatedParent is System.Windows.Controls.Button)
+                return;
 
             if (e.ClickCount == 2)
             {
@@ -2079,11 +2094,6 @@ namespace DownloadMuck
                 && ActualWidth < SystemParameters.WorkArea.Width - 2)
             {
                 _restoreBounds = new Rect(Left, Top, ActualWidth, ActualHeight);
-            }
-
-            if (WindowState == WindowState.Minimized && !_exitRequested)
-            {
-                Dispatcher.BeginInvoke(HideToTray, DispatcherPriority.Background);
             }
 
             UpdateChromeForWindowState();
@@ -2482,7 +2492,7 @@ namespace DownloadMuck
                 item.FileName = newName;
                 item.FilePath = dest;
                 item.FileType = FileNameHelper.FormatTypeLabel(newName);
-                item.FileIcon = IconHelper.GetIconForExtension(newName);
+                item.FileIcon = IconHelper.GetIconForExtension(newName, _listIconPx);
                 RebindEngineAfterPathChange(item, dest);
                 QueueHistorySave();
             }
@@ -2497,11 +2507,161 @@ namespace DownloadMuck
             DeleteSelectedItems();
         }
 
-        private void MenuRefresh_Click(object sender, RoutedEventArgs e)
+        private void MenuSelectAll_Click(object sender, RoutedEventArgs e)
         {
-            _downloadView?.Refresh();
-            DgDownloads.Items.Refresh();
-            UpdateTransportButtons();
+            DgDownloads.Focus();
+            DgDownloads.SelectAll();
+            foreach (var item in _downloadView?.OfType<DownloadItem>() ?? DownloadList)
+                item.IsChecked = true;
+            ChkSelectAll.IsChecked = true;
+        }
+
+        private void MenuViewDensity_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem mi) return;
+            string tag = (mi.Header as string) switch
+            {
+                "Küçük" => "Small",
+                "Büyük" => "Large",
+                _ => "Medium"
+            };
+            ApplyListDensity(tag);
+            PersistListViewSettings();
+            SyncListViewMenuChecks();
+        }
+
+        private void MenuSortBy_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem mi) return;
+            string tag = (mi.Header as string) switch
+            {
+                "İsim" => "Name",
+                "Boyut" => "Size",
+                "Tür" => "Type",
+                _ => "Date"
+            };
+            ApplyListSort(tag);
+            PersistListViewSettings();
+            SyncListViewMenuChecks();
+        }
+
+        private void PersistListViewSettings()
+        {
+            var s = AppSettingsStore.Load();
+            s.ListDensity = _listDensity;
+            s.ListSort = _listSort;
+            AppSettingsStore.Save(s);
+        }
+
+        private void ApplyListDensity(string? density)
+        {
+            _listDensity = density switch
+            {
+                "Small" or "Küçük" => "Small",
+                "Large" or "Büyük" => "Large",
+                _ => "Medium"
+            };
+
+            double icon;
+            double row;
+            double font;
+            switch (_listDensity)
+            {
+                case "Small":
+                    icon = 14; row = 34; font = 12; _listIconPx = 16;
+                    break;
+                case "Large":
+                    icon = 32; row = 64; font = 14; _listIconPx = 32;
+                    break;
+                default:
+                    icon = 22; row = 46; font = 13; _listIconPx = 24;
+                    break;
+            }
+
+            Resources["ListIconSize"] = icon;
+            Resources["ListNameFontSize"] = font;
+            DgDownloads.RowHeight = row;
+            DgDownloads.MinRowHeight = row;
+
+            foreach (var item in DownloadList)
+                item.FileIcon = IconHelper.GetIconForExtension(item.FileName, _listIconPx);
+
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void ApplyListSort(string? sort)
+        {
+            _listSort = sort switch
+            {
+                "Size" or "Boyut" => "Size",
+                "Type" or "Tür" => "Type",
+                "Name" or "İsim" => "Name",
+                _ => "Date"
+            };
+
+            if (_downloadView == null) return;
+            _downloadView.SortDescriptions.Clear();
+            switch (_listSort)
+            {
+                case "Size":
+                    _downloadView.SortDescriptions.Add(
+                        new SortDescription(nameof(DownloadItem.FileSizeBytes), ListSortDirection.Descending));
+                    break;
+                case "Type":
+                    _downloadView.SortDescriptions.Add(
+                        new SortDescription(nameof(DownloadItem.FileType), ListSortDirection.Ascending));
+                    break;
+                case "Name":
+                    _downloadView.SortDescriptions.Add(
+                        new SortDescription(nameof(DownloadItem.FileName), ListSortDirection.Ascending));
+                    break;
+                default:
+                    _downloadView.SortDescriptions.Add(
+                        new SortDescription(nameof(DownloadItem.DateAdded), ListSortDirection.Descending));
+                    break;
+            }
+        }
+
+        private void SyncListViewMenuChecks()
+        {
+            if (Resources["EmptyContextMenu"] is not ContextMenu menu) return;
+            foreach (var top in menu.Items.OfType<MenuItem>())
+            {
+                string? header = top.Header as string;
+                if (header == "Görünüm")
+                {
+                    foreach (var sub in top.Items.OfType<MenuItem>())
+                    {
+                        sub.IsChecked = (sub.Header as string) switch
+                        {
+                            "Küçük" => _listDensity == "Small",
+                            "Büyük" => _listDensity == "Large",
+                            "Orta" => _listDensity == "Medium",
+                            _ => false
+                        };
+                    }
+                }
+                else if (header == "Sıralama ölçütü")
+                {
+                    foreach (var sub in top.Items.OfType<MenuItem>())
+                    {
+                        sub.IsChecked = (sub.Header as string) switch
+                        {
+                            "İsim" => _listSort == "Name",
+                            "Boyut" => _listSort == "Size",
+                            "Tür" => _listSort == "Type",
+                            "Tarih" => _listSort == "Date",
+                            _ => false
+                        };
+                    }
+                }
+            }
+        }
+
+        private static void SetItemFileSize(DownloadItem item, long bytes)
+        {
+            item.FileSizeBytes = bytes;
+            item.FileSize = FormatFileSize(bytes);
         }
 
         private void DeleteSelectedItems()
@@ -2515,13 +2675,18 @@ namespace DownloadMuck
         {
             if (selectedItems.Count == 0) return;
 
+            bool fromDisk = DeletesFilesFromDisk;
             string message = selectedItems.Count == 1
-                ? $"“{selectedItems[0].FileName}” kalıcı olarak silinsin mi?"
-                : $"{selectedItems.Count} öğe kalıcı olarak silinsin mi?";
+                ? $"“{selectedItems[0].FileName}” silinsin mi?"
+                : $"{selectedItems.Count} öğe silinsin mi?";
 
-            string detail = selectedItems.Count == 1
-                ? "Dosya listeden kaldırılır ve diskteki kopyası da silinir."
-                : "Seçili dosyalar listeden kaldırılır ve diskteki kopyaları da silinir.";
+            string detail = fromDisk
+                ? (selectedItems.Count == 1
+                    ? "Dosya listeden ve diskten kaldırılır."
+                    : "Seçili dosyalar listeden ve diskten kaldırılır.")
+                : (selectedItems.Count == 1
+                    ? "Yalnızca listeden çıkarılır; dosya diskte kalır."
+                    : "Yalnızca listeden çıkarılır; dosyalar diskte kalır.");
 
             if (!ConfirmDialog.Show(this, "Silme onayı", message, detail,
                     confirmText: "Sil", danger: true))
@@ -2535,13 +2700,16 @@ namespace DownloadMuck
                     _engines.Remove(selectedItem);
                 }
 
-                try
+                if (fromDisk)
                 {
-                    DownloadPathHelper.DeleteFileAndState(selectedItem.FilePath);
-                }
-                catch (Exception ex)
-                {
-                    InfoDialog.Show(this, "Uyarı", $"'{selectedItem.FileName}' silinemedi: {ex.Message}");
+                    try
+                    {
+                        DownloadPathHelper.DeleteFileAndState(selectedItem.FilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        InfoDialog.Show(this, "Uyarı", $"'{selectedItem.FileName}' silinemedi: {ex.Message}");
+                    }
                 }
 
                 DownloadList.Remove(selectedItem);
@@ -2613,20 +2781,7 @@ namespace DownloadMuck
                 contentType = mimeHint;
 
             string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
-
-            string chosen = PickBestFileName(fromHeader, decodedSuggested, fromUrl) ?? "download";
-            chosen = FileNameHelper.EnsureExtension(chosen, contentType);
-
-            if (string.IsNullOrEmpty(Path.GetExtension(chosen)))
-            {
-                string ext = FileNameHelper.GuessExtensionFromContentType(contentType);
-                if (FileNameHelper.IsPlaceholderName(chosen))
-                    chosen = "download" + (string.IsNullOrEmpty(ext) ? ".bin" : ext);
-                else if (!string.IsNullOrEmpty(ext))
-                    chosen += ext;
-            }
-
-            return chosen;
+            return FileNameHelper.ChooseDisplayName(fromHeader, decodedSuggested, fromUrl, contentType);
         }
 
         private static string? PickBestFileName(params string?[] candidates)
@@ -2698,24 +2853,17 @@ namespace DownloadMuck
                     }
                 }
 
-                // Listede aynı URL varsa eklenti yakalaması yeni pencere açmasın
-                // (Chrome açılışında eski indirmeler tekrar gelir).
+                // Listede aynı URL ile hâlâ inen/bekleyen varsa yeni pencere açma
                 foreach (var item in DownloadList)
                 {
                     string u = item.Url;
                     if (string.IsNullOrWhiteSpace(u))
                         _itemUrls.TryGetValue(item, out u!);
                     if (NormalizeCaptureUrl(u) != urlKey) continue;
-
-                    _recentCaptureUrls[urlKey] = DateTime.UtcNow;
-                    if (fromCapture)
-                    {
-                        Debug.WriteLine($"Capture already in list: {urlKey}");
-                        return;
-                    }
-
                     if (item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase)) continue;
                     if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    _recentCaptureUrls[urlKey] = DateTime.UtcNow;
                     ShowSessionForItem(item);
                     return;
                 }
@@ -2762,19 +2910,7 @@ namespace DownloadMuck
         {
             string decodedSuggested = FileNameHelper.DecodeDisplayName(incomingFilename);
             string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
-            string chosen = PickBestFileName(decodedSuggested, fromUrl) ?? "download";
-            chosen = FileNameHelper.EnsureExtension(chosen, mimeHint);
-
-            if (string.IsNullOrEmpty(Path.GetExtension(chosen)))
-            {
-                string ext = FileNameHelper.GuessExtensionFromContentType(mimeHint);
-                if (FileNameHelper.IsPlaceholderName(chosen))
-                    chosen = "download" + (string.IsNullOrEmpty(ext) ? ".bin" : ext);
-                else if (!string.IsNullOrEmpty(ext))
-                    chosen += ext;
-            }
-
-            return chosen;
+            return FileNameHelper.ChooseDisplayName(null, decodedSuggested, fromUrl, mimeHint);
         }
 
         private async Task EnrichSessionMetaAsync(
@@ -2838,6 +2974,26 @@ namespace DownloadMuck
                     contentType = response.Content.Headers.ContentType?.MediaType;
                     fromHeader = FileNameHelper.ExtractFromContentDisposition(response.Content.Headers);
                     contentLength = response.Content.Headers.ContentLength;
+
+                    bool isHtml = !string.IsNullOrWhiteSpace(contentType)
+                        && contentType.Contains("html", StringComparison.OrdinalIgnoreCase);
+                    if (isHtml && string.IsNullOrWhiteSpace(fromHeader))
+                    {
+                        try
+                        {
+                            await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                            byte[] buf = new byte[96 * 1024];
+                            int n = await stream.ReadAsync(buf).ConfigureAwait(false);
+                            if (n > 0)
+                            {
+                                string html = Encoding.UTF8.GetString(buf, 0, n);
+                                fromHeader = FileNameHelper.TryFileNameFromHtml(html);
+                            }
+                        }
+                        catch { /* ignore */ }
+                        contentType = null;
+                        contentLength = null;
+                    }
                 }
             }
             catch { /* ignore */ }
@@ -2846,17 +3002,7 @@ namespace DownloadMuck
                 contentType = mimeHint;
 
             string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
-            string chosen = PickBestFileName(fromHeader, decodedSuggested, fromUrl) ?? "download";
-            chosen = FileNameHelper.EnsureExtension(chosen, contentType);
-
-            if (string.IsNullOrEmpty(Path.GetExtension(chosen)))
-            {
-                string ext = FileNameHelper.GuessExtensionFromContentType(contentType);
-                if (FileNameHelper.IsPlaceholderName(chosen))
-                    chosen = "download" + (string.IsNullOrEmpty(ext) ? ".bin" : ext);
-                else if (!string.IsNullOrEmpty(ext))
-                    chosen += ext;
-            }
+            string chosen = FileNameHelper.ChooseDisplayName(fromHeader, decodedSuggested, fromUrl, contentType);
 
             string sizeLabel = contentLength is > 0 ? FormatFileSize(contentLength.Value) : "—";
             return (chosen, sizeLabel);
@@ -2992,7 +3138,7 @@ namespace DownloadMuck
                 FileType = FileNameHelper.FormatTypeLabel(finalFileName),
                 DateAdded = DateTime.Now,
                 Status = "İndiriliyor",
-                FileIcon = IconHelper.GetIconForExtension(finalFileName),
+                FileIcon = IconHelper.GetIconForExtension(finalFileName, _listIconPx),
                 CategoryId = categoryId,
                 Url = url
             };
@@ -3085,6 +3231,8 @@ namespace DownloadMuck
             UpdateTransportButtons();
         }
 
+        public bool DeletesFilesFromDisk => AppSettingsStore.Load().DeleteFilesFromDisk;
+
         public void DeleteItemFromSession(DownloadItem item)
         {
             if (_engines.TryGetValue(item, out var engine))
@@ -3093,11 +3241,14 @@ namespace DownloadMuck
                 _engines.Remove(item);
             }
 
-            try
+            if (DeletesFilesFromDisk)
             {
-                DownloadPathHelper.DeleteFileAndState(item.FilePath);
+                try
+                {
+                    DownloadPathHelper.DeleteFileAndState(item.FilePath);
+                }
+                catch { /* ignore */ }
             }
-            catch { /* ignore */ }
 
             DownloadList.Remove(item);
             _itemUrls.Remove(item);
@@ -3111,7 +3262,7 @@ namespace DownloadMuck
             engine.TotalSizeKnown += (totalBytes) =>
             {
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
-                    () => item.FileSize = FormatFileSize(totalBytes));
+                    () => SetItemFileSize(item, totalBytes));
             };
 
             engine.ProgressChanged += (progress) =>
@@ -3247,7 +3398,7 @@ namespace DownloadMuck
                     item.Status = "Tamamlandı";
                     item.ProgressValue = 100;
                     if (File.Exists(item.FilePath))
-                        item.FileSize = FormatFileSize(new FileInfo(item.FilePath).Length);
+                        SetItemFileSize(item, new FileInfo(item.FilePath).Length);
                     _engines.Remove(item);
                 }
                 else if (engine.IsPaused)
@@ -3407,7 +3558,7 @@ namespace DownloadMuck
                     target.IsDownloading = false;
                     target.ProgressValue = 100;
                     if (File.Exists(target.FilePath))
-                        target.FileSize = FormatFileSize(new FileInfo(target.FilePath).Length);
+                        SetItemFileSize(target, new FileInfo(target.FilePath).Length);
                     _engines.Remove(target);
                 }
                 else
@@ -3681,7 +3832,7 @@ namespace DownloadMuck
                         : $"{selected.Count} dosya";
                     TxtFileDragGhost.Text = label;
                     ImgFileDragGhost.Source = selected[0].FileIcon
-                        ?? IconHelper.GetIconForExtension(selected[0].FileName);
+                        ?? IconHelper.GetIconForExtension(selected[0].FileName, _listIconPx);
                     FileDragPopup.IsOpen = true;
                     row.Opacity = 0.45;
 

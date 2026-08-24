@@ -70,7 +70,7 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                <Button x:Name="BtnConfirm" Content="Onayla" Width="72" Height="28" Cursor="Hand" Click="BtnConfirm_Click"
+                <Button x:Name="BtnConfirm" Content="Onayla" MinWidth="72" Height="28" Padding="12,0" Cursor="Hand" Click="BtnConfirm_Click"
                         FontSize="12" FontWeight="SemiBold" Foreground="White" BorderThickness="0"
                         Background="#C62828">
                     <Button.Template>

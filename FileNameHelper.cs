@@ -161,6 +161,11 @@ namespace DownloadMuck
                 last = DecodeDisplayName(last);
                 if (!string.IsNullOrWhiteSpace(last) &&
                     !last.Equals("download", StringComparison.OrdinalIgnoreCase) &&
+                    !last.Equals("uc", StringComparison.OrdinalIgnoreCase) &&
+                    !last.Equals("open", StringComparison.OrdinalIgnoreCase) &&
+                    !last.Equals("file", StringComparison.OrdinalIgnoreCase) &&
+                    !last.Equals("export", StringComparison.OrdinalIgnoreCase) &&
+                    !last.Equals("view", StringComparison.OrdinalIgnoreCase) &&
                     last != "/")
                     return last;
             }
@@ -193,10 +198,84 @@ namespace DownloadMuck
         public static bool IsPlaceholderName(string? name)
         {
             if (string.IsNullOrWhiteSpace(name)) return true;
-            string n = Path.GetFileNameWithoutExtension(name).Trim();
-            return n.Equals("download", StringComparison.OrdinalIgnoreCase)
+            string file = Path.GetFileName(name).Trim();
+            string n = Path.GetFileNameWithoutExtension(file).Trim();
+            if (n.Equals("download", StringComparison.OrdinalIgnoreCase)
                 || n.Equals("downloaded_file", StringComparison.OrdinalIgnoreCase)
-                || n.Equals("dosya", StringComparison.OrdinalIgnoreCase);
+                || n.Equals("dosya", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("uc", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("file", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Chrome/octet-stream varsayılanı — gerçek ad henüz yok
+            if (file.Equals("download.bin", StringComparison.OrdinalIgnoreCase)
+                || file.Equals("file.bin", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Google Drive virüs uyarısı HTML'inden gerçek dosya adını çekmeyi dener.
+        /// </summary>
+        public static string? TryFileNameFromHtml(string? html)
+        {
+            if (string.IsNullOrWhiteSpace(html) || html.Length < 20) return null;
+            if (html.IndexOf('<') < 0) return null;
+
+            Match title = Regex.Match(html, @"<title>\s*([^<]+?)\s*</title>", RegexOptions.IgnoreCase);
+            if (title.Success)
+            {
+                string raw = System.Net.WebUtility.HtmlDecode(title.Groups[1].Value);
+                raw = Regex.Replace(raw, @"\s*[-–—]\s*Google Drive\s*$", "", RegexOptions.IgnoreCase).Trim();
+                string decoded = DecodeDisplayName(raw);
+                if (!IsPlaceholderName(decoded) && Path.GetExtension(decoded).Length > 1)
+                    return decoded;
+            }
+
+            Match named = Regex.Match(
+                html,
+                @"([^\s<>""'][^<>""']{2,180}?\.(?:rar|zip|7z|gz|tar|iso|exe|msi|apk|pdf|mp4|mkv|mp3|dmg))\s*(?:\(|<|$)",
+                RegexOptions.IgnoreCase);
+            if (named.Success)
+            {
+                string raw = System.Net.WebUtility.HtmlDecode(named.Groups[1].Value).Trim();
+                string decoded = DecodeDisplayName(raw);
+                if (!IsPlaceholderName(decoded) && Path.GetExtension(decoded).Length > 1)
+                    return decoded;
+            }
+
+            return null;
+        }
+
+        public static string ChooseDisplayName(
+            string? fromHeader, string? suggested, string? fromUrl, string? contentType)
+        {
+            string decodedSuggested = DecodeDisplayName(suggested);
+            string media = (contentType ?? "").Split(';')[0].Trim();
+            if (media.Contains("html", StringComparison.OrdinalIgnoreCase)
+                || media.Contains("javascript", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = null;
+            }
+
+            string? best = null;
+            foreach (string? n in new[] { fromHeader, decodedSuggested, fromUrl })
+            {
+                if (string.IsNullOrWhiteSpace(n) || IsPlaceholderName(n)) continue;
+                best = n;
+                break;
+            }
+
+            if (best == null)
+            {
+                string ext = GuessExtensionFromContentType(contentType);
+                if (!string.IsNullOrEmpty(ext) && ext != ".bin" && ext != ".html" && ext != ".htm")
+                    return "download" + ext;
+                return "download";
+            }
+
+            return EnsureExtension(best, contentType);
         }
     }
 }

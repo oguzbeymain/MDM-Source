@@ -73,7 +73,9 @@ namespace DownloadMuck
                 return AppModal.Confirm(title, message, detail, confirmText, cancelText, danger);
 
             var dlg = new ConfirmDialog(title, message, detail, confirmText, cancelText, danger);
-            if (owner != null && owner.IsLoaded)
+            // WindowStyle.None owner (mini indirme) ShowDialog'u yutabiliyor — bağımsız aç
+            bool attachOwner = owner != null && owner.IsLoaded && owner.WindowStyle != WindowStyle.None;
+            if (attachOwner)
             {
                 dlg.Owner = owner;
                 dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;

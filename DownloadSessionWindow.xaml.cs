@@ -107,6 +107,27 @@ namespace DownloadMuck
                     TxtUrl.SelectAll();
                 }
             });
+            UpdateTitleBar();
+        }
+
+        private void UpdateTitleBar()
+        {
+            string name = !string.IsNullOrWhiteSpace(_item?.FileName) ? _item!.FileName : _fileName;
+            if (string.IsNullOrWhiteSpace(name)) name = "İndirme";
+
+            TxtTitleFile.Text = name;
+
+            if (_started || (_item != null && _item.ProgressValue > 0))
+            {
+                double pct = _item?.ProgressValue ?? 0;
+                TxtTitlePercent.Text = $"%{pct:F0}";
+                Title = $"{name}  %{pct:F0}";
+            }
+            else
+            {
+                TxtTitlePercent.Text = "";
+                Title = name;
+            }
         }
 
         public void BringToFrontSoft()
@@ -137,6 +158,8 @@ namespace DownloadMuck
 
             if (!string.IsNullOrWhiteSpace(sizeLabel) && sizeLabel != "-")
                 TxtSize.Text = sizeLabel;
+
+            UpdateTitleBar();
         }
 
         public void ApplyDefaultFolderIfIdle(string folder)
@@ -320,6 +343,15 @@ namespace DownloadMuck
             BarProgress.Value = _item.ProgressValue;
             TxtPercent.Text = $"%{_item.ProgressValue:F0}";
 
+            if (!string.IsNullOrWhiteSpace(_item.FileName))
+            {
+                TxtFileName.Text = _item.FileName;
+                TxtFileType.Text = FileNameHelper.FormatTypeLabel(_item.FileName);
+                if (_item.FileIcon != null)
+                    ImgIcon.Source = _item.FileIcon;
+            }
+            UpdateTitleBar();
+
             if (_item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
@@ -396,24 +428,24 @@ namespace DownloadMuck
 
         private void BtnCancelDl_Click(object sender, RoutedEventArgs e)
         {
-            // Baslatilmadiysa sadece pencereyi kapat
+            string fileLabel = !string.IsNullOrWhiteSpace(_item?.FileName) ? _item!.FileName : _fileName;
+            bool ok = ConfirmDialog.Show(
+                this,
+                "İptal",
+                "İndirmeyi iptal etmek ister misin?",
+                string.IsNullOrWhiteSpace(fileLabel) ? "" : $"“{fileLabel}” durdurulur.",
+                confirmText: "Evet",
+                cancelText: "Hayır",
+                danger: true,
+                forceFloating: true);
+
+            if (!ok) return;
+
             if (!_started || _engine == null || _item == null)
             {
                 Close();
                 return;
             }
-
-            bool ok = ConfirmDialog.Show(
-                this,
-                "İptal onayı",
-                "İndirme iptal edilsin mi?",
-                $"“{_item.FileName}” durdurulur. Eksik dosya diskte kalabilir.",
-                confirmText: "İptal et",
-                cancelText: "Vazgeç",
-                danger: true,
-                forceFloating: true);
-
-            if (!ok) return;
 
             _host.CancelFromSession(_item, _engine);
             TxtStatus.Text = "İptal edildi";
@@ -477,11 +509,14 @@ namespace DownloadMuck
             if (_item == null) return;
 
             // Mini ekrana özel onay — ana uygulamadaki modal'a gitmez
+            bool fromDisk = _host.DeletesFilesFromDisk;
             bool ok = ConfirmDialog.Show(
                 this,
                 "Silme onayı",
                 $"“{_item.FileName}” silinsin mi?",
-                "Bu indirme listeden ve diskten kaldırılır.",
+                fromDisk
+                    ? "Bu indirme listeden ve diskten kaldırılır."
+                    : "Yalnızca listeden çıkarılır; dosya diskte kalır.",
                 confirmText: "Sil",
                 cancelText: "Vazgeç",
                 danger: true,

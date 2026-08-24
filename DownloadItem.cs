@@ -30,6 +30,13 @@ namespace DownloadMuck
             set => SetField(ref _fileSize, value);
         }
 
+        private long _fileSizeBytes = -1;
+        public long FileSizeBytes
+        {
+            get => _fileSizeBytes;
+            set => SetField(ref _fileSizeBytes, value);
+        }
+
         private string _fileType = "";
         public string FileType
         {

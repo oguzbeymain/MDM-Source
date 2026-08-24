@@ -18,11 +18,15 @@ namespace DownloadMuck
         private const int DwmwaTransitionsForceDisabled = 3;
 
         private const int GwlStyle = -16;
+        private const int GwlExStyle = -20;
         private const int WsCaption = 0x00C00000;
         private const int WsThickFrame = 0x00040000;
         private const int WsMinimizeBox = 0x00020000;
         private const int WsMaximizeBox = 0x00010000;
         private const int WsSysMenu = 0x00080000;
+        private const int WsExAppWindow = 0x00040000;
+        private const int WsExToolWindow = 0x00000080;
+        private const int SwMinimize = 6;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
@@ -72,6 +76,9 @@ namespace DownloadMuck
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         private const uint SwpNoSize = 0x0001;
         private const uint SwpNoMove = 0x0002;
@@ -169,6 +176,33 @@ namespace DownloadMuck
 
                 ApplyDwmNativeChrome(window);
             };
+        }
+
+        /// <summary>
+        /// WindowChrome ile WindowState.Minimized görev çubuğu düğmesini düşürebilir.
+        /// Native SW_MINIMIZE + WS_EX_APPWINDOW görev çubuğunda tutar.
+        /// </summary>
+        public static void MinimizeToTaskbar(Window window)
+        {
+            try
+            {
+                window.ShowInTaskbar = true;
+                if (!window.IsVisible)
+                    window.Show();
+
+                var hwnd = new WindowInteropHelper(window).EnsureHandle();
+                int ex = GetWindowLong(hwnd, GwlExStyle);
+                ex |= WsExAppWindow;
+                ex &= ~WsExToolWindow;
+                SetWindowLong(hwnd, GwlExStyle, ex);
+
+                ShowWindow(hwnd, SwMinimize);
+            }
+            catch
+            {
+                window.ShowInTaskbar = true;
+                window.WindowState = WindowState.Minimized;
+            }
         }
     }
 }

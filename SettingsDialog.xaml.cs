@@ -35,6 +35,7 @@ namespace DownloadMuck
             ChkAutoStart.IsChecked = settings.AutoStart;
             ChkAutoStartMin.IsChecked = settings.AutoStartMinimized;
             ChkAutoStartMin.IsEnabled = settings.AutoStart;
+            ChkDeleteFromDisk.IsChecked = settings.DeleteFilesFromDisk;
 
             TxtExtPath.Text = ExtensionInstaller.InstallRoot;
             string ver = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
@@ -133,28 +134,38 @@ namespace DownloadMuck
             if (_updateBusy) return;
             _updateBusy = true;
             BtnCheckUpdate.IsEnabled = false;
+            SetUpdateStatus("Güncelleniyor…", "#FF6B00");
             _updateCts = new CancellationTokenSource();
-            var progress = new Progress<string>(msg => TxtUpdateStatus.Text = msg);
+            var progress = new Progress<string>(_ => SetUpdateStatus("Güncelleniyor…", "#FF6B00"));
 
             try
             {
                 var result = await UpdateService.CheckAndApplyAsync(progress, _updateCts.Token);
-                TxtUpdateStatus.Text = result.Message;
 
                 if (result.Applying)
                 {
+                    SetUpdateStatus("Güncelleniyor…", "#FF6B00");
                     UpdateApplying?.Invoke();
                     return;
                 }
 
                 if (result.HadError)
+                {
+                    SetUpdateStatus(result.Message, "#E07070");
                     InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", result.Message);
+                }
                 else if (result.IsUpToDate)
-                    InfoDialog.Show(OwnerWindow, "Güncelleme", "Güncelsiniz.", result.Message);
+                {
+                    SetUpdateStatus("Güncelsiniz", "#8BC34A");
+                }
+                else
+                {
+                    SetUpdateStatus(result.Message, "#E0E0E0");
+                }
             }
             catch (Exception ex)
             {
-                TxtUpdateStatus.Text = ex.Message;
+                SetUpdateStatus(ex.Message, "#E07070");
                 InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", ex.Message);
             }
             finally
@@ -164,6 +175,17 @@ namespace DownloadMuck
                 _updateCts?.Dispose();
                 _updateCts = null;
             }
+        }
+
+        private void SetUpdateStatus(string text, string hex)
+        {
+            TxtUpdateStatus.Text = text;
+            try
+            {
+                TxtUpdateStatus.Foreground = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+            }
+            catch { /* ignore */ }
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
@@ -185,6 +207,7 @@ namespace DownloadMuck
             _settings.DefaultDownloadFolder = folder;
             _settings.AutoStart = ChkAutoStart.IsChecked == true;
             _settings.AutoStartMinimized = ChkAutoStartMin.IsChecked == true;
+            _settings.DeleteFilesFromDisk = ChkDeleteFromDisk.IsChecked == true;
 
             AppSettingsStore.Save(_settings);
 

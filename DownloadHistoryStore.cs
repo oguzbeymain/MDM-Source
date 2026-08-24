@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace DownloadMuck
 {
@@ -69,6 +71,7 @@ namespace DownloadMuck
                         CategoryId = string.IsNullOrWhiteSpace(d.CategoryId) ? "All" : d.CategoryId,
                         Url = d.Url ?? "",
                         FileIcon = IconHelper.GetIconForExtension(d.FileName),
+                        FileSizeBytes = ParseSizeBytes(d.FileSize),
                         IsDownloading = false,
                         CurrentSpeed = "",
                         StatusText = ""
@@ -87,6 +90,25 @@ namespace DownloadMuck
             {
                 return new List<DownloadItem>();
             }
+        }
+
+        private static long ParseSizeBytes(string? label)
+        {
+            if (string.IsNullOrWhiteSpace(label) || label == "-" || label == "—") return -1;
+            string t = label.Trim().Replace(',', '.');
+            var m = Regex.Match(t, @"^([\d.]+)\s*([KMGT]B|B)$", RegexOptions.IgnoreCase);
+            if (!m.Success) return -1;
+            if (!double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double n))
+                return -1;
+            return m.Groups[2].Value.ToUpperInvariant() switch
+            {
+                "B" => (long)n,
+                "KB" => (long)(n * 1024),
+                "MB" => (long)(n * 1024 * 1024),
+                "GB" => (long)(n * 1024 * 1024 * 1024),
+                "TB" => (long)(n * 1024L * 1024 * 1024 * 1024),
+                _ => -1
+            };
         }
 
         private sealed class DownloadDto

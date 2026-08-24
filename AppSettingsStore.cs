@@ -9,6 +9,9 @@ namespace DownloadMuck
         public bool AutoStartMinimized { get; set; } = true;
         public string? DefaultDownloadFolder { get; set; }
         public bool ExtensionPromptDone { get; set; }
+        public string ListDensity { get; set; } = "Medium";
+        public string ListSort { get; set; } = "Date";
+        public bool DeleteFilesFromDisk { get; set; } = true;
     }
 
     public static class AppSettingsStore

@@ -1,10 +1,10 @@
-// DownloadMuck / MDM tarayici entegrasyonu v1.7
+// DownloadMuck / MDM tarayici entegrasyonu v1.8
 // Once masaustu uygulamasina ilet; BASARILI olursa tarayici indirmesini iptal et.
 // Chrome/Edge acilista eski indirmeleri onCreated ile tekrar firlatir — bunlari yut.
 
 const CANDIDATE_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
 const recentHandoffs = new Map(); // url -> timestamp
-const HANDOFF_DEBOUNCE_MS = 15000;
+const HANDOFF_DEBOUNCE_MS = 900;
 const PROBE_TIMEOUT_MS = 900;
 const STARTUP_GUARD_MS = 15000;
 const MAX_FRESH_AGE_MS = 8000;
@@ -145,7 +145,8 @@ function isSessionRestoreReplay(downloadItem) {
   if (downloadItem.state === "interrupted" || downloadItem.paused === true) {
     return true;
   }
-  if ((downloadItem.bytesReceived || 0) > 0) {
+  // Eski oturum kaydi: hem byte almis hem de birkac saniyeden eski
+  if ((downloadItem.bytesReceived || 0) > 0 && ageMs > 3000) {
     return true;
   }
   if (ageMs > MAX_FRESH_AGE_MS) {
