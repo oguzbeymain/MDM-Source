@@ -86,7 +86,6 @@ namespace DownloadMuck
             Categories = CategoryStore.Load();
             CategoryStore.EnsureBuiltinCategories(Categories);
             CategoryStore.Save(Categories);
-            CategoryStore.EnsureDiskFolders(Categories, _defaultFolder);
             RebuildVisibleCategories();
             LstCategories.ItemsSource = VisibleCategories;
 
@@ -146,6 +145,17 @@ namespace DownloadMuck
             }
         }
 
+        public void ShowDownloadCompleteTip(string fileName)
+        {
+            if (!AppSettingsStore.Load().NotifyOnComplete)
+                return;
+            try
+            {
+                _tray?.ShowBalloon("İndirme tamamlandı", fileName);
+            }
+            catch { /* ignore */ }
+        }
+
         public void HideToTray()
         {
             try
@@ -155,7 +165,8 @@ namespace DownloadMuck
                 if (!_trayTipShown)
                 {
                     _trayTipShown = true;
-                    _tray?.ShowHiddenTipOnce();
+                    if (AppSettingsStore.Load().NotifyOnTrayMinimize)
+                        _tray?.ShowHiddenTipOnce();
                 }
             }
             catch (Exception ex)
@@ -221,8 +232,13 @@ namespace DownloadMuck
             {
                 try
                 {
-                    AutoStartHelper.EnsureRegistered();
+                    BeginBackgroundCaptureQuiet(45);
                     AutoResumeIncompleteDownloads();
+                    _ = Task.Run(() =>
+                    {
+                        try { CategoryStore.EnsureDiskFolders(Categories, _defaultFolder); }
+                        catch (Exception ex) { Debug.WriteLine($"EnsureDiskFolders: {ex.Message}"); }
+                    });
                     try
                     {
                         PluginRegistry.LoadFromFolder(Path.Combine(AppSettingsStore.StoreDir, "plugins"));
@@ -670,7 +686,7 @@ namespace DownloadMuck
         }
 
         private static readonly SolidColorBrush ColumnDragBrush =
-            new(Color.FromRgb(0xFF, 0x6B, 0x00));
+            new(Color.FromArgb(0xB3, 0xFF, 0x6B, 0x00)); // saydam turuncu
 
         private void DgDownloads_GiveFeedback(object sender, GiveFeedbackEventArgs e)
         {
@@ -700,22 +716,34 @@ namespace DownloadMuck
         {
             if (Mouse.LeftButton != MouseButtonState.Pressed) return;
             // Her layout'ta gorsel agaci gezmek donmaya yol acar — throttle
-            if ((DateTime.UtcNow - _lastDragRecolor).TotalMilliseconds < 50) return;
+            if ((DateTime.UtcNow - _lastDragRecolor).TotalMilliseconds < 80) return;
             _lastDragRecolor = DateTime.UtcNow;
             RecolorColumnDragAdorners();
         }
 
         private void RecolorColumnDragAdorners()
         {
-            RecolorBlueVisuals(DgDownloads);
-
+            // Tüm DataGrid ağacını gezmek donmaya yol açar — yalnızca adorner katmanı
             var layer = AdornerLayer.GetAdornerLayer(DgDownloads);
             if (layer != null)
                 RecolorBlueVisuals(layer);
 
-            // Header presenter uzerindeki gostergeler
             if (FindVisualChild<DataGridColumnHeadersPresenter>(DgDownloads) is { } headers)
                 RecolorBlueVisuals(headers);
+        }
+
+        private static bool LooksLikeSystemBlue(Color c)
+        {
+            if (c.A < 30) return false;
+            // Klasik Aero / Win11 vurgu mavisi ve yarı saydam tonlar
+            if (c.B >= 140 && c.B > c.R + 25 && c.B > c.G + 10)
+                return true;
+            if (c.B >= 100 && c.R <= 120 && c.G <= 170 && c.B >= c.G && c.B > c.R)
+                return true;
+            // #0078D7 ailesi
+            if (c.R <= 80 && c.G >= 90 && c.G <= 160 && c.B >= 180)
+                return true;
+            return false;
         }
 
         private void RecolorBlueVisuals(DependencyObject root)
@@ -730,23 +758,58 @@ namespace DownloadMuck
             foreach (var border in FindVisualChildren<Border>(root))
             {
                 if (border.Background is SolidColorBrush sb && LooksLikeSystemBlue(sb.Color))
-                    border.Background = ColumnDragBrush;
+                    border.Background = OrangeOf(sb.Color.A);
                 if (border.BorderBrush is SolidColorBrush bb && LooksLikeSystemBlue(bb.Color))
-                    border.BorderBrush = ColumnDragBrush;
+                    border.BorderBrush = OrangeOf(bb.Color.A);
+                if (border.Background is LinearGradientBrush lgb)
+                    border.Background = RemapGradientToOrange(lgb);
+                if (border.BorderBrush is LinearGradientBrush lgb2)
+                    border.BorderBrush = RemapGradientToOrange(lgb2);
             }
 
             foreach (var rect in FindVisualChildren<System.Windows.Shapes.Rectangle>(root))
             {
                 if (rect.Fill is SolidColorBrush fb && LooksLikeSystemBlue(fb.Color))
-                    rect.Fill = ColumnDragBrush;
+                    rect.Fill = OrangeOf(fb.Color.A);
                 if (rect.Stroke is SolidColorBrush st && LooksLikeSystemBlue(st.Color))
-                    rect.Stroke = ColumnDragBrush;
+                    rect.Stroke = OrangeOf(st.Color.A);
+                if (rect.Fill is LinearGradientBrush lg)
+                    rect.Fill = RemapGradientToOrange(lg);
+            }
+
+            foreach (var path in FindVisualChildren<System.Windows.Shapes.Path>(root))
+            {
+                if (path.Fill is SolidColorBrush pf && LooksLikeSystemBlue(pf.Color))
+                    path.Fill = OrangeOf(pf.Color.A);
+                if (path.Stroke is SolidColorBrush ps && LooksLikeSystemBlue(ps.Color))
+                    path.Stroke = OrangeOf(ps.Color.A);
             }
         }
 
-        private static bool LooksLikeSystemBlue(Color c)
+        private static SolidColorBrush OrangeOf(byte alpha)
         {
-            return c.B > 180 && c.B > c.R + 40 && c.B > c.G + 20;
+            var b = new SolidColorBrush(Color.FromArgb(Math.Max(alpha, (byte)0x66), 0xFF, 0x6B, 0x00));
+            b.Freeze();
+            return b;
+        }
+
+        private static Brush RemapGradientToOrange(LinearGradientBrush src)
+        {
+            var b = new LinearGradientBrush
+            {
+                StartPoint = src.StartPoint,
+                EndPoint = src.EndPoint,
+                Opacity = src.Opacity
+            };
+            foreach (GradientStop stop in src.GradientStops)
+            {
+                Color c = LooksLikeSystemBlue(stop.Color)
+                    ? Color.FromArgb(stop.Color.A, 0xFF, 0x6B, 0x00)
+                    : stop.Color;
+                b.GradientStops.Add(new GradientStop(c, stop.Offset));
+            }
+            b.Freeze();
+            return b;
         }
 
         private static T? FindVisualChild<T>(DependencyObject root) where T : DependencyObject
@@ -1730,7 +1793,8 @@ namespace DownloadMuck
                 {
                     Header = new string(' ', cat.Depth * 2) + cat.DisplayLabel,
                     Tag = cat.Id,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+                    Foreground = TryFindResource("MenuTextBrush") as Brush
+                                 ?? new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
                     Background = Brushes.Transparent,
                     Padding = new Thickness(10, 5, 10, 5),
                     FontSize = 11,
@@ -1787,8 +1851,8 @@ namespace DownloadMuck
         {
             var template = new ControlTemplate(typeof(ContextMenu));
             var factory = new FrameworkElementFactory(typeof(Border));
-            factory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C)));
-            factory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            factory.SetValue(Border.BackgroundProperty, new DynamicResourceExtension("MenuBgBrush"));
+            factory.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("MenuBorderBrush"));
             factory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
             factory.SetValue(Border.PaddingProperty, new Thickness(4));
@@ -1815,12 +1879,12 @@ namespace DownloadMuck
             template.VisualTree = factory;
 
             var trigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
-            trigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "bd"));
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("MenuHoverBgBrush"), "bd"));
             trigger.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
             template.Triggers.Add(trigger);
 
             var kf = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
-            kf.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "bd"));
+            kf.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("MenuHoverBgBrush"), "bd"));
             kf.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
             template.Triggers.Add(kf);
             return template;
@@ -2360,6 +2424,8 @@ namespace DownloadMuck
         private void CloseSettingsOverlay()
         {
             SettingsOverlay.Visibility = Visibility.Collapsed;
+            // İptal / kapat: kaydedilmemiş tema önizlemesini geri al
+            ThemeService.ApplyFromSettings();
         }
 
         private void OnSettingsSaved()
@@ -2369,11 +2435,19 @@ namespace DownloadMuck
             {
                 _defaultFolder = settings.DefaultDownloadFolder;
                 try { Directory.CreateDirectory(_defaultFolder); } catch { /* ignore */ }
-                CategoryStore.EnsureDiskFolders(Categories, _defaultFolder);
             }
-            CloseSettingsOverlay();
+            SettingsOverlay.Visibility = Visibility.Collapsed;
             StartBrowserCaptureServer();
             TorrentEngineHost.ReloadIfIdle();
+            ThemeService.ApplyFromSettings();
+            if (settings.AutoCreateCategoryFolders)
+            {
+                _ = Task.Run(() =>
+                {
+                    try { CategoryStore.EnsureDiskFolders(Categories, _defaultFolder); }
+                    catch { /* ignore */ }
+                });
+            }
         }
 
         private void OnSettingsUpdateApplying()
@@ -2487,6 +2561,17 @@ namespace DownloadMuck
         private void RowCancel_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button { Tag: DownloadItem item }) return;
+
+            bool ok = ConfirmDialog.Show(
+                this,
+                "İptal",
+                "İndirmeyi iptal etmek istediğine emin misin?",
+                string.IsNullOrWhiteSpace(item.FileName) ? "" : $"“{item.FileName}” durdurulur.",
+                confirmText: "Evet, iptal et",
+                cancelText: "Vazgeç",
+                danger: true);
+            if (!ok) return;
+
             if (_engines.TryGetValue(item, out var engine))
                 CancelFromSession(item, engine);
         }
@@ -2532,7 +2617,7 @@ namespace DownloadMuck
             try
             {
                 Clipboard.SetText(url);
-                ShowCopyToast();
+                ShowCopyToast("Bağlantı kopyalandı");
             }
             catch (Exception ex)
             {
@@ -2540,8 +2625,17 @@ namespace DownloadMuck
             }
         }
 
-        private void ShowCopyToast()
+        private void MenuCopyFile_Click(object sender, RoutedEventArgs e)
         {
+            if (!TryCopySelectedFilesToClipboard())
+                ShowCopyToast("Kopyalanacak dosya yok");
+        }
+
+        private void ShowCopyToast(string? message = null)
+        {
+            if (CopyToast.Child is StackPanel sp && sp.Children.OfType<TextBlock>().LastOrDefault() is { } label)
+                label.Text = string.IsNullOrWhiteSpace(message) ? "Bağlantı kopyalandı" : message;
+
             _copyToastTimer?.Stop();
             CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
             CopyToast.Visibility = Visibility.Visible;
@@ -2980,24 +3074,25 @@ namespace DownloadMuck
                     return;
                 }
 
-                // Açık oturum varsa öne getir
+                // Açık oturum varsa — boot quiet sırasında öne getirme
                 foreach (var kv in _sessionWindows.ToList())
                 {
-                    if (NormalizeCaptureUrl(kv.Value.SessionUrl) == urlKey)
-                    {
-                        try
-                        {
-                            if (!kv.Value.IsVisible) kv.Value.Show();
-                            kv.Value.Activate();
-                            kv.Value.BringToFrontSoft();
-                        }
-                        catch { /* ignore */ }
-                        _recentCaptureUrls[urlKey] = DateTime.UtcNow;
+                    if (NormalizeCaptureUrl(kv.Value.SessionUrl) != urlKey)
+                        continue;
+                    _recentCaptureUrls[urlKey] = DateTime.UtcNow;
+                    if (fromCapture && DateTime.UtcNow < _captureQuietUntilUtc)
                         return;
+                    try
+                    {
+                        if (!kv.Value.IsVisible) kv.Value.Show();
+                        kv.Value.Activate();
+                        kv.Value.BringToFrontSoft();
                     }
+                    catch { /* ignore */ }
+                    return;
                 }
 
-                // Listede aynı URL ile hâlâ inen/bekleyen varsa yeni pencere açma
+                // Listede aynı URL ile devam edilebilir kayıt varsa pencere açma (açılış replay)
                 foreach (var item in DownloadList)
                 {
                     string u = item.Url;
@@ -3008,7 +3103,7 @@ namespace DownloadMuck
                     if (item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase)) continue;
 
                     _recentCaptureUrls[urlKey] = DateTime.UtcNow;
-                    ShowSessionForItem(item);
+                    Debug.WriteLine($"Capture matched existing item, no popup: {urlKey}");
                     return;
                 }
 
@@ -3636,8 +3731,7 @@ namespace DownloadMuck
                         UpdateTransportButtons();
                         QueueHistorySave();
                         RefreshCategoryCounts();
-                        // Tamamlandi ekranini goster
-                        ShowSessionForItem(item);
+                        // Bildirim RunEngineAsync finally içinde (çift tetiklenmesin)
                     }
                     else if (status.Contains('%'))
                     {
@@ -3746,7 +3840,7 @@ namespace DownloadMuck
                         SetItemFileSize(item, new FileInfo(item.FilePath).Length);
                     TryAutoExtract(item);
                     _engines.Remove(item);
-                    CompleteNotify.PlayIfEnabled();
+                    CompleteNotify.PlayIfEnabled(item.FileName);
                 }
                 else
                 {
@@ -3860,6 +3954,17 @@ namespace DownloadMuck
             if (Keyboard.FocusedElement is TextBoxBase)
                 return;
 
+            var settings = AppSettingsStore.Load();
+            if (settings.CopyFilesHotkeyEnabled
+                && HotkeyParser.Matches(settings.CopyFilesHotkey, e))
+            {
+                // Native Ctrl+C metin kopyasından ayır: her zaman işle, dosya yoksa bildir
+                e.Handled = true;
+                if (!TryCopySelectedFilesToClipboard())
+                    ShowCopyToast("Kopyalanacak dosya yok");
+                return;
+            }
+
             if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 DgDownloads.Focus();
@@ -3871,6 +3976,68 @@ namespace DownloadMuck
             {
                 DeleteSelectedItems();
                 e.Handled = true;
+            }
+        }
+
+        private bool TryCopySelectedFilesToClipboard()
+        {
+            var files = DgDownloads.SelectedItems.OfType<DownloadItem>()
+                .Select(i => i.FilePath)
+                .Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (files.Length == 0)
+                return false;
+
+            try
+            {
+                var list = new System.Collections.Specialized.StringCollection();
+                list.AddRange(files);
+                Clipboard.SetFileDropList(list);
+                ShowCopyToast("Dosya kopyalandı");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Copy files: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void MenuResetColumns_Click(object sender, RoutedEventArgs e)
+            => ResetColumnsToDefault();
+
+        private void ResetColumnsToDefault()
+        {
+            // Dosya adı, Boyut, Tür, Tarih, Durum (+ seçim ve aksiyon)
+            try
+            {
+                ColCheck.Visibility = Visibility.Visible;
+                ColFileName.Visibility = Visibility.Visible;
+                ColSize.Visibility = Visibility.Visible;
+                ColType.Visibility = Visibility.Visible;
+                ColDate.Visibility = Visibility.Visible;
+                ColStatus.Visibility = Visibility.Visible;
+                ColActions.Visibility = Visibility.Visible;
+
+                ColCheck.DisplayIndex = 0;
+                ColFileName.DisplayIndex = 1;
+                ColFileName.Width = new DataGridLength(2, DataGridLengthUnitType.Star);
+                ColSize.DisplayIndex = 2;
+                ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColType.DisplayIndex = 3;
+                ColType.Width = DataGridLength.Auto;
+                ColDate.DisplayIndex = 4;
+                ColDate.Width = DataGridLength.Auto;
+                ColStatus.DisplayIndex = 5;
+                ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColActions.DisplayIndex = 6;
+
+                ApplyResponsiveLayout(ActualWidth);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Reset columns: {ex.Message}");
             }
         }
 

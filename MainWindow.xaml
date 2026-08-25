@@ -30,13 +30,48 @@
         <SolidColorBrush x:Key="InputDark" Color="#262626"/>
         <SolidColorBrush x:Key="OrangeAccent" Color="#FF6B00"/>
         <SolidColorBrush x:Key="OrangeHover" Color="#FF8533"/>
+        <!-- Tema ile değişen yüzeyler (ThemeService günceller) -->
+        <SolidColorBrush x:Key="SidebarTextBrush" Color="#B0B0B0"/>
+        <SolidColorBrush x:Key="SidebarHoverBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="SidebarHoverBrightBrush" Color="#FF8533"/>
+        <SolidColorBrush x:Key="ToolbarTextBrush" Color="#C8C8C8"/>
+        <SolidColorBrush x:Key="MenuBgBrush" Color="#1C1C1C"/>
+        <SolidColorBrush x:Key="MenuBorderBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="MenuTextBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="MenuHoverBgBrush" Color="#2A2118"/>
+        <SolidColorBrush x:Key="HeaderBgBrush" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="HeaderTextBrush" Color="#888888"/>
+        <SolidColorBrush x:Key="ToolbarHoverBgBrush" Color="#28FF6B00"/>
+        <SolidColorBrush x:Key="NavTextBrush" Color="#AAAAAA"/>
+        <SolidColorBrush x:Key="NavHoverBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="NavSelectedBgBrush" Color="#252525"/>
+        <!-- Seçili kategori / ayarlar nav — soft charcoal; açıkta ThemeService ayarlar -->
+        <SolidColorBrush x:Key="CategorySelectedBgBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="CheckBoxIdleBgBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="CheckBoxIdleBorderBrush" Color="#555555"/>
+        <SolidColorBrush x:Key="RowTextBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="RowHoverBgBrush" Color="#221A12"/>
+        <SolidColorBrush x:Key="RowHoverFgBrush" Color="#E07030"/>
+        <SolidColorBrush x:Key="RowSelectedBgBrush" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="RowSelectedFgBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="RowSelectedHoverBgBrush" Color="#242424"/>
+        <SolidColorBrush x:Key="RowSelectedHoverFgBrush" Color="#FF8533"/>
+        <SolidColorBrush x:Key="RowActionChromeBgBrush" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="RowActionChromeBorderBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="RowActionSepBrush" Color="#2E2E2E"/>
+        <SolidColorBrush x:Key="SearchBorderBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="SearchFocusBorderBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="MarqueeStrokeBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="MarqueeFillBrush" Color="#55000000"/>
+        <SolidColorBrush x:Key="DownloadingStatusBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="DownloadingTrackBrush" Color="#333333"/>
         <sys:Double x:Key="ListIconSize">22</sys:Double>
         <sys:Double x:Key="ListNameFontSize">13</sys:Double>
 
         <!-- Kolon surukle / secim sistem renklerini uygulama temasına cevir -->
-        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
-        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#251A12"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#1A1A1A"/>
         <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF6B00"/>
         <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#2A2118"/>
         <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#FF6B00"/>
@@ -147,7 +182,7 @@
             </Setter>
         </Style>
 
-        <!-- Title bar: kucult / buyut -->
+        <!-- Title bar: küçült / büyült — hover turuncu (açık/koyu temada okunur) -->
         <Style x:Key="TitleBarChromeButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888888"/>
@@ -159,39 +194,25 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="#00000000" ClipToBounds="True">
+                        <Border x:Name="border" Background="Transparent" ClipToBounds="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="MouseEnter">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#28FFFFFF" Duration="0:0:0.18"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#F5F5F5" Duration="0:0:0.18"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="MouseLeave">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#00000000" Duration="0:0:0.18"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#888888" Duration="0:0:0.18"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#28FF6B00"/>
+                                <Setter Property="Foreground" Value="#FF6B00"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#40FF6B00"/>
+                                <Setter Property="Foreground" Value="#FF8533"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <!-- Title bar: kapat — varsayilan gri (digerleri gibi), hover kirmizi gecis animasyonu -->
+        <!-- Title bar: kapat -->
         <Style x:Key="TitleBarCloseButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888888"/>
@@ -203,34 +224,16 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="#00000000" CornerRadius="0,14,0,0" ClipToBounds="True">
+                        <Border x:Name="border" Background="Transparent" CornerRadius="0,14,0,0" ClipToBounds="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <EventTrigger RoutedEvent="MouseEnter">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#E53935" Duration="0:0:0.16"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#FFFFFF" Duration="0:0:0.16"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                            <EventTrigger RoutedEvent="MouseLeave">
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#00000000" Duration="0:0:0.16"/>
-                                        <ColorAnimation Storyboard.TargetProperty="(Button.Foreground).(SolidColorBrush.Color)"
-                                                        To="#888888" Duration="0:0:0.16"/>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E53935"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#B71C1C"/>
+                                <Setter TargetName="border" Property="Background" Value="#C62828"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -386,7 +389,7 @@
 
         <Style x:Key="CategoryListItemStyle" TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#B0B0B0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
             <Setter Property="Padding" Value="4,0,6,0"/>
             <Setter Property="Margin" Value="0,0,0,2"/>
             <Setter Property="Height" Value="36"/>
@@ -405,9 +408,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="#FF6B00"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
                                 <Setter Property="Foreground" Value="#FF6B00"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
@@ -416,7 +420,8 @@
                                     <Condition Property="IsSelected" Value="True"/>
                                     <Condition Property="IsMouseOver" Value="True"/>
                                 </MultiTrigger.Conditions>
-                                <Setter Property="Foreground" Value="#FF8533"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrightBrush}"/>
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -430,19 +435,24 @@
             <Setter Property="Padding" Value="10,0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#C8C8C8"/>
+            <Setter Property="Foreground" Value="{DynamicResource ToolbarTextBrush}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#2A2A2A"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ToolbarHoverBgBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#40FF6B00"/>
+                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrightBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#555555"/>
@@ -459,10 +469,10 @@
 
         <ContextMenu x:Key="CategoryPanelEmptyContextMenu"
                      Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
-                     FocusVisualStyle="{x:Null}">
+                     FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
@@ -476,7 +486,7 @@
                 <SolidColorBrush x:Key="{x:Static SystemColors.MenuHighlightBrushKey}" Color="#2A2118"/>
                 <Style TargetType="MenuItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#E0E0E0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
                     <Setter Property="FontSize" Value="11"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="Height" Value="28"/>
@@ -490,11 +500,11 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
@@ -506,12 +516,12 @@
             <MenuItem Header="Yeni kategori ekle" Click="MenuAddCategory_Click"/>
         </ContextMenu>
 
-        <ContextMenu x:Key="CategoryItemContextMenu"
+        <ContextMenu x:Key="ColumnHeaderContextMenu"
                      Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
-                     FocusVisualStyle="{x:Null}">
+                     FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
@@ -521,11 +531,9 @@
                 </ControlTemplate>
             </ContextMenu.Template>
             <ContextMenu.Resources>
-                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
-                <SolidColorBrush x:Key="{x:Static SystemColors.MenuHighlightBrushKey}" Color="#2A2118"/>
                 <Style TargetType="MenuItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#E0E0E0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
                     <Setter Property="FontSize" Value="11"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="Height" Value="28"/>
@@ -539,11 +547,56 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
+                                        <Setter Property="Foreground" Value="#FF6B00"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ContextMenu.Resources>
+            <MenuItem Header="Varsayılan" Click="MenuResetColumns_Click"/>
+        </ContextMenu>
+
+        <ContextMenu x:Key="CategoryItemContextMenu"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     FocusVisualStyle="{x:Null}" StaysOpen="False">
+            <ContextMenu.Template>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
+                            CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True"/>
+                    </Border>
+                </ControlTemplate>
+            </ContextMenu.Template>
+            <ContextMenu.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
+                <SolidColorBrush x:Key="{x:Static SystemColors.MenuHighlightBrushKey}" Color="#2A2118"/>
+                <Style TargetType="MenuItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="Padding" Value="10,5"/>
+                    <Setter Property="Height" Value="28"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="MenuItem">
+                                <Border x:Name="itemBorder" Background="{TemplateBinding Background}"
+                                        BorderThickness="0" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
@@ -561,33 +614,7 @@
         </ContextMenu>
 
         <!-- Koyu checkbox -->
-        <Style x:Key="DarkCheckBoxStyle" TargetType="CheckBox">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <Border x:Name="box" Width="16" Height="16" CornerRadius="3"
-                                Background="#1E1E1E" BorderBrush="#555555" BorderThickness="1.5"
-                                SnapsToDevicePixels="True">
-                            <Path x:Name="mark" Data="M3,8 L6.5,11.5 L13,4" Stroke="#FF6B00"
-                                  StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  StrokeLineJoin="Round" Visibility="Collapsed"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="#FF6B00"/>
-                                <Setter TargetName="box" Property="Background" Value="#251A12"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="box" Property="BorderBrush" Value="#FF6B00"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <Style x:Key="DarkCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource ModernCheckBoxStyle}"/>
 
         <!-- Satir aksiyon — listeyle ayni palet, golgesiz -->
         <Style x:Key="RowActionButtonStyle" TargetType="Button">
@@ -808,6 +835,7 @@
                 </Style>
             </ContextMenu.Resources>
             <MenuItem Header="Dosya konumunu aç" Tag="📂" Click="MenuOpenFolder_Click"/>
+            <MenuItem Header="Dosyayı kopyala" Tag="📋" Click="MenuCopyFile_Click" InputGestureText="Ctrl+C"/>
             <MenuItem Header="Bağlantıyı kopyala" Tag="🔗" Click="MenuCopyUrl_Click"/>
             <MenuItem Header="Yeniden indir" Click="MenuRedownload_Click">
                 <MenuItem.Icon>
@@ -826,10 +854,10 @@
         <!-- Bos alan sag tik -->
         <ContextMenu x:Key="EmptyContextMenu"
                      Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
-                     FocusVisualStyle="{x:Null}">
+                     FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
@@ -860,11 +888,11 @@
                             <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -880,12 +908,12 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{TemplateBinding Tag}" FontSize="13" VerticalAlignment="Center"/>
                             <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="›" FontSize="14" Foreground="#888888"
+                            <TextBlock Grid.Column="2" Text="›" FontSize="14" Foreground="{DynamicResource HeaderTextBrush}"
                                        VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             <Popup Grid.ColumnSpan="3" Placement="Right" HorizontalOffset="2" AllowsTransparency="True"
                                    IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
                                    Focusable="False" PopupAnimation="Fade">
-                                <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                                <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                                         CornerRadius="8" Padding="4" Margin="8">
                                     <Border.Effect>
                                         <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
@@ -897,18 +925,18 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
                         <Trigger Property="IsSubmenuOpen" Value="True">
-                            <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
                 <Style TargetType="MenuItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#E0E0E0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
                     <Setter Property="FontSize" Value="11"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="Height" Value="28"/>
@@ -1019,39 +1047,50 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <!-- Tum indirilenler — sade tiklanabilir satir -->
+                            <!-- Tum indirilenler — Style Setter kullan (local Foreground hover'ı ezer) -->
                             <Button x:Name="BtnAllDownloads" Grid.Row="0" Click="BtnAllDownloads_Click"
                                     AllowDrop="True" Drop="BtnAllDownloads_Drop" DragOver="BtnAllDownloads_DragOver"
                                     Cursor="Hand" Margin="0,0,0,8" Height="32"
-                                    HorizontalContentAlignment="Left" BorderThickness="0"
+                                    HorizontalContentAlignment="Left" BorderThickness="0" Background="Transparent"
                                     ToolTip="Tüm indirilenleri göster" Tag="idle">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="10,0">
-                                            <TextBlock x:Name="lbl" Text="Tüm indirilenler" FontSize="12"
-                                                       FontWeight="SemiBold" Foreground="#AAAAAA"
-                                                       VerticalAlignment="Center"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF6B00"/>
-                                            </Trigger>
-                                            <Trigger Property="Tag" Value="selected">
-                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF6B00"/>
-                                            </Trigger>
-                                            <MultiTrigger>
-                                                <MultiTrigger.Conditions>
-                                                    <Condition Property="IsMouseOver" Value="True"/>
-                                                    <Condition Property="Tag" Value="selected"/>
-                                                </MultiTrigger.Conditions>
-                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF8533"/>
-                                            </MultiTrigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="10,0">
+                                                        <TextBlock x:Name="lbl" Text="Tüm indirilenler" FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{TemplateBinding Foreground}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
+                                                        </Trigger>
+                                                        <Trigger Property="Tag" Value="selected">
+                                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
+                                                            <Setter Property="Foreground" Value="#FF6B00"/>
+                                                        </Trigger>
+                                                        <MultiTrigger>
+                                                            <MultiTrigger.Conditions>
+                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                <Condition Property="Tag" Value="selected"/>
+                                                            </MultiTrigger.Conditions>
+                                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrightBrush}"/>
+                                                        </MultiTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
                             </Button>
 
-                            <TextBlock Grid.Row="1" Text="Kategoriler" Foreground="#777777" FontSize="11" FontWeight="Bold"
+                            <TextBlock x:Name="LblCategoriesHeader" Grid.Row="1" Text="Kategoriler"
+                                       Foreground="{DynamicResource HeaderTextBrush}" FontSize="11" FontWeight="Bold"
                                        Margin="8,0,0,8"/>
 
                             <Grid Grid.Row="2" ClipToBounds="True"
@@ -1140,7 +1179,8 @@
 
                             <Canvas x:Name="CatSelectionCanvas" IsHitTestVisible="False">
                                 <Rectangle x:Name="CatSelectionRect" Visibility="Collapsed"
-                                           Stroke="#FF6B00" StrokeThickness="1" Fill="#33FF6B00"
+                                           Stroke="{DynamicResource MarqueeStrokeBrush}" StrokeThickness="1"
+                                           Fill="{DynamicResource MarqueeFillBrush}"
                                            RadiusX="4" RadiusY="4"/>
                                 <Border x:Name="CatDropInsertLine" Visibility="Collapsed"
                                         Background="#FF6B00" Height="2" CornerRadius="1"
@@ -1232,11 +1272,11 @@
                                         SnapsToDevicePixels="True">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="#333333"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource SearchBorderBrush}"/>
                                             <Setter Property="BorderThickness" Value="1"/>
                                             <Style.Triggers>
                                                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                                    <Setter Property="BorderBrush" Value="#FF6B00"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource SearchFocusBorderBrush}"/>
                                                     <Setter Property="BorderThickness" Value="1.5"/>
                                                 </Trigger>
                                             </Style.Triggers>
@@ -1258,7 +1298,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <TextBox x:Name="TxtSearch" Background="Transparent" BorderThickness="0"
-                                                 Foreground="White" CaretBrush="#FF6B00" FontSize="12"
+                                                 Foreground="{DynamicResource RowTextBrush}" CaretBrush="#FF6B00" FontSize="12"
                                                  VerticalContentAlignment="Center" Padding="10,0,28,0"
                                                  TextChanged="TxtSearch_TextChanged"
                                                  PreviewKeyDown="TxtSearch_PreviewKeyDown"/>
@@ -1308,9 +1348,9 @@
                               SelectionChanged="DgDownloads_SelectionChanged">
 
                         <DataGrid.Resources>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#251A12"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#1A1A1A"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF6B00"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#1A1A1A"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF6B00"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkBrushKey}" Color="#FF6B00"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.ControlDarkDarkBrushKey}" Color="#FF8533"/>
@@ -1362,14 +1402,15 @@
                             </Style>
 
                             <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="#1A1A1A"/>
-                                <Setter Property="Foreground" Value="#888888"/>
+                                <Setter Property="Background" Value="{DynamicResource HeaderBgBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource HeaderTextBrush}"/>
                                 <Setter Property="Padding" Value="10,10"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="BorderBrush" Value="Transparent"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                                 <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                <Setter Property="ContextMenu" Value="{StaticResource ColumnHeaderContextMenu}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="DataGridColumnHeader">
@@ -1436,42 +1477,57 @@
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource RowSelectedBgBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource RowSelectedFgBrush}"/>
+                                    </Trigger>
+                                </Style.Triggers>
                             </Style>
 
                             <Style TargetType="DataGridRow">
                                 <Setter Property="Cursor" Value="Hand"/>
                                 <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Foreground" Value="#E0E0E0"/>
+                                <Setter Property="Foreground" Value="{DynamicResource RowTextBrush}"/>
                                 <Setter Property="SnapsToDevicePixels" Value="True"/>
                                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                 <Setter Property="ContextMenu" Value="{StaticResource RowContextMenu}"/>
                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="DataGridRow_PreviewMouseLeftButtonDown"/>
                                 <EventSetter Event="PreviewMouseRightButtonDown" Handler="DataGridRow_PreviewMouseRightButtonDown"/>
                                 <EventSetter Event="MouseMove" Handler="DataGridRow_MouseMove"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridRow">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderThickness="0"
+                                                    SnapsToDevicePixels="True">
+                                                <DataGridCellsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                                        SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
 
                                 <Style.Triggers>
-                                    <!-- Hover: hafif turuncu -->
                                     <MultiTrigger>
                                         <MultiTrigger.Conditions>
                                             <Condition Property="IsMouseOver" Value="True"/>
                                             <Condition Property="IsSelected" Value="False"/>
                                         </MultiTrigger.Conditions>
-                                        <Setter Property="Background" Value="#221A12"/>
-                                        <Setter Property="Foreground" Value="#E07030"/>
+                                        <Setter Property="Background" Value="{DynamicResource RowHoverBgBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource RowHoverFgBrush}"/>
                                     </MultiTrigger>
-                                    <!-- Secili: koyu / yogun turuncu -->
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#3A2208"/>
-                                        <Setter Property="Foreground" Value="#FF6B00"/>
+                                        <Setter Property="Background" Value="{DynamicResource RowSelectedBgBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource RowSelectedFgBrush}"/>
                                     </Trigger>
-                                    <!-- Secili + hover: biraz daha koyu -->
                                     <MultiTrigger>
                                         <MultiTrigger.Conditions>
                                             <Condition Property="IsMouseOver" Value="True"/>
                                             <Condition Property="IsSelected" Value="True"/>
                                         </MultiTrigger.Conditions>
-                                        <Setter Property="Background" Value="#4A2C0A"/>
-                                        <Setter Property="Foreground" Value="#FF8533"/>
+                                        <Setter Property="Background" Value="{DynamicResource RowSelectedHoverBgBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource RowSelectedHoverFgBrush}"/>
                                     </MultiTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -1482,7 +1538,7 @@
                             <DataGridTemplateColumn x:Name="ColCheck" Width="40" MinWidth="36" MaxWidth="44"
                                                     CanUserSort="False" CanUserResize="False" CanUserReorder="False">
                                 <DataGridTemplateColumn.Header>
-                                    <CheckBox x:Name="ChkSelectAll" Width="16" Height="16"
+                                    <CheckBox x:Name="ChkSelectAll" Width="17" Height="17"
                                               VerticalAlignment="Center" HorizontalAlignment="Center"
                                               Click="ChkSelectAll_Click"
                                               Style="{StaticResource DarkCheckBoxStyle}"/>
@@ -1490,7 +1546,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  Width="16" Height="16"
+                                                  Width="17" Height="17"
                                                   VerticalAlignment="Center" HorizontalAlignment="Center"
                                                   Style="{StaticResource DarkCheckBoxStyle}"/>
                                     </DataTemplate>
@@ -1583,16 +1639,19 @@
                                                            Margin="10,0,0,0" VerticalAlignment="Center"/>
                                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="İndiriliyor" FontSize="10" Foreground="#E0E0E0"/>
+                                                        <TextBlock Text="İndiriliyor" FontSize="10"
+                                                                   Foreground="{DynamicResource DownloadingStatusBrush}"/>
                                                         <TextBlock Text="{Binding ProgressValue, StringFormat= %{0:F1}}"
-                                                                   FontSize="10" Foreground="#E0E0E0"
+                                                                   FontSize="10"
+                                                                   Foreground="{DynamicResource DownloadingStatusBrush}"
                                                                    Margin="4,0,8,0"/>
                                                     </StackPanel>
                                                     <ProgressBar Minimum="0" Maximum="100"
                                                                  Value="{Binding ProgressValue}"
                                                                  Height="5" Margin="0,4,0,0"
                                                                  HorizontalAlignment="Stretch"
-                                                                 Foreground="#FF6B00" Background="#333333"
+                                                                 Foreground="#FF6B00"
+                                                                 Background="{DynamicResource DownloadingTrackBrush}"
                                                                  Style="{StaticResource OrangeProgressBarStyle}"/>
                                                 </StackPanel>
                                             </DockPanel>
@@ -1609,7 +1668,7 @@
                                     <Style TargetType="DataGridCell">
                                         <Setter Property="Padding" Value="2,1"/>
                                         <Setter Property="BorderThickness" Value="0"/>
-                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Background" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Background}"/>
                                         <Setter Property="ClipToBounds" Value="False"/>
                                         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                         <Setter Property="HorizontalContentAlignment" Value="Right"/>
@@ -1630,7 +1689,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Border HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                Background="#1A1A1A" BorderBrush="#2A2A2A" BorderThickness="1"
+                                                Background="Transparent" BorderThickness="0"
                                                 CornerRadius="6" Padding="1,0">
                                             <Border.Style>
                                                 <Style TargetType="Border">
@@ -1685,7 +1744,7 @@
                                                     </Path>
                                                 </Grid>
                                             </Button>
-                                            <Rectangle Width="1" Height="10" Fill="#2E2E2E" Margin="0" VerticalAlignment="Center"/>
+                                            <Rectangle Width="1" Height="10" Fill="{DynamicResource RowActionSepBrush}" Margin="0" VerticalAlignment="Center"/>
                                             <Button ToolTip="İndirme penceresi" Style="{StaticResource RowActionButtonStyle}"
                                                     Click="RowOpenDownload_Click" Tag="{Binding}">
                                                 <Path Width="9" Height="9" Stretch="Uniform"
@@ -1695,7 +1754,7 @@
                                                       Fill="Transparent"
                                                       Data="M2.5,4.2 H13.5 V12.8 H2.5 Z M2.5,4.2 H13.5 V6.6 H2.5 Z M7.2,9.2 H11.2"/>
                                             </Button>
-                                            <Rectangle Width="1" Height="10" Fill="#2E2E2E" Margin="0" VerticalAlignment="Center"/>
+                                            <Rectangle Width="1" Height="10" Fill="{DynamicResource RowActionSepBrush}" Margin="0" VerticalAlignment="Center"/>
                                             <Button ToolTip="İptal et" Style="{StaticResource RowActionDangerButtonStyle}"
                                                     Click="RowCancel_Click" Tag="{Binding}">
                                                 <Path Width="9" Height="9" Stretch="Uniform"
@@ -1715,9 +1774,9 @@
                     <Canvas x:Name="SelectionCanvas" IsHitTestVisible="False">
                         <Rectangle x:Name="SelectionRect"
                                    Visibility="Collapsed"
-                                   Stroke="#FF6B00"
+                                   Stroke="{DynamicResource MarqueeStrokeBrush}"
                                    StrokeThickness="1"
-                                   Fill="#33FF6B00"
+                                   Fill="{DynamicResource MarqueeFillBrush}"
                                    RadiusX="4"
                                    RadiusY="4"/>
                     </Canvas>
@@ -1781,7 +1840,7 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <Border Background="#242424" CornerRadius="12,12,0,0">
+                            <Border x:Name="ModalTitleBar" Background="#242424" CornerRadius="12,12,0,0">
                                 <Grid>
                                     <TextBlock x:Name="ModalTitle" Text="" Margin="16,0,44,0"
                                                VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"

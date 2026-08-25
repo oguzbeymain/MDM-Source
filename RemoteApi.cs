@@ -51,7 +51,15 @@ namespace DownloadMuck
             IRemoteJobHost? jobs)
         {
             method = (method ?? "GET").ToUpperInvariant();
-            string p = NormalizePath(path);
+            string rawPath = path ?? "/";
+            string query = "";
+            int qMark = rawPath.IndexOf('?');
+            if (qMark >= 0)
+            {
+                query = rawPath[(qMark + 1)..];
+                rawPath = rawPath[..qMark];
+            }
+            string p = NormalizePath(rawPath);
 
             if (method == "OPTIONS")
                 return RemoteApiResult.Text(200, "OK");
@@ -64,6 +72,25 @@ namespace DownloadMuck
 
             if (method == "GET" && (p == "/" || p == "/health"))
                 return RemoteApiResult.Text(200, "MDM capture ready");
+
+            // Eklenti canlılık — /ext/ping?browser=edge|chrome|brave
+            if ((method == "GET" || method == "POST") && (p == "/ext/ping" || p == "/ping"))
+            {
+                string? browser = QueryValue(query, "browser");
+                try
+                {
+                    if (browser == null && !string.IsNullOrWhiteSpace(body))
+                    {
+                        using var doc = JsonDocument.Parse(body);
+                        if (doc.RootElement.TryGetProperty("browser", out var b))
+                            browser = b.GetString();
+                    }
+                }
+                catch { /* ignore */ }
+
+                ExtensionPresence.NotifyPing(browser);
+                return RemoteApiResult.Json(200, """{"ok":true}""");
+            }
 
             if (method == "GET" && p == "/jobs")
             {
@@ -124,6 +151,7 @@ namespace DownloadMuck
                 }
                 catch { /* capture may be plain */ }
 
+                ExtensionPresence.NotifyPing();
                 onCapture(url, filename, mime);
                 return RemoteApiResult.Text(200, "OK");
             }
@@ -145,6 +173,19 @@ namespace DownloadMuck
             if (p.Length > 1)
                 p = p.TrimEnd('/');
             return p;
+        }
+
+        private static string? QueryValue(string query, string key)
+        {
+            if (string.IsNullOrEmpty(query)) return null;
+            foreach (string part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                int eq = part.IndexOf('=');
+                string k = eq < 0 ? part : part[..eq];
+                if (!k.Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
+                return eq < 0 ? "" : Uri.UnescapeDataString(part[(eq + 1)..]);
+            }
+            return null;
         }
 
         private static bool AuthOk(string auth, string token)

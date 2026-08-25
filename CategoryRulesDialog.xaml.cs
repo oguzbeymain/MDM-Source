@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace DownloadMuck
 {
@@ -68,6 +69,80 @@ namespace DownloadMuck
             BtnResetDefaults.Visibility = category.IsBuiltin && CategoryStore.GetDefaultExtensions(category.Id) != null
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+            ApplyThemeSurface(ThemeService.IsLight);
+        }
+
+        public void ApplyThemeSurface(bool light)
+        {
+            var card = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1B, 0x1B, 0x1B);
+            var header = light ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x1F, 0x1F, 0x1F);
+            var footer = light ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x1A, 0x1A, 0x1A);
+            var panel = light ? Color.FromRgb(0xF4, 0xF4, 0xF6) : Color.FromRgb(0x14, 0x14, 0x14);
+            var chip = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x17, 0x17, 0x17);
+            var chipBorder = light ? Color.FromRgb(0xD0, 0xD0, 0xD4) : Color.FromRgb(0x2A, 0x2A, 0x2A);
+            var boxBg = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x0C, 0x0C, 0x0C);
+            var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0);
+            var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x88, 0x88, 0x88);
+            var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
+            var softBtn = light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x25, 0x25, 0x25);
+            var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xCC, 0xCC, 0xCC);
+
+            if (RulesRoot != null)
+            {
+                RulesRoot.Background = Brush(card);
+                RulesRoot.BorderBrush = Brush(border);
+            }
+            if (RulesHeader != null)
+                RulesHeader.Background = Brush(header);
+            if (RulesFooter != null)
+            {
+                RulesFooter.Background = Brush(footer);
+                RulesFooter.BorderBrush = Brush(border);
+            }
+            if (RulesListPanel != null)
+            {
+                RulesListPanel.Background = Brush(panel);
+                RulesListPanel.BorderBrush = Brush(border);
+            }
+            if (TxtTitle != null)
+                TxtTitle.Foreground = Brush(text);
+            if (TxtHint != null)
+                TxtHint.Foreground = Brush(muted);
+            if (TxtCustom != null)
+            {
+                TxtCustom.Background = Brush(input);
+                TxtCustom.Foreground = Brush(text);
+                TxtCustom.BorderBrush = Brush(border);
+            }
+
+            SetBrush("ChipBg", chip);
+            SetBrush("ChipBorder", chipBorder);
+            SetBrush("ChipBoxBg", boxBg);
+            SetBrush("ChipFg", light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xD0, 0xD0, 0xD0));
+            SetBrush("ChipCheckedBg", light ? Color.FromRgb(0xFF, 0xF5, 0xEC) : Color.FromRgb(0x2A, 0x21, 0x18));
+            SetBrush("ChipCheckedBorder", Color.FromRgb(0xFF, 0x6B, 0x00));
+            // Tik kutusu: turuncu çerçeve + siyah iç + beyaz ✓ (açık/koyu aynı)
+            SetBrush("ChipCheckedBoxBg", Color.FromRgb(0x1A, 0x1A, 0x1A));
+            SetBrush("ChipCheckedFg", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xFF, 0xB0, 0x6B));
+            SetBrush("ChipCheckMark", Colors.White);
+            SetBrush("SoftBtnBg", softBtn);
+            SetBrush("SoftBtnFg", softFg);
+        }
+
+        private void SetBrush(string key, Color c)
+        {
+            var b = Brush(c);
+            if (Resources.Contains(key)) Resources[key] = b;
+            else Resources.Add(key, b);
+        }
+
+        private static SolidColorBrush Brush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
         }
 
         private void BtnResetDefaults_Click(object sender, RoutedEventArgs e)
@@ -78,15 +153,7 @@ namespace DownloadMuck
 
             _options.Clear();
             foreach (var ext in Presets)
-            {
-                _options.Add(new ExtOption
-                {
-                    Ext = ext,
-                    IsChecked = defaults.Contains(ext)
-                });
-            }
-            foreach (var extra in defaults.Where(d => !Presets.Contains(d, StringComparer.OrdinalIgnoreCase)))
-                _options.Add(new ExtOption { Ext = extra, IsChecked = true });
+                _options.Add(new ExtOption { Ext = ext, IsChecked = defaults.Contains(ext) });
         }
 
         private void BtnAddCustom_Click(object sender, RoutedEventArgs e)
@@ -95,24 +162,20 @@ namespace DownloadMuck
             if (string.IsNullOrWhiteSpace(raw)) return;
             if (_options.Any(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase)))
             {
-                var hit = _options.First(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase));
-                hit.IsChecked = true;
+                var existing = _options.First(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase));
+                existing.IsChecked = true;
             }
             else
-            {
                 _options.Add(new ExtOption { Ext = raw, IsChecked = true });
-            }
             TxtCustom.Clear();
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             if (_category == null) return;
-            var set = _options.Where(o => o.IsChecked)
-                .Select(o => o.Ext.Trim().TrimStart('.').ToLowerInvariant())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
+            _category.Extensions = _options.Where(o => o.IsChecked)
+                .Select(o => o.Ext)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            _category.Extensions = set.Count > 0 ? set : null;
             Saved?.Invoke();
         }
 

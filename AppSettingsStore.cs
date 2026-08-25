@@ -34,6 +34,11 @@ namespace DownloadMuck
         public int MaxConcurrentDownloads { get; set; }
         public int HttpMaxChannels { get; set; }
         public bool NotifyOnComplete { get; set; } = true;
+        public bool NotifyOnTrayMinimize { get; set; }
+        public bool AutoCreateCategoryFolders { get; set; } = true;
+        public string Theme { get; set; } = "Dark";
+        public bool CopyFilesHotkeyEnabled { get; set; } = true;
+        public string CopyFilesHotkey { get; set; } = "Ctrl+C";
         public int TorrentListenPort { get; set; } = 6881;
         public bool TorrentDht { get; set; } = true;
         public bool TorrentLocalPeers { get; set; } = true;

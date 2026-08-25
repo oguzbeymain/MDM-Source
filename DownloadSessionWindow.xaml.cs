@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -21,6 +22,161 @@ namespace DownloadMuck
         public string SessionUrl => _url;
         public bool HasStarted => _started;
 
+        public void ApplyThemeSurface(bool light)
+        {
+            var card = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1B, 0x1B, 0x1B);
+            var title = light ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x22, 0x22, 0x22);
+            var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xF0, 0xF0, 0xF0);
+            var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x88, 0x88, 0x88);
+            var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
+            var soft = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2D, 0x2D, 0x2D);
+            // Açık: hover siyah; koyu: daha koyu siyah
+            var softHover = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0x12, 0x12, 0x12);
+            var softHoverFg = light ? Colors.White : Color.FromRgb(0xF0, 0xF0, 0xF0);
+            var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xEE, 0xEE, 0xEE);
+            var track = light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x2A, 0x2A, 0x2A);
+
+            if (SessionChrome != null)
+            {
+                SessionChrome.Background = Brush(card);
+                SessionChrome.BorderBrush = Brush(border);
+            }
+            if (SessionTitleBar != null)
+                SessionTitleBar.Background = Brush(title);
+
+            TxtTitleFile.Foreground = Brush(text);
+            TxtFileName.Foreground = Brush(light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xEE, 0xEE, 0xEE));
+            TxtFileType.Foreground = Brush(muted);
+            TxtSize.Foreground = Brush(light ? Color.FromRgb(0x22, 0x22, 0x22) : Color.FromRgb(0xDD, 0xDD, 0xDD));
+            TxtSpeed.Foreground = Brush(light ? Color.FromRgb(0x22, 0x22, 0x22) : Color.FromRgb(0xDD, 0xDD, 0xDD));
+            TxtStatus.Foreground = Brush(muted);
+            TxtPercent.Foreground = Brush(muted);
+
+            TxtUrl.Background = Brush(input);
+            TxtUrl.Foreground = Brush(light ? Color.FromRgb(0x44, 0x44, 0x44) : Color.FromRgb(0x99, 0x99, 0x99));
+            TxtUrl.BorderBrush = Brush(border);
+
+            // Pasif klasör: koyu #1A1A1A yerine temaya uygun gri (beyazda yazı kaybolmasın)
+            bool folderPassive = !TxtFolder.IsEnabled;
+            TxtFolder.Background = Brush(folderPassive
+                ? (light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x22, 0x22, 0x22))
+                : input);
+            TxtFolder.Foreground = Brush(folderPassive
+                ? (light ? Color.FromRgb(0x55, 0x55, 0x55) : Color.FromRgb(0x99, 0x99, 0x99))
+                : text);
+            TxtFolder.BorderBrush = Brush(border);
+            BarProgress.Background = Brush(track);
+
+            foreach (var tb in FindNamedLabels())
+                tb.Foreground = Brush(muted);
+
+            foreach (var btn in new[] { BtnBrowse, BtnPause })
+            {
+                if (btn == null) continue;
+                btn.ClearValue(Control.ForegroundProperty);
+            }
+
+            RemapSoftButtonTemplates(soft, softHover, softFg, softHoverFg, light);
+
+            TxtUrl.ContextMenu = BuildEditMenu(light);
+            TxtFolder.ContextMenu = BuildEditMenu(light);
+        }
+
+        private IEnumerable<TextBlock> FindNamedLabels()
+        {
+            // "Adres", "Kayıt klasörü", "Boyut", "Hız" etiketleri
+            if (SessionChrome == null) yield break;
+            foreach (var tb in EnumerateTextBlocks(SessionChrome))
+            {
+                string t = tb.Text ?? "";
+                if (t is "Adres" or "Kayıt klasörü" or "Boyut" or "Hız")
+                    yield return tb;
+            }
+        }
+
+        private static IEnumerable<TextBlock> EnumerateTextBlocks(DependencyObject root)
+        {
+            // Logical tree — Loaded öncesi VisualTree boş olabilir
+            foreach (object child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject d) continue;
+                if (child is TextBlock tb) yield return tb;
+                foreach (var nested in EnumerateTextBlocks(d))
+                    yield return nested;
+            }
+        }
+
+        private void RemapSoftButtonTemplates(Color soft, Color softHover, Color softFg, Color softHoverFg, bool light)
+        {
+            void StyleSoft(Button? btn, bool danger)
+            {
+                if (btn == null) return;
+                var bg = danger
+                    ? (light ? Color.FromRgb(0xFF, 0xEB, 0xEE) : Color.FromRgb(0x3A, 0x1C, 0x1C))
+                    : soft;
+                var hover = danger
+                    ? (light ? Color.FromRgb(0xFF, 0xCD, 0xD2) : Color.FromRgb(0x5A, 0x28, 0x28))
+                    : softHover;
+                var fg = danger
+                    ? (light ? Color.FromRgb(0xC6, 0x28, 0x28) : Color.FromRgb(0xFF, 0x6B, 0x6B))
+                    : softFg;
+                var hoverFg = danger ? fg : softHoverFg;
+
+                btn.ClearValue(Control.ForegroundProperty);
+                btn.ClearValue(FrameworkElement.StyleProperty);
+                var style = new Style(typeof(Button));
+                style.Setters.Add(new Setter(Control.ForegroundProperty, Brush(fg)));
+                btn.Style = style;
+
+                var template = new ControlTemplate(typeof(Button));
+                var factory = new FrameworkElementFactory(typeof(Border));
+                factory.Name = "bd";
+                factory.SetValue(Border.BackgroundProperty, Brush(bg));
+                factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+                var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+                cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+                cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+                cp.SetValue(TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+                factory.AppendChild(cp);
+                template.VisualTree = factory;
+
+                var over = new MultiTrigger();
+                over.Conditions.Add(new Condition(UIElement.IsMouseOverProperty, true));
+                over.Conditions.Add(new Condition(UIElement.IsEnabledProperty, true));
+                over.Setters.Add(new Setter(Border.BackgroundProperty, Brush(hover), "bd"));
+                over.Setters.Add(new Setter(Control.ForegroundProperty, Brush(hoverFg)));
+                template.Triggers.Add(over);
+
+                var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+                disabled.Setters.Add(new Setter(UIElement.OpacityProperty, 0.55));
+                template.Triggers.Add(disabled);
+
+                btn.Template = template;
+            }
+
+            StyleSoft(BtnBrowse, false);
+            StyleSoft(BtnPause, false);
+            StyleSoft(BtnCancelDl, true);
+            if (PanelDone != null)
+            {
+                foreach (var child in PanelDone.Children)
+                {
+                    if (child is not Button b) continue;
+                    string c = b.Content?.ToString() ?? "";
+                    if (c is "Klasör" or "Kapat") StyleSoft(b, false);
+                    else if (c == "Sil") StyleSoft(b, true);
+                }
+            }
+        }
+
+        private static SolidColorBrush Brush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+
         public DownloadSessionWindow(MainWindow host, string url, string fileName, string defaultFolder, string sizeLabel)
         {
             InitializeComponent();
@@ -28,6 +184,8 @@ namespace DownloadMuck
             _url = url;
             _fileName = fileName;
             ApplyMeta(fileName, url, defaultFolder, sizeLabel);
+            ThemeService.ApplyToWindow(this);
+            Background = Brushes.Transparent;
         }
 
         /// <summary>Mevcut indirmeye bagli oturum (cift tik).</summary>
@@ -43,6 +201,8 @@ namespace DownloadMuck
 
             string folder = Path.GetDirectoryName(item.FilePath) ?? "";
             ApplyMeta(item.FileName, url, folder, item.FileSize);
+            ThemeService.ApplyToWindow(this);
+            Background = Brushes.Transparent;
 
             TxtFolder.IsEnabled = false;
             BtnBrowse.IsEnabled = false;
@@ -173,22 +333,29 @@ namespace DownloadMuck
             _engine = engine;
         }
 
-        private static ContextMenu BuildEditMenu()
+        private ContextMenu BuildEditMenu(bool? lightOverride = null)
         {
+            bool light = lightOverride ?? ThemeService.IsLight;
+            var menuBg = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1C, 0x1C, 0x1C);
+            var menuBorder = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            var menuText = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0);
+            var hoverBg = light ? Color.FromRgb(0xF0, 0xF0, 0xF2) : Color.FromRgb(0x2A, 0x21, 0x18);
+            var sep = light ? Color.FromRgb(0xE4, 0xE4, 0xE8) : Color.FromRgb(0x33, 0x33, 0x33);
+
             var menu = new ContextMenu
             {
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 FocusVisualStyle = null
             };
-            menu.Template = CreateMenuTemplate();
-            var itemTemplate = CreateMenuItemTemplate();
+            menu.Template = CreateMenuTemplate(menuBg, menuBorder);
+            var itemTemplate = CreateMenuItemTemplate(hoverBg);
 
             MenuItem Make(string header, RoutedUICommand cmd) => new()
             {
                 Header = header,
                 Command = cmd,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                Foreground = Brush(menuText),
                 Background = Brushes.Transparent,
                 FontSize = 11,
                 Padding = new Thickness(10, 5, 10, 5),
@@ -202,19 +369,19 @@ namespace DownloadMuck
             menu.Items.Add(Make("Yapıştır", ApplicationCommands.Paste));
             var sepFactory = new FrameworkElementFactory(typeof(Border));
             sepFactory.SetValue(Border.HeightProperty, 1.0);
-            sepFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            sepFactory.SetValue(Border.BackgroundProperty, Brush(sep));
             sepFactory.SetValue(Border.MarginProperty, new Thickness(6, 3, 6, 3));
             menu.Items.Add(new Separator { Template = new ControlTemplate(typeof(Separator)) { VisualTree = sepFactory } });
             menu.Items.Add(Make("Tümünü seç", ApplicationCommands.SelectAll));
             return menu;
         }
 
-        private static ControlTemplate CreateMenuTemplate()
+        private static ControlTemplate CreateMenuTemplate(Color bg, Color border)
         {
             var template = new ControlTemplate(typeof(ContextMenu));
             var factory = new FrameworkElementFactory(typeof(Border));
-            factory.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1C)));
-            factory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            factory.SetValue(Border.BackgroundProperty, Brush(bg));
+            factory.SetValue(Border.BorderBrushProperty, Brush(border));
             factory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
             factory.SetValue(Border.PaddingProperty, new Thickness(4));
@@ -225,7 +392,7 @@ namespace DownloadMuck
             return template;
         }
 
-        private static ControlTemplate CreateMenuItemTemplate()
+        private static ControlTemplate CreateMenuItemTemplate(Color hoverBg)
         {
             var template = new ControlTemplate(typeof(MenuItem));
             var bd = new FrameworkElementFactory(typeof(Border));
@@ -241,13 +408,13 @@ namespace DownloadMuck
             template.VisualTree = bd;
 
             var hi = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
-            hi.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "itemBorder"));
-            hi.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            hi.Setters.Add(new Setter(Border.BackgroundProperty, Brush(hoverBg), "itemBorder"));
+            hi.Setters.Add(new Setter(MenuItem.ForegroundProperty, Brush(Color.FromRgb(0xFF, 0x6B, 0x00))));
             template.Triggers.Add(hi);
 
             var kf = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
-            kf.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2A, 0x21, 0x18)), "itemBorder"));
-            kf.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            kf.Setters.Add(new Setter(Border.BackgroundProperty, Brush(hoverBg), "itemBorder"));
+            kf.Setters.Add(new Setter(MenuItem.ForegroundProperty, Brush(Color.FromRgb(0xFF, 0x6B, 0x00))));
             template.Triggers.Add(kf);
 
             return template;
@@ -452,6 +619,18 @@ namespace DownloadMuck
             TxtFolder.IsHitTestVisible = !passive;
             BtnBrowse.IsHitTestVisible = !passive;
             TxtFolder.Cursor = passive ? Cursors.Arrow : Cursors.IBeam;
+
+            bool light = ThemeService.IsLight;
+            var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
+            var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xF0, 0xF0, 0xF0);
+            var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            TxtFolder.Background = Brush(passive
+                ? (light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x22, 0x22, 0x22))
+                : input);
+            TxtFolder.Foreground = Brush(passive
+                ? (light ? Color.FromRgb(0x55, 0x55, 0x55) : Color.FromRgb(0x99, 0x99, 0x99))
+                : text);
+            TxtFolder.BorderBrush = Brush(border);
         }
 
         private void BtnPause_Click(object sender, RoutedEventArgs e)
@@ -470,10 +649,10 @@ namespace DownloadMuck
             bool ok = ConfirmDialog.Show(
                 this,
                 "İptal",
-                "İndirmeyi iptal etmek ister misin?",
+                "İndirmeyi iptal etmek istediğine emin misin?",
                 string.IsNullOrWhiteSpace(fileLabel) ? "" : $"“{fileLabel}” durdurulur.",
-                confirmText: "Evet",
-                cancelText: "Hayır",
+                confirmText: "Evet, iptal et",
+                cancelText: "Vazgeç",
                 danger: true,
                 forceFloating: true);
 

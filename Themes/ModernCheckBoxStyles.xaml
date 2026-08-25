@@ -1,0 +1,96 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="CheckBoxIdleBgBrush" Color="#2A2A2A"/>
+    <SolidColorBrush x:Key="CheckBoxIdleBorderBrush" Color="#555555"/>
+    <SolidColorBrush x:Key="CheckBoxAccentBrush" Color="#FF6B00"/>
+    <SolidColorBrush x:Key="CheckBoxAccentHoverBrush" Color="#FF8533"/>
+    <SolidColorBrush x:Key="CheckBoxCheckedFillBrush" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="CheckBoxMarkBrush" Color="#FFFFFF"/>
+
+    <!-- Önceki sürüm: turuncu çerçeve, #1A1A1A iç, beyaz ✓ -->
+    <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Border x:Name="box" Width="16" Height="16" CornerRadius="4"
+                            Background="{DynamicResource CheckBoxIdleBgBrush}"
+                            BorderBrush="{DynamicResource CheckBoxIdleBorderBrush}"
+                            BorderThickness="1.5"
+                            SnapsToDevicePixels="True">
+                        <TextBlock x:Name="mark" Text="✓" FontSize="10" FontWeight="Bold"
+                                   Foreground="{DynamicResource CheckBoxMarkBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="Collapsed" Margin="0,-1,0,0"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource CheckBoxCheckedFillBrush}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentBrush}"/>
+                            <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentHoverBrush}"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsChecked" Value="True"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentHoverBrush}"/>
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource CheckBoxCheckedFillBrush}"/>
+                        </MultiTrigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ModernLabeledCheckBoxStyle" TargetType="CheckBox" BasedOn="{StaticResource ModernCheckBoxStyle}">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal">
+                        <Border x:Name="box" Width="18" Height="18" CornerRadius="5"
+                                Background="{DynamicResource CheckBoxIdleBgBrush}"
+                                BorderBrush="{DynamicResource CheckBoxIdleBorderBrush}"
+                                BorderThickness="1.5"
+                                VerticalAlignment="Center" SnapsToDevicePixels="True">
+                            <TextBlock x:Name="mark" Text="✓" FontSize="11" FontWeight="Bold"
+                                       Foreground="{DynamicResource CheckBoxMarkBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="Collapsed" Margin="0,-1,0,0"/>
+                        </Border>
+                        <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource CheckBoxCheckedFillBrush}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentBrush}"/>
+                            <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentHoverBrush}"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsChecked" Value="True"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBoxAccentHoverBrush}"/>
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource CheckBoxCheckedFillBrush}"/>
+                        </MultiTrigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

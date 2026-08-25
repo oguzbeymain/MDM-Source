@@ -67,12 +67,15 @@ namespace DownloadMuck
 
                 var main = new MainWindow();
                 MainWindow = main;
+                // Koyu tema native; açık tema + global tik fırçaları
+                ThemeService.ApplyGlobalCheckBoxBrushes(Resources, ThemeService.IsLight);
+                if (ThemeService.IsLight)
+                    ThemeService.ApplyFromSettings();
                 main.Show();
+                // Windows açılışında tarayıcı eski indirmeleri tekrar yollayabilir
+                main.BeginBackgroundCaptureQuiet(45);
                 if (startBackground)
-                {
-                    main.BeginBackgroundCaptureQuiet();
                     main.HideToTray();
-                }
 
                 SingleInstance.StartListening(
                     onShowRequested: () => main.Dispatcher.BeginInvoke(() => main.ShowFromTray()),

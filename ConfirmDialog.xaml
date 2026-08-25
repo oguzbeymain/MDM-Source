@@ -8,10 +8,7 @@
         FontFamily="Segoe UI" ShowInTaskbar="False"
         SizeToContent="Height">
 
-    <Border Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
-        </Border.Effect>
+    <Border x:Name="DlgChrome" Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Margin="0">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="32"/>
@@ -19,7 +16,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0" Background="#222222" CornerRadius="12,12,0,0" ClipToBounds="True"
+            <Border x:Name="DlgTitleBar" Grid.Row="0" Background="#222222" CornerRadius="12,12,0,0" ClipToBounds="True"
                     MouseLeftButtonDown="TitleBar_MouseDown">
                 <Grid>
                     <TextBlock x:Name="TxtTitle" Text="Onay" VerticalAlignment="Center" Margin="14,0,0,0"
@@ -51,7 +48,7 @@
                            FontSize="11" Foreground="#888888" LineHeight="16"/>
             </StackPanel>
 
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+            <StackPanel x:Name="DlgFooter" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
                         Margin="16,8,16,14">
                 <Button Content="Vazgeç" x:Name="BtnCancelLabel" Width="78" Height="28" Margin="0,0,8,0"
                         Cursor="Hand" Click="BtnCancel_Click" FontSize="12"

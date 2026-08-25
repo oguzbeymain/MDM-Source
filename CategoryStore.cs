@@ -229,6 +229,8 @@ namespace DownloadMuck
             {
                 if (string.IsNullOrWhiteSpace(downloadsRoot)) return;
                 Directory.CreateDirectory(downloadsRoot);
+                if (!AppSettingsStore.Load().AutoCreateCategoryFolders)
+                    return;
                 foreach (var root in roots)
                 {
                     if (root.Id == "All") continue;
@@ -264,7 +266,10 @@ namespace DownloadMuck
 
             if (!string.IsNullOrWhiteSpace(cat.CustomFolderPath))
             {
-                try { Directory.CreateDirectory(cat.CustomFolderPath!); } catch { /* ignore */ }
+                if (AppSettingsStore.Load().AutoCreateCategoryFolders)
+                {
+                    try { Directory.CreateDirectory(cat.CustomFolderPath!); } catch { /* ignore */ }
+                }
                 return cat.CustomFolderPath!;
             }
 
@@ -276,6 +281,10 @@ namespace DownloadMuck
                 chain.Insert(0, cur);
                 cur = string.IsNullOrEmpty(cur.ParentId) ? null : FindById(roots, cur.ParentId!);
             }
+
+            bool create = AppSettingsStore.Load().AutoCreateCategoryFolders;
+            if (!create)
+                return downloadsRoot;
 
             string path = downloadsRoot;
             foreach (var node in chain)

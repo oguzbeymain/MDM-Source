@@ -4,27 +4,61 @@
              FontFamily="Segoe UI">
 
     <UserControl.Resources>
+        <SolidColorBrush x:Key="NavTextBrush" Color="#AAAAAA"/>
+        <SolidColorBrush x:Key="NavHoverBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="NavHoverBgBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="NavSelectedBgBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="CheckBoxIdleBgBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="CheckBoxIdleBorderBrush" Color="#555555"/>
+        <SolidColorBrush x:Key="SoftBtnBgBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="SoftBtnHoverBgBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="SoftBtnFgBrush" Color="#DDDDDD"/>
+        <SolidColorBrush x:Key="SettingsPanelBgBrush" Color="#141414"/>
+        <SolidColorBrush x:Key="SettingsPanelBorderBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="SettingsMutedBrush" Color="#777777"/>
+        <SolidColorBrush x:Key="SettingsLabelBrush" Color="#BBBBBB"/>
+        <SolidColorBrush x:Key="SettingsBodyBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="SettingsInputBgBrush" Color="#252525"/>
+        <SolidColorBrush x:Key="SettingsInputBorderBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="BrowserCardBgBrush" Color="#141414"/>
+        <SolidColorBrush x:Key="BrowserCardBorderBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="BrowserCardTextBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="BrowserCardMutedBrush" Color="#888888"/>
+        <SolidColorBrush x:Key="BrowserPillIdleBgBrush" Color="#2A2A2A"/>
+        <SolidColorBrush x:Key="BrowserPillIdleFgBrush" Color="#999999"/>
+        <SolidColorBrush x:Key="BrowserPillActiveBgBrush" Color="#1B3A24"/>
+        <SolidColorBrush x:Key="BrowserPillActiveFgBrush" Color="#8BC34A"/>
+
         <Style x:Key="SettingsNavButton" TargetType="RadioButton">
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="#AAAAAA"/>
+            <Setter Property="Foreground" Value="{DynamicResource NavTextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="12,9">
-                            <ContentPresenter VerticalAlignment="Center"/>
+                            <ContentPresenter x:Name="cp" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#222018"/>
-                                <Setter Property="Foreground" Value="#E0E0E0"/>
+                                <Setter Property="Foreground" Value="{DynamicResource NavHoverBrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource NavHoverBgBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#2A2118"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource NavSelectedBgBrush}"/>
                                 <Setter Property="Foreground" Value="#FF6B00"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                    <Condition Property="IsChecked" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource NavHoverBrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource NavSelectedBgBrush}"/>
+                            </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -34,23 +68,29 @@
         <Style x:Key="SoftButton" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="#DDD"/>
+            <Setter Property="Foreground" Value="{DynamicResource SoftBtnFgBrush}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="#252525" CornerRadius="8" Padding="12,0">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="bd" Background="{DynamicResource SoftBtnBgBrush}" CornerRadius="8" Padding="12,0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#333"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SoftBtnHoverBgBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Ortak modern tik (App.xaml) -->
+        <Style TargetType="CheckBox" BasedOn="{StaticResource ModernLabeledCheckBoxStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SettingsBodyBrush}"/>
         </Style>
     </UserControl.Resources>
 
@@ -59,12 +99,12 @@
           TextOptions.TextFormattingMode="Display"
           TextOptions.TextRenderingMode="ClearType">
         <!-- Gölge ayrı katman — içerik bulanıklaşmasın -->
-        <Border Background="#1B1B1B" CornerRadius="14" Margin="4" Opacity="0.01">
+        <Border x:Name="SettingsShadow" Background="#1B1B1B" CornerRadius="14" Margin="4" Opacity="0.01">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.45" Color="#000"/>
             </Border.Effect>
         </Border>
-        <Border Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="14"
+        <Border x:Name="SettingsCard" Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="14"
                 UseLayoutRounding="True" SnapsToDevicePixels="True">
         <Grid>
             <Grid.RowDefinitions>
@@ -73,9 +113,9 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Border Background="#1F1F1F" CornerRadius="14,14,0,0">
+            <Border x:Name="SettingsHeader" Background="#1F1F1F" CornerRadius="14,14,0,0">
                 <Grid>
-                    <TextBlock Text="Ayarlar" Margin="16,0,0,0" VerticalAlignment="Center"
+                    <TextBlock x:Name="SettingsTitle" Text="Ayarlar" Margin="16,0,0,0" VerticalAlignment="Center"
                                FontWeight="SemiBold" FontSize="13" Foreground="#E0E0E0"
                                TextOptions.TextFormattingMode="Display"/>
                     <Button HorizontalAlignment="Right" Width="40" Height="38" Content="✕" Click="BtnCancel_Click"
@@ -103,14 +143,25 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Background="#161616" BorderBrush="#262626" BorderThickness="0,0,1,0">
+                <Border x:Name="SettingsNavPane" Background="#161616" BorderBrush="#262626" BorderThickness="0,0,1,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  Padding="0" CanContentScroll="False">
                     <StackPanel Margin="10,12,10,12">
-                        <TextBlock Text="BÖLÜMLER" Foreground="#666" FontSize="10" FontWeight="SemiBold"
+                        <TextBlock x:Name="SettingsNavLabel" Text="BÖLÜMLER" Foreground="#666" FontSize="10" FontWeight="SemiBold"
                                    Margin="8,0,0,10"/>
                         <RadioButton x:Name="NavGeneral" Content="Genel" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}" IsChecked="True"
                                      Checked="Nav_Checked"/>
+                        <RadioButton x:Name="NavNotifications" Content="Bildirimler" GroupName="SettingsNav"
+                                     Style="{StaticResource SettingsNavButton}"
+                                     Checked="Nav_Checked"/>
+                        <RadioButton x:Name="NavTheme" Content="Tema" GroupName="SettingsNav"
+                                     Style="{StaticResource SettingsNavButton}"
+                                     Checked="Nav_Checked"/>
                         <RadioButton x:Name="NavExtension" Content="Tarayıcı eklentisi" GroupName="SettingsNav"
+                                     Style="{StaticResource SettingsNavButton}"
+                                     Checked="Nav_Checked"/>
+                        <RadioButton x:Name="NavKeyboard" Content="Klavye ayarları" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
                         <RadioButton x:Name="NavAdvanced" Content="Gelişmiş" GroupName="SettingsNav"
@@ -123,12 +174,13 @@
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
                     </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
                 <Grid Grid.Column="1" Margin="16,14,16,8">
                     <ScrollViewer x:Name="PanelGeneral" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="Varsayılan indirme klasörü" Foreground="#BBB" FontSize="11" Margin="0,0,0,8"/>
+                            <TextBlock Text="Varsayılan indirme klasörü" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
                             <Grid Margin="0,0,0,16">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -138,24 +190,128 @@
                                          Background="#252525" Foreground="#E0E0E0" BorderBrush="#333" BorderThickness="1"
                                          Padding="10,0"/>
                                 <Button Grid.Column="1" Content="Gözat" Width="68" Height="32" Margin="8,0,0,0"
-                                        Click="BtnBrowse_Click" Style="{StaticResource SoftButton}" Foreground="#E0E0E0"/>
+                                        Click="BtnBrowse_Click" Style="{StaticResource SoftButton}"/>
                             </Grid>
 
-                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="12">
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
                                 <StackPanel>
                                     <CheckBox x:Name="ChkAutoStart" Content="Windows ile birlikte başlat"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,10" Cursor="Hand"
+                                              Margin="0,0,0,10"
                                               Checked="ChkAutoStart_Changed" Unchecked="ChkAutoStart_Changed"/>
                                     <CheckBox x:Name="ChkAutoStartMin" Content="Başlangıçta arka planda aç"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,10" Cursor="Hand"/>
-                                    <CheckBox x:Name="ChkDeleteFromDisk" Content="Silince dosyayı bilgisayardan da kaldır"
-                                              Foreground="#E0E0E0" FontSize="12" Cursor="Hand"/>
+                                              Margin="0,0,0,10"/>
+                                    <CheckBox x:Name="ChkDeleteFromDisk" Content="Silince dosyayı bilgisayardan da kaldır"/>
                                     <TextBlock Text="Kapalıysa öğe yalnızca listeden çıkar; indirme klasöründeki dosya durur."
-                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="22,6,0,0"/>
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="28,6,0,0"/>
                                     <CheckBox x:Name="ChkAutoExtract" Content="Arşivi indirdikten sonra aç"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,12,0,0" Cursor="Hand"/>
+                                              Margin="0,12,0,0"/>
                                     <CheckBox x:Name="ChkDeleteArchive" Content="Açtıktan sonra arşiv dosyasını sil"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,10,0,0" Cursor="Hand"/>
+                                              Margin="0,10,0,0"/>
+                                    <CheckBox x:Name="ChkAutoFolders" Content="Kategori klasörlerini otomatik oluştur"
+                                              Margin="0,12,0,0"/>
+                                    <TextBlock Text="Kapalıysa indirmeler doğrudan varsayılan klasöre yazılır; Videolar/Arşivler alt klasörü açılmaz."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="28,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="PanelNotifications" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Bildirimler" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
+                                <StackPanel>
+                                    <CheckBox x:Name="ChkNotifyTray" Content="Alta alınca tepsi bildirimi göster"
+                                              Margin="0,0,0,10"/>
+                                    <TextBlock Text="Uygulama gizli simgelere indiğinde «arka planda çalışıyor» balonu."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,12"/>
+                                    <CheckBox x:Name="ChkNotifyDone" Content="Dosya indince bildirim göster"/>
+                                    <TextBlock Text="İndirme bitince Windows tepsi bildirimi (Windows sesi). Kapalıysa bildirim ve ses gelmez."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="28,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="PanelTheme" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Tema" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="Görünüm" Foreground="#999" FontSize="11" Margin="0,0,0,12"/>
+                                    <UniformGrid Columns="2" Margin="0,0,0,8">
+                                        <RadioButton x:Name="ThemeDark" GroupName="ThemePick" Margin="0,0,8,0"
+                                                     Cursor="Hand" Checked="ThemePick_Changed">
+                                            <RadioButton.Template>
+                                                <ControlTemplate TargetType="RadioButton">
+                                                    <Border x:Name="bd" Background="#121212" BorderBrush="#444" BorderThickness="2"
+                                                            CornerRadius="12" Padding="14" Cursor="Hand">
+                                                        <StackPanel>
+                                                            <Border Width="40" Height="28" CornerRadius="6" Background="#0E0E0E"
+                                                                    BorderBrush="#FF6B00" BorderThickness="2" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                                            <TextBlock x:Name="t1" Text="Koyu" Foreground="#F0F0F0" FontSize="13" FontWeight="SemiBold"/>
+                                                            <TextBlock x:Name="t2" Text="Siyah mod" Foreground="#999" FontSize="11" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="#FF6B00"/>
+                                                            <Setter TargetName="bd" Property="BorderThickness" Value="2.5"/>
+                                                            <Setter TargetName="bd" Property="Background" Value="#1A1510"/>
+                                                        </Trigger>
+                                                        <MultiTrigger>
+                                                            <MultiTrigger.Conditions>
+                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                <Condition Property="IsChecked" Value="False"/>
+                                                            </MultiTrigger.Conditions>
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="#FF8533"/>
+                                                        </MultiTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </RadioButton.Template>
+                                        </RadioButton>
+                                        <RadioButton x:Name="ThemeLight" GroupName="ThemePick" Margin="8,0,0,0"
+                                                     Cursor="Hand" Checked="ThemePick_Changed">
+                                            <RadioButton.Template>
+                                                <ControlTemplate TargetType="RadioButton">
+                                                    <!-- Kart her zaman açık; seçili turuncu çerçeve kalın — beyazda görünsün -->
+                                                    <Border x:Name="bd" Background="#F4F4F6" BorderBrush="#C8C8CE" BorderThickness="2"
+                                                            CornerRadius="12" Padding="14" Cursor="Hand">
+                                                        <StackPanel>
+                                                            <Border Width="40" Height="28" CornerRadius="6" Background="#FFFFFF"
+                                                                    BorderBrush="#DDD" BorderThickness="1" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                                            <TextBlock Text="Açık" Foreground="#1A1A1A" FontSize="13" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="Beyaz mod" Foreground="#666" FontSize="11" Margin="0,4,0,0"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="#FF6B00"/>
+                                                            <Setter TargetName="bd" Property="BorderThickness" Value="2.5"/>
+                                                            <Setter TargetName="bd" Property="Background" Value="#FFF5EC"/>
+                                                        </Trigger>
+                                                        <MultiTrigger>
+                                                            <MultiTrigger.Conditions>
+                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                <Condition Property="IsChecked" Value="False"/>
+                                                            </MultiTrigger.Conditions>
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="#FF8533"/>
+                                                        </MultiTrigger>
+                                                        <MultiTrigger>
+                                                            <MultiTrigger.Conditions>
+                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                <Condition Property="IsChecked" Value="True"/>
+                                                            </MultiTrigger.Conditions>
+                                                            <Setter TargetName="bd" Property="BorderBrush" Value="#FF8533"/>
+                                                            <Setter TargetName="bd" Property="BorderThickness" Value="2.5"/>
+                                                        </MultiTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </RadioButton.Template>
+                                        </RadioButton>
+                                    </UniformGrid>
+                                    <TextBlock Text="Seçince anında önizlenir. Kalıcı olması için Kaydet’e basın; İptal eski temaya döner."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -163,26 +319,65 @@
 
                     <ScrollViewer x:Name="PanelExtension" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBlock Text="Eklenti klasörü" Foreground="#BBB" FontSize="11" Margin="0,0,0,8"/>
-                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,14">
-                                <TextBlock x:Name="TxtExtPath" Foreground="#999" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock Text="Eklenti denetimi" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <StackPanel x:Name="BrowserStatusList" Margin="0,0,0,14"/>
+                            <Button x:Name="BtnRefreshBrowsers" Content="Yenile" HorizontalAlignment="Left" Margin="0,0,0,16"
+                                    Click="BtnRefreshBrowsers_Click" Style="{StaticResource SoftButton}"/>
+                            <TextBlock Text="Eklenti klasörü" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,14">
+                                <TextBlock x:Name="TxtExtPath" Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                             </Border>
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="Kalıntı temizle" Margin="0,0,8,0"
-                                        Click="BtnReinstallExt_Click" Style="{StaticResource SoftButton}" Foreground="#E0E0E0"/>
+                                        Click="BtnReinstallExt_Click" Style="{StaticResource SoftButton}"/>
                                 <Button Content="Klasörü aç"
                                         Click="BtnOpenExtFolder_Click" Style="{StaticResource SoftButton}"/>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 
+                    <ScrollViewer x:Name="PanelKeyboard" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Uygulama içi kısayollar" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                                <StackPanel>
+                                    <CheckBox x:Name="ChkCopyHotkey" Content="Seçili dosyaları panoya kopyala"
+                                              Margin="0,0,0,8"
+                                              Checked="ChkCopyHotkey_Changed" Unchecked="ChkCopyHotkey_Changed"/>
+                                    <TextBlock Text="Etkinse seçili tamamlanmış indirmeleri panoya dosya olarak koyar; Explorer veya başka uygulamaya Ctrl+V ile yapıştırabilirsiniz."
+                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,14"/>
+                                    <TextBlock Text="Kısayol" Foreground="#999" FontSize="11" Margin="0,0,0,8"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="HotkeyBox" Background="{DynamicResource SettingsInputBgBrush}" BorderBrush="{DynamicResource SettingsInputBorderBrush}" BorderThickness="1"
+                                                CornerRadius="8" Height="34" Padding="12,0" VerticalAlignment="Center"
+                                                Focusable="True" PreviewKeyDown="HotkeyBox_PreviewKeyDown"
+                                                MouseLeftButtonDown="HotkeyBox_MouseLeftButtonDown">
+                                            <TextBlock x:Name="TxtHotkey" Text="Ctrl+C" Foreground="{DynamicResource SettingsBodyBrush}"
+                                                       FontSize="12" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                        </Border>
+                                        <Button Grid.Column="1" Content="Değiştir" Width="78" Height="34" Margin="8,0,0,0"
+                                                Click="BtnCaptureHotkey_Click" Style="{StaticResource SoftButton}"/>
+                                        <Button Grid.Column="2" Content="Sıfırla" Width="68" Height="34" Margin="8,0,0,0"
+                                                Click="BtnResetHotkey_Click" Style="{StaticResource SoftButton}"/>
+                                    </Grid>
+                                    <TextBlock x:Name="TxtHotkeyHint" Text="Kısayolu değiştirmek için «Değiştir»e basın, sonra tuşlara basın."
+                                               Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
                     <ScrollViewer x:Name="PanelAdvanced" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBlock Text="Zamanlayıcı ve uzak denetim" Foreground="#BBB" FontSize="11" Margin="0,0,0,8"/>
-                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="12">
+                            <TextBlock Text="Zamanlayıcı ve uzak denetim" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12">
                                 <StackPanel>
-                                    <CheckBox x:Name="ChkSchedule" Content="Yalnızca bu saatler arasında indir"
-                                              Foreground="#E0E0E0" FontSize="12" Cursor="Hand"/>
+                                    <CheckBox x:Name="ChkSchedule" Content="Yalnızca bu saatler arasında indir"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                         <TextBlock Text="Başlangıç saati" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBox x:Name="TxtSchedStart" Width="40" Height="28" Text="0"
@@ -200,17 +395,15 @@
                                              Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
                                              VerticalContentAlignment="Center" Padding="6,0"/>
                                     <CheckBox x:Name="ChkRemoteLan" Content="REST API’yi LAN’dan dinle (token gerekir)"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,14,0,8" Cursor="Hand"/>
+                                              Margin="0,14,0,8"/>
                                     <TextBlock Text="API token" Foreground="#999" FontSize="11" Margin="0,0,0,6"/>
                                     <TextBox x:Name="TxtApiToken" Height="28"
                                              Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
                                              VerticalContentAlignment="Center" Padding="8,0"/>
                                     <CheckBox x:Name="ChkHttp3" Content="HTTPS’te HTTP/3 dene (olmazsa 2 / 1.1)"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,14,0,8" Cursor="Hand"/>
+                                              Margin="0,14,0,8"/>
                                     <CheckBox x:Name="ChkAutoReconnect" Content="Ağ düşünce otomatik devam et"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
-                                    <CheckBox x:Name="ChkNotifyDone" Content="İndirme bitince ses çal"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                         <TextBlock Text="Hız limiti KB/s" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBox x:Name="TxtSpeedLimit" Width="56" Height="28" Text="0"
@@ -239,13 +432,13 @@
                                                  VerticalContentAlignment="Center" Padding="6,0"/>
                                     </StackPanel>
                                     <CheckBox x:Name="ChkTorrentDht" Content="DHT (trackersız magnet)"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <CheckBox x:Name="ChkTorrentLpd" Content="Yerel eş keşfi"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <CheckBox x:Name="ChkTorrentUpnp" Content="UPnP / NAT-PMP port yönlendirme"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <CheckBox x:Name="ChkTorrentSeq" Content="Sıralı indir (önce ilk dosya)"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                         <TextBlock Text="Paylaşım oranı" Foreground="#999" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBox x:Name="TxtTorrentSeed" Width="48" Height="28" Text="0"
@@ -254,7 +447,7 @@
                                         <TextBlock Text="(0 = indince dur)" Foreground="#777" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                     </StackPanel>
                                     <CheckBox x:Name="ChkSkipDup" Content="Aynı URL’yi ikinci kez ekleme"
-                                              Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8" Cursor="Hand"/>
+                                              Margin="0,0,0,8"/>
                                     <TextBlock Text="Atlanan uzantılar (virgülle)" Foreground="#999" FontSize="11" Margin="0,4,0,6"/>
                                     <TextBox x:Name="TxtSkipExt" Height="28"
                                              Background="#252525" Foreground="#E0E0E0" BorderBrush="#333"
@@ -307,12 +500,12 @@
 
                     <ScrollViewer x:Name="PanelUpdate" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBlock Text="Uygulama güncellemesi" Foreground="#BBB" FontSize="11" Margin="0,0,0,8"/>
-                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,14">
+                            <TextBlock Text="Uygulama güncellemesi" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,0,0,14">
                                 <StackPanel>
-                                    <TextBlock x:Name="TxtUpdateCurrent" Foreground="#E0E0E0" FontSize="12" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="TxtUpdateCurrent" Foreground="{DynamicResource SettingsBodyBrush}" FontSize="12" Margin="0,0,0,8"/>
                                     <TextBlock Text="Güncelleme yalnızca buradan denetlenir; uygulama her açılışta otomatik aramaz."
-                                               Foreground="#777" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"/>
                                     <Button x:Name="BtnCheckUpdate" Content="Güncellemeyi denetle" HorizontalAlignment="Left"
                                             MinWidth="160" Height="32" Click="BtnCheckUpdate_Click"
                                             Cursor="Hand" Foreground="White" BorderThickness="0" FontSize="12" FontWeight="SemiBold">
@@ -333,7 +526,7 @@
                                             </ControlTemplate>
                                         </Button.Template>
                                     </Button>
-                                    <TextBlock x:Name="TxtUpdateStatus" Foreground="#999" FontSize="12" TextWrapping="Wrap"
+                                    <TextBlock x:Name="TxtUpdateStatus" Foreground="{DynamicResource SettingsMutedBrush}" FontSize="12" TextWrapping="Wrap"
                                                Margin="0,10,0,0" MinHeight="18"/>
                                 </StackPanel>
                             </Border>
@@ -342,18 +535,18 @@
 
                     <ScrollViewer x:Name="PanelAbout" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <StackPanel>
-                            <Border Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1" CornerRadius="10" Padding="16">
+                            <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                         <Image Source="pack://application:,,,/Assets/mdm-logo.png" Width="36" Height="36"
                                                Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                                         <StackPanel VerticalAlignment="Center">
-                                            <TextBlock Text="MuckDownloadManager" Foreground="#E0E0E0" FontSize="15" FontWeight="SemiBold"/>
-                                            <TextBlock x:Name="TxtVersion" Foreground="#999" FontSize="11" Margin="0,3,0,0"/>
+                                            <TextBlock Text="MuckDownloadManager" Foreground="{DynamicResource SettingsBodyBrush}" FontSize="15" FontWeight="SemiBold"/>
+                                            <TextBlock x:Name="TxtVersion" Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" Margin="0,3,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
                                     <TextBlock Text="İndirmeleri kategorilere ayıran, tarayıcı yakalamalı masaüstü yöneticisi."
-                                               Foreground="#777" FontSize="11" TextWrapping="Wrap"/>
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -361,7 +554,7 @@
                 </Grid>
             </Grid>
 
-            <Border Grid.Row="2" Background="#1A1A1A" BorderBrush="#262626" BorderThickness="0,1,0,0"
+            <Border x:Name="SettingsFooter" Grid.Row="2" Background="#1A1A1A" BorderBrush="#262626" BorderThickness="0,1,0,0"
                     CornerRadius="0,0,14,14" Padding="16,12">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="İptal" Width="84" Height="32" Margin="0,0,8,0" Click="BtnCancel_Click"

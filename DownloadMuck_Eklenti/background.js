@@ -6,8 +6,8 @@ const CANDIDATE_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
 const recentHandoffs = new Map(); // url -> timestamp
 const HANDOFF_DEBOUNCE_MS = 900;
 const PROBE_TIMEOUT_MS = 900;
-const STARTUP_GUARD_MS = 15000;
-const MAX_FRESH_AGE_MS = 8000;
+const STARTUP_GUARD_MS = 45000;
+const MAX_FRESH_AGE_MS = 12000;
 
 let startupGuardUntil = 0;
 
@@ -129,12 +129,66 @@ disableBrowserDownloadUi();
 
 chrome.runtime.onInstalled.addListener(() => {
   disableBrowserDownloadUi();
+  startPresencePing();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   startupGuardUntil = Date.now() + STARTUP_GUARD_MS;
   disableBrowserDownloadUi();
+  startPresencePing();
 });
+
+async function detectBrowser() {
+  try {
+    const ua = navigator.userAgent || "";
+    if (/Edg\//.test(ua)) return "edge";
+    if (navigator.brave && typeof navigator.brave.isBrave === "function") {
+      try { if (await navigator.brave.isBrave()) return "brave"; } catch (_) { /* ignore */ }
+    }
+    if (/Brave/i.test(ua)) return "brave";
+  } catch (_) { /* ignore */ }
+  return "chrome";
+}
+
+async function pingDesktop() {
+  const preferred = await getPreferredPort();
+  const browser = await detectBrowser();
+  const endpoints = buildEndpoints(preferred).filter(e => e.url.includes("127.0.0.1"));
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 800);
+      const base = endpoint.url.replace(/\/?$/, "");
+      const response = await fetch(`${base}/ext/ping?browser=${encodeURIComponent(browser)}`, {
+        method: "GET",
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (response.ok) {
+        await savePreferredPort(endpoint.port);
+        return true;
+      }
+    } catch (_) { /* sonraki */ }
+  }
+  return false;
+}
+
+function startPresencePing() {
+  pingDesktop();
+  try {
+    // MV3: alarms en az ~1 dk; service worker uyurken setInterval çalışmaz
+    chrome.alarms.create("mdm-presence", { periodInMinutes: 1 });
+  } catch (_) { /* ignore */ }
+}
+
+try {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm && alarm.name === "mdm-presence") pingDesktop();
+  });
+} catch (_) { /* ignore */ }
+
+// SW uyanınca hemen ping
+startPresencePing();
 
 function isSessionRestoreReplay(downloadItem) {
   const now = Date.now();

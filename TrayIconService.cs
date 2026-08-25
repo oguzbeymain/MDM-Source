@@ -70,17 +70,32 @@ namespace DownloadMuck
         public void ShowHiddenTipOnce()
         {
             if (_balloonShown || !_added || _disposed) return;
+            if (!AppSettingsStore.Load().NotifyOnTrayMinimize)
+                return;
             _balloonShown = true;
+            ShowBalloon("MDM arka planda",
+                "Gizli simgelerde çalışmaya devam ediyor. Çıkmak için tepsi menüsünden «Çıkış».");
+        }
+
+        public void ShowBalloon(string title, string message)
+        {
+            if (!_added || _disposed) return;
             try
             {
                 _data.uFlags = NifMessage | NifIcon | NifTip | NifInfo;
-                _data.szInfoTitle = "MDM arka planda";
-                _data.szInfo = "Gizli simgelerde çalışmaya devam ediyor. Çıkmak için tepsi menüsünden «Çıkış».";
+                _data.szInfoTitle = Truncate(title, 63);
+                _data.szInfo = Truncate(message, 255);
                 _data.dwInfoFlags = 1;
                 Shell_NotifyIcon(NimModify, ref _data);
                 _data.uFlags = NifMessage | NifIcon | NifTip;
             }
             catch { /* ignore */ }
+        }
+
+        private static string Truncate(string text, int max)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return text.Length <= max ? text : text[..max];
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

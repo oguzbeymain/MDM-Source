@@ -1,19 +1,26 @@
-using System.Runtime.InteropServices;
+using System.Windows;
 
 namespace DownloadMuck
 {
     public static class CompleteNotify
     {
-        private const uint MbIconAsterisk = 0x00000040;
-
-        [DllImport("user32.dll")]
-        private static extern bool MessageBeep(uint type);
-
-        public static void PlayIfEnabled()
+        /// <summary>
+        /// Yalnızca Windows tepsi bildirimi (kendi sesi). Uygulama MessageBeep kullanmaz — çift ses olmaz.
+        /// </summary>
+        public static void PlayIfEnabled(string? fileName = null)
         {
             if (!AppSettingsStore.Load().NotifyOnComplete)
                 return;
-            try { MessageBeep(MbIconAsterisk); }
+
+            string name = string.IsNullOrWhiteSpace(fileName) ? "Dosya" : fileName.Trim();
+            try
+            {
+                Application.Current?.Dispatcher.BeginInvoke(() =>
+                {
+                    if (Application.Current?.MainWindow is MainWindow mw)
+                        mw.ShowDownloadCompleteTip(name);
+                });
+            }
             catch { /* ignore */ }
         }
     }
