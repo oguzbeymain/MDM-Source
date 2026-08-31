@@ -7,10 +7,7 @@
         Background="Transparent" ResizeMode="NoResize"
         FontFamily="Segoe UI" ShowInTaskbar="False"
         FocusManager.FocusedElement="{Binding ElementName=TxtName}">
-    <Border Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="12" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.5" Color="#000"/>
-        </Border.Effect>
+    <Border x:Name="DlgChrome" Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="12" Margin="0">
         <Grid Margin="16,14,16,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -21,9 +18,9 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <TextBlock Text="Yeni kategori" FontWeight="SemiBold" FontSize="14" Foreground="#EEE" Margin="0,0,0,12"/>
+            <TextBlock x:Name="TxtTitle" Text="Yeni kategori" FontWeight="SemiBold" FontSize="14" Foreground="#EEE" Margin="0,0,0,12"/>
 
-            <TextBlock Grid.Row="1" Text="Kategori adı" Foreground="#999" FontSize="12" Margin="0,0,0,6"/>
+            <TextBlock x:Name="LblName" Grid.Row="1" Text="Kategori adı" Foreground="#999" FontSize="12" Margin="0,0,0,6"/>
             <TextBox x:Name="TxtName" Grid.Row="2" Height="34" FontSize="13"
                      Background="#252525" Foreground="White" BorderBrush="#333" BorderThickness="1"
                      VerticalContentAlignment="Center" Padding="8,0" KeyDown="Txt_KeyDown">
@@ -37,7 +34,7 @@
                 </TextBox.Template>
             </TextBox>
 
-            <TextBlock Grid.Row="3" Text="Kayıt klasörü" Foreground="#999" FontSize="12" Margin="0,12,0,6"/>
+            <TextBlock x:Name="LblFolder" Grid.Row="3" Text="Kayıt klasörü" Foreground="#999" FontSize="12" Margin="0,12,0,6"/>
             <Grid Grid.Row="4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -55,7 +52,7 @@
                         </ControlTemplate>
                     </TextBox.Template>
                 </TextBox>
-                <Button Grid.Column="1" Content="Gözat" Width="72" Height="34" Click="BtnBrowse_Click"
+                <Button x:Name="BtnBrowse" Grid.Column="1" Content="Gözat" Width="72" Height="34" Click="BtnBrowse_Click"
                         Cursor="Hand" Foreground="#EEE" BorderThickness="0" FontSize="12">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
@@ -73,7 +70,7 @@
             </Grid>
 
             <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button Content="İptal" MinWidth="84" Height="32" Margin="0,0,8,0" Padding="14,0"
+                <Button x:Name="BtnCancel" Content="İptal" MinWidth="84" Height="32" Margin="0,0,8,0" Padding="14,0"
                         Click="BtnCancel_Click" Cursor="Hand" Foreground="#CCC" BorderThickness="0" FontSize="12">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
@@ -88,7 +85,7 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                <Button Content="Oluştur" MinWidth="84" Height="32" Padding="14,0" Click="BtnOk_Click"
+                <Button x:Name="BtnOk" Content="Oluştur" MinWidth="84" Height="32" Padding="14,0" Click="BtnOk_Click"
                         Cursor="Hand" Foreground="White" BorderThickness="0" FontSize="12" FontWeight="SemiBold"
                         IsDefault="True">
                     <Button.Template>

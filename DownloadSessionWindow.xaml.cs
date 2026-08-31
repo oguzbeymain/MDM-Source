@@ -1,11 +1,14 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using Ellipse = System.Windows.Shapes.Ellipse;
+using Shape = System.Windows.Shapes.Shape;
 
 namespace DownloadMuck
 {
@@ -17,6 +20,7 @@ namespace DownloadMuck
         private DownloadItem? _item;
         private ITransferBackend? _engine;
         private bool _started;
+        private TorrentFetchMode _torrentMode = TorrentFetchMode.FullContent;
 
         public DownloadItem? BoundItem => _item;
         public string SessionUrl => _url;
@@ -31,8 +35,8 @@ namespace DownloadMuck
             var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x88, 0x88, 0x88);
             var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
             var soft = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2D, 0x2D, 0x2D);
-            // Açık: hover siyah; koyu: daha koyu siyah
-            var softHover = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0x12, 0x12, 0x12);
+            // Açık: hover koyu; koyu: gri vurgu (siyah değil)
+            var softHover = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0x40, 0x40, 0x40);
             var softHoverFg = light ? Colors.White : Color.FromRgb(0xF0, 0xF0, 0xF0);
             var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xEE, 0xEE, 0xEE);
             var track = light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x2A, 0x2A, 0x2A);
@@ -81,6 +85,111 @@ namespace DownloadMuck
 
             TxtUrl.ContextMenu = BuildEditMenu(light);
             TxtFolder.ContextMenu = BuildEditMenu(light);
+
+            if (TorrentPickCard != null)
+            {
+                TorrentPickCard.Background = Brush(light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1E, 0x1E, 0x1E));
+                TorrentPickCard.BorderBrush = Brush(border);
+            }
+            if (TorrentPickOverlay != null)
+                TorrentPickOverlay.Background = Brush(light
+                    ? Color.FromArgb(0x88, 0, 0, 0)
+                    : Color.FromArgb(0xB0, 0x1A, 0x1A, 0x1A));
+            if (TxtTorrentPickTitle != null) TxtTorrentPickTitle.Foreground = Brush(text);
+            if (TxtTorrentPickHint != null) TxtTorrentPickHint.Foreground = Brush(muted);
+            if (RbTorrentFile != null) RbTorrentFile.Foreground = Brush(text);
+            if (RbFullContent != null) RbFullContent.Foreground = Brush(text);
+            if (TxtRbTorrentFile != null) TxtRbTorrentFile.Foreground = Brush(text);
+            if (TxtRbFullContent != null) TxtRbFullContent.Foreground = Brush(text);
+            if (TxtTorrentFileSize != null) TxtTorrentFileSize.Foreground = Brush(muted);
+            if (TxtFullContentSize != null) TxtFullContentSize.Foreground = Brush(muted);
+            StyleTorrentPickButton(BtnTorrentPickOk, light);
+            StyleTorrentPickRadios(light);
+        }
+
+        private void StyleTorrentPickRadios(bool light)
+        {
+            var bullet = light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x66, 0x66, 0x66);
+            var bulletChecked = Color.FromRgb(0xFF, 0x6B, 0x00);
+            var hoverBg = light ? Color.FromRgb(0xF0, 0xF0, 0xF2) : Color.FromRgb(0x2A, 0x2A, 0x2A);
+
+            void Apply(RadioButton? rb)
+            {
+                if (rb == null) return;
+                rb.FocusVisualStyle = null;
+                rb.Template = CreateTorrentPickRadioTemplate(bullet, bulletChecked, hoverBg);
+            }
+
+            Apply(RbTorrentFile);
+            Apply(RbFullContent);
+        }
+
+        private static ControlTemplate CreateTorrentPickRadioTemplate(Color bullet, Color bulletChecked, Color hoverBg)
+        {
+            var template = new ControlTemplate(typeof(RadioButton));
+            var root = new FrameworkElementFactory(typeof(Border));
+            root.Name = "root";
+            root.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            root.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            root.SetValue(Border.PaddingProperty, new Thickness(4, 2, 4, 2));
+
+            var stack = new FrameworkElementFactory(typeof(StackPanel));
+            stack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+
+            var ellipse = new FrameworkElementFactory(typeof(Ellipse));
+            ellipse.Name = "bullet";
+            ellipse.SetValue(FrameworkElement.WidthProperty, 14.0);
+            ellipse.SetValue(FrameworkElement.HeightProperty, 14.0);
+            ellipse.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
+            ellipse.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Top);
+            ellipse.SetValue(Shape.StrokeProperty, new SolidColorBrush(bullet));
+            ellipse.SetValue(Shape.StrokeThicknessProperty, 1.5);
+            ellipse.SetValue(Shape.FillProperty, Brushes.Transparent);
+            stack.AppendChild(ellipse);
+
+            var content = new FrameworkElementFactory(typeof(ContentPresenter));
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stack.AppendChild(content);
+
+            root.AppendChild(stack);
+            template.VisualTree = root;
+
+            var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hover.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(hoverBg), "root"));
+            template.Triggers.Add(hover);
+
+            var selected = new Trigger { Property = RadioButton.IsCheckedProperty, Value = true };
+            selected.Setters.Add(new Setter(Shape.StrokeProperty, new SolidColorBrush(bulletChecked), "bullet"));
+            selected.Setters.Add(new Setter(Shape.FillProperty, new SolidColorBrush(bulletChecked), "bullet"));
+            template.Triggers.Add(selected);
+
+            return template;
+        }
+
+        private void StyleTorrentPickButton(Button? btn, bool light)
+        {
+            if (btn == null) return;
+            var accent = Color.FromRgb(0xFF, 0x6B, 0x00);
+            var accentHover = Color.FromRgb(0xFF, 0x85, 0x33);
+            var fg = Colors.White;
+            btn.ClearValue(Control.ForegroundProperty);
+            btn.Foreground = Brush(fg);
+            var template = new ControlTemplate(typeof(Button));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.Name = "bd";
+            factory.SetValue(Border.BackgroundProperty, Brush(accent));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            factory.SetValue(Border.PaddingProperty, new Thickness(14, 0, 14, 0));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            cp.SetValue(TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+            factory.AppendChild(cp);
+            template.VisualTree = factory;
+            var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            over.Setters.Add(new Setter(Border.BackgroundProperty, Brush(accentHover), "bd"));
+            template.Triggers.Add(over);
+            btn.Template = template;
         }
 
         private IEnumerable<TextBlock> FindNamedLabels()
@@ -186,6 +295,94 @@ namespace DownloadMuck
             ApplyMeta(fileName, url, defaultFolder, sizeLabel);
             ThemeService.ApplyToWindow(this);
             Background = Brushes.Transparent;
+            Loaded += SessionWindow_Loaded;
+        }
+
+        private async void SessionWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (_started || _item != null) return;
+            var kind = UrlClassifier.Classify(_url);
+            if (kind is not TransferKind.Torrent and not TransferKind.Magnet)
+                return;
+
+            BtnStart.IsEnabled = false;
+            TorrentPickOverlay.Visibility = Visibility.Visible;
+
+            if (kind == TransferKind.Magnet)
+                RbTorrentFile.Visibility = Visibility.Collapsed;
+
+            await LoadTorrentPickerSizesAsync(kind);
+        }
+
+        private async Task LoadTorrentPickerSizesAsync(TransferKind kind)
+        {
+            try
+            {
+                long torrentFileBytes = 0;
+                if (kind == TransferKind.Torrent)
+                {
+                    torrentFileBytes = await TryGetTorrentFileByteSizeAsync(_url);
+                    TxtTorrentFileSize.Text = torrentFileBytes > 0
+                        ? MainWindow.FormatFileSize(torrentFileBytes)
+                        : "Boyut bilinmiyor";
+                }
+
+                var peek = await TorrentPeek.TryDescribeAsync(_url);
+                long fullBytes = peek?.Size ?? 0;
+                TxtFullContentSize.Text = fullBytes > 0
+                    ? MainWindow.FormatFileSize(fullBytes)
+                    : kind == TransferKind.Magnet
+                        ? "Bağlantı kurulduktan sonra netleşir"
+                        : "Boyut bilinmiyor";
+
+                if (kind == TransferKind.Torrent && torrentFileBytes <= 0 && fullBytes > 0)
+                    RbFullContent.IsChecked = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"TorrentPick sizes: {ex.Message}");
+                TxtTorrentFileSize.Text = "Boyut bilinmiyor";
+                TxtFullContentSize.Text = "Boyut bilinmiyor";
+            }
+        }
+
+        private static async Task<long> TryGetTorrentFileByteSizeAsync(string url)
+        {
+            if (UrlClassifier.Classify(url) != TransferKind.Torrent)
+                return 0;
+            try
+            {
+                using var client = TransferHttp.CreateClient();
+                using var req = new HttpRequestMessage(HttpMethod.Head, url);
+                using var resp = await client.SendAsync(req).ConfigureAwait(true);
+                if (resp.Content.Headers.ContentLength is > 0 and long len)
+                    return len;
+            }
+            catch { /* HEAD desteklenmeyebilir */ }
+
+            return 0;
+        }
+
+        private void BtnTorrentPickOk_Click(object sender, RoutedEventArgs e)
+        {
+            _torrentMode = RbTorrentFile.IsChecked == true && RbTorrentFile.Visibility == Visibility.Visible
+                ? TorrentFetchMode.TorrentFileOnly
+                : TorrentFetchMode.FullContent;
+
+            if (_torrentMode == TorrentFetchMode.TorrentFileOnly)
+            {
+                string name = _fileName;
+                if (!name.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase))
+                    name = Path.GetFileNameWithoutExtension(name) + ".torrent";
+                ApplyResolvedMeta(name, TxtTorrentFileSize.Text);
+            }
+            else if (!string.IsNullOrWhiteSpace(TxtFullContentSize.Text))
+            {
+                ApplyResolvedMeta(_fileName, TxtFullContentSize.Text);
+            }
+
+            TorrentPickOverlay.Visibility = Visibility.Collapsed;
+            BtnStart.IsEnabled = true;
         }
 
         /// <summary>Mevcut indirmeye bagli oturum (cift tik).</summary>
@@ -316,10 +513,19 @@ namespace DownloadMuck
                 ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
             }
 
-            if (!string.IsNullOrWhiteSpace(sizeLabel) && sizeLabel != "-")
-                TxtSize.Text = sizeLabel;
+            if (IsKnownSizeLabel(sizeLabel))
+                TxtSize.Text = sizeLabel!;
 
             UpdateTitleBar();
+        }
+
+        private static bool IsKnownSizeLabel(string? sizeLabel)
+        {
+            if (string.IsNullOrWhiteSpace(sizeLabel) || sizeLabel is "-" or "—")
+                return false;
+            if (sizeLabel.Contains("netleşir", StringComparison.OrdinalIgnoreCase))
+                return false;
+            return !string.Equals(sizeLabel, "Boyut bilinmiyor", StringComparison.OrdinalIgnoreCase);
         }
 
         public void ApplyDefaultFolderIfIdle(string folder)
@@ -485,7 +691,8 @@ namespace DownloadMuck
             TxtStatus.Visibility = Visibility.Visible;
             TxtStatus.Text = "İndiriliyor...";
 
-            var run = _host.BeginDownloadFromSession(_url, _fileName, folder);
+            var run = _host.BeginDownloadFromSession(_url, _fileName, folder,
+                torrentMode: _torrentMode, sizeHint: TxtSize.Text);
             if (run == null)
             {
                 _started = false;
@@ -648,11 +855,11 @@ namespace DownloadMuck
             string fileLabel = !string.IsNullOrWhiteSpace(_item?.FileName) ? _item!.FileName : _fileName;
             bool ok = ConfirmDialog.Show(
                 this,
-                "İptal",
-                "İndirmeyi iptal etmek istediğine emin misin?",
-                string.IsNullOrWhiteSpace(fileLabel) ? "" : $"“{fileLabel}” durdurulur.",
-                confirmText: "Evet, iptal et",
-                cancelText: "Vazgeç",
+                DialogTexts.CancelDownloadTitle,
+                DialogTexts.CancelDownloadMessage,
+                DialogTexts.CancelDownloadDetail(fileLabel),
+                confirmText: DialogTexts.CancelDownloadConfirm,
+                cancelText: DialogTexts.CancelDownloadDismiss,
                 danger: true,
                 forceFloating: true);
 
@@ -729,13 +936,11 @@ namespace DownloadMuck
             bool fromDisk = _host.DeletesFilesFromDisk;
             bool ok = ConfirmDialog.Show(
                 this,
-                "Silme onayı",
-                $"“{_item.FileName}” silinsin mi?",
-                fromDisk
-                    ? "Bu indirme listeden ve diskten kaldırılır."
-                    : "Yalnızca listeden çıkarılır; dosya diskte kalır.",
-                confirmText: "Sil",
-                cancelText: "Vazgeç",
+                DialogTexts.DeleteTitle,
+                DialogTexts.DeleteMessage(_item.FileName),
+                DialogTexts.DeleteDetail(fromDisk, 1),
+                confirmText: DialogTexts.DeleteConfirm,
+                cancelText: DialogTexts.DismissAlt,
                 danger: true,
                 forceFloating: true);
 

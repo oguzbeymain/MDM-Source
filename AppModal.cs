@@ -12,7 +12,7 @@ namespace DownloadMuck
     internal static class AppModal
     {
         public static bool Confirm(string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "Vazgeç", bool danger = false)
+            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false)
         {
             if (Application.Current?.MainWindow is MainWindow mw)
                 return mw.ShowModalConfirm(title, message, detail, confirmText, cancelText, danger);

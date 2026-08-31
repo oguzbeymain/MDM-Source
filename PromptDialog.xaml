@@ -7,10 +7,7 @@
         Background="Transparent" ResizeMode="NoResize"
         FontFamily="Segoe UI" ShowInTaskbar="False"
         FocusManager.FocusedElement="{Binding ElementName=TxtInput}">
-    <Border Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="12" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.5" Color="#000"/>
-        </Border.Effect>
+    <Border Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="12" Margin="0">
         <Grid Margin="16,14,16,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>

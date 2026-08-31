@@ -17,7 +17,7 @@ namespace DownloadMuck
                 try
                 {
                     InfoDialog.Show(MainWindow, "Beklenmeyen hata",
-                        "İşlem sırasında bir hata oluştu. Uygulama açık kalmaya devam ediyor.",
+                        "Beklenmeyen bir sorun oluştu. Uygulama açık kalmaya devam ediyor.",
                         args.Exception.Message);
                 }
                 catch { /* dialog da fail olursa yut */ }
@@ -84,8 +84,8 @@ namespace DownloadMuck
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"Uygulama baslatilamadi:\n{ex.Message}",
-                    "MDM",
+                    $"Uygulama başlatılamadı:\n{ex.Message}",
+                    "DownloadMuck",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 SingleInstance.Release();

@@ -384,5 +384,48 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <!-- Torrent indirme türü seçimi -->
+        <Border x:Name="TorrentPickOverlay" Visibility="Collapsed" Background="#CC000000"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Border x:Name="TorrentPickCard" Background="#1E1E1E" BorderBrush="#3A3A3A" BorderThickness="1"
+                    CornerRadius="12" Padding="16" MaxWidth="360" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="TxtTorrentPickTitle" Text="İndirme türü" FontWeight="SemiBold" FontSize="14"
+                               Foreground="#F0F0F0" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtTorrentPickHint" Text="Bu torrent için ne indirmek istiyorsunuz?"
+                               FontSize="12" Foreground="#999" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <RadioButton x:Name="RbTorrentFile" GroupName="TorrentMode" Margin="0,0,0,4"
+                                 Foreground="#E0E0E0" FontSize="12" Cursor="Hand">
+                        <StackPanel>
+                            <TextBlock x:Name="TxtRbTorrentFile" Text="Torrent dosyası (.torrent)" FontSize="12"/>
+                            <TextBlock x:Name="TxtTorrentFileSize" Text="" FontSize="11" Foreground="#888" Margin="16,2,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton x:Name="RbFullContent" GroupName="TorrentMode" IsChecked="True" Margin="0,8,0,0"
+                                 Foreground="#E0E0E0" FontSize="12" Cursor="Hand">
+                        <StackPanel>
+                            <TextBlock x:Name="TxtRbFullContent" Text="Tam içerik" FontSize="12"/>
+                            <TextBlock x:Name="TxtFullContentSize" Text="" FontSize="11" Foreground="#888" Margin="16,2,0,0"/>
+                        </StackPanel>
+                    </RadioButton>
+                    <Button x:Name="BtnTorrentPickOk" Content="Devam" MinWidth="96" Height="32" Margin="0,16,0,0"
+                            HorizontalAlignment="Right" Cursor="Hand" Foreground="White" BorderThickness="0"
+                            FontWeight="SemiBold" FontSize="12" Click="BtnTorrentPickOk_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="bd" Background="#FF6B00" CornerRadius="8" Padding="14,0">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#FF8533"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </Window>

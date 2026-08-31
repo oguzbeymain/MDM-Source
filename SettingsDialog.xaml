@@ -98,12 +98,6 @@
           UseLayoutRounding="True" SnapsToDevicePixels="True"
           TextOptions.TextFormattingMode="Display"
           TextOptions.TextRenderingMode="ClearType">
-        <!-- Gölge ayrı katman — içerik bulanıklaşmasın -->
-        <Border x:Name="SettingsShadow" Background="#1B1B1B" CornerRadius="14" Margin="4" Opacity="0.01">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.45" Color="#000"/>
-            </Border.Effect>
-        </Border>
         <Border x:Name="SettingsCard" Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="14"
                 UseLayoutRounding="True" SnapsToDevicePixels="True">
         <Grid>

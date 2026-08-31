@@ -61,6 +61,21 @@
         <SolidColorBrush x:Key="RowActionSepBrush" Color="#2E2E2E"/>
         <SolidColorBrush x:Key="SearchBorderBrush" Color="#333333"/>
         <SolidColorBrush x:Key="SearchFocusBorderBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="AccentBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="HeaderLineBrush" Color="#222222"/>
+        <SolidColorBrush x:Key="HeaderHoverBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="HeaderHoverBgBrush" Color="#222222"/>
+        <SolidColorBrush x:Key="HeaderHoverForegroundBrush" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="ToolbarHoverBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="ToolbarHoverForegroundBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="ToolbarPressedForegroundBrush" Color="#FF8533"/>
+        <SolidColorBrush x:Key="TitleBarButtonIdleBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="TitleBarButtonHoverBorderBrush" Color="#00000000"/>
+        <SolidColorBrush x:Key="TitleBarButtonHoverBgBrush" Color="#28FF6B00"/>
+        <SolidColorBrush x:Key="TitleBarButtonHoverForegroundBrush" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="TitleBarButtonPressedBgBrush" Color="#40FF6B00"/>
+        <SolidColorBrush x:Key="TitleBarButtonPressedForegroundBrush" Color="#FF8533"/>
+        <SolidColorBrush x:Key="MenuSeparatorBrush" Color="#333333"/>
         <SolidColorBrush x:Key="MarqueeStrokeBrush" Color="#FF6B00"/>
         <SolidColorBrush x:Key="MarqueeFillBrush" Color="#55000000"/>
         <SolidColorBrush x:Key="DownloadingStatusBrush" Color="#E0E0E0"/>
@@ -139,6 +154,24 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.94" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#3D3D3D"/>
                             </Trigger>
@@ -182,7 +215,7 @@
             </Setter>
         </Style>
 
-        <!-- Title bar: küçült / büyült — hover turuncu (açık/koyu temada okunur) -->
+        <!-- Title bar: küçült / büyült — koyu tema (orijinal) -->
         <Style x:Key="TitleBarChromeButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#888888"/>
@@ -198,13 +231,83 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.94" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#28FF6B00"/>
-                                <Setter Property="Foreground" Value="#FF6B00"/>
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBgBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonHoverForegroundBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#40FF6B00"/>
-                                <Setter Property="Foreground" Value="#FF8533"/>
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBgBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonPressedForegroundBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Title bar: küçült / büyült — açık tema: turuncu çerçeve, simge rengi sabit -->
+        <Style x:Key="TitleBarChromeButtonStyleLight" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#888888"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="Transparent"
+                                BorderBrush="{DynamicResource TitleBarButtonIdleBorderBrush}"
+                                BorderThickness="1" Margin="3,5" CornerRadius="5" ClipToBounds="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.94" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonHoverBgBrush}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TitleBarButtonHoverBorderBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonHoverForegroundBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource TitleBarButtonPressedBgBrush}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TitleBarButtonHoverBorderBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TitleBarButtonPressedForegroundBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -228,6 +331,24 @@
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.94" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#E53935"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -441,18 +562,39 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="bd" Background="Transparent" BorderBrush="Transparent"
+                                BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bd"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bd"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.94" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource ToolbarHoverBgBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ToolbarHoverBorderBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ToolbarHoverForegroundBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="#40FF6B00"/>
-                                <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrightBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ToolbarHoverBorderBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ToolbarPressedForegroundBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#555555"/>
@@ -468,15 +610,12 @@
 
 
         <ContextMenu x:Key="CategoryPanelEmptyContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True"/>
                     </Border>
                 </ControlTemplate>
@@ -517,15 +656,12 @@
         </ContextMenu>
 
         <ContextMenu x:Key="ColumnHeaderContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True"/>
                     </Border>
                 </ControlTemplate>
@@ -560,15 +696,13 @@
         </ContextMenu>
 
         <ContextMenu x:Key="CategoryItemContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
-                     FocusVisualStyle="{x:Null}" StaysOpen="False">
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
+                     FocusVisualStyle="{x:Null}" StaysOpen="False"
+                     Opened="CategoryItemContextMenu_Opened">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True"/>
                     </Border>
                 </ControlTemplate>
@@ -673,17 +807,14 @@
             </Setter>
         </Style>
 
-        <!-- Modern TextBox sag tik — kompakt, turuncu (mavi yok) -->
+        <!-- Modern TextBox sağ tık — tema uyumlu -->
         <ContextMenu x:Key="ModernEditContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True"/>
                     </Border>
                 </ControlTemplate>
@@ -694,7 +825,7 @@
                 <SolidColorBrush x:Key="{x:Static SystemColors.MenuHighlightBrushKey}" Color="#2A2118"/>
                 <Style TargetType="MenuItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#E0E0E0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
                     <Setter Property="FontSize" Value="11"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="Height" Value="28"/>
@@ -707,22 +838,22 @@
                                         SnapsToDevicePixels="True">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Right" Text="{TemplateBinding InputGestureText}"
-                                                   Foreground="#666" FontSize="10" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                                   Foreground="{DynamicResource HeaderTextBrush}" FontSize="10" Margin="14,0,0,0" VerticalAlignment="Center"/>
                                         <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
                                                           RecognizesAccessKey="True"/>
                                     </DockPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Foreground" Value="#555"/>
+                                        <Setter Property="Foreground" Value="#999"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -736,7 +867,7 @@
             <Separator>
                 <Separator.Template>
                     <ControlTemplate TargetType="Separator">
-                        <Border Height="1" Background="#333" Margin="6,3"/>
+                        <Border Height="1" Background="{DynamicResource MenuSeparatorBrush}" Margin="6,3"/>
                     </ControlTemplate>
                 </Separator.Template>
             </Separator>
@@ -771,15 +902,12 @@
 
         <!-- Satir sag tik -->
         <ContextMenu x:Key="RowContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="#1C1C1C" BorderBrush="#333333" BorderThickness="1"
+                    <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
                     </Border>
                 </ControlTemplate>
@@ -788,7 +916,7 @@
                 <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FF6B00"/>
                 <Style TargetType="MenuItem">
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#E0E0E0"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
                     <Setter Property="FontSize" Value="11"/>
                     <Setter Property="Padding" Value="10,5"/>
                     <Setter Property="Height" Value="28"/>
@@ -811,11 +939,11 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="#2A2118"/>
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
@@ -828,7 +956,7 @@
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="Separator">
-                                <Border Height="1" Background="#333333" Margin="{TemplateBinding Margin}"/>
+                                <Border Height="1" Background="{DynamicResource MenuSeparatorBrush}" Margin="{TemplateBinding Margin}"/>
                             </ControlTemplate>
                         </Setter.Value>
                     </Setter>
@@ -853,15 +981,12 @@
 
         <!-- Bos alan sag tik -->
         <ContextMenu x:Key="EmptyContextMenu"
-                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="True"
+                     Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}" StaysOpen="False">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                             CornerRadius="8" Padding="4" SnapsToDevicePixels="True">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                        </Border.Effect>
                         <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
                     </Border>
                 </ControlTemplate>
@@ -915,9 +1040,6 @@
                                    Focusable="False" PopupAnimation="Fade">
                                 <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
                                         CornerRadius="8" Padding="4" Margin="8">
-                                    <Border.Effect>
-                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="#000000"/>
-                                    </Border.Effect>
                                     <StackPanel IsItemsHost="True"/>
                                 </Border>
                             </Popup>
@@ -954,7 +1076,7 @@
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="Separator">
-                                <Border Height="1" Background="#333333" Margin="{TemplateBinding Margin}"/>
+                                <Border Height="1" Background="{DynamicResource MenuSeparatorBrush}" Margin="{TemplateBinding Margin}"/>
                             </ControlTemplate>
                         </Setter.Value>
                     </Setter>
@@ -1011,7 +1133,7 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Content="—" Style="{StaticResource TitleBarChromeButtonStyle}" FontSize="12" Click="BtnMinimize_Click"
+                        <Button x:Name="BtnMinimize" Content="—" Style="{StaticResource TitleBarChromeButtonStyle}" FontSize="12" Click="BtnMinimize_Click"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                         <Button x:Name="BtnMaximize" Content="☐" Style="{StaticResource TitleBarChromeButtonStyle}" Click="BtnMaximize_Click"
                                 shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
@@ -1037,9 +1159,6 @@
                             CornerRadius="14"
                             AllowDrop="True" Drop="LstCategories_Drop" DragOver="LstCategories_DragOver"
                             ContextMenu="{StaticResource CategoryPanelEmptyContextMenu}">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.18" Color="#000000"/>
-                        </Border.Effect>
                         <Grid x:Name="SidebarInner" Margin="8,10,8,8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1170,9 +1289,6 @@
                                    Placement="Absolute" StaysOpen="True">
                                 <Border Background="#2A2118" BorderBrush="#FF6B00" BorderThickness="1"
                                         CornerRadius="9" Padding="12,8" Opacity="0.92">
-                                    <Border.Effect>
-                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" Color="#000"/>
-                                    </Border.Effect>
                                     <TextBlock x:Name="TxtDragGhost" Foreground="#FF6B00" FontWeight="SemiBold" FontSize="12"/>
                                 </Border>
                             </Popup>
@@ -1214,9 +1330,6 @@
                     <Border x:Name="ContentPanel" Grid.Column="2" Margin="2,8,8,8"
                             Background="#161616" BorderBrush="#2A2A2A" BorderThickness="1"
                             CornerRadius="14">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="8" ShadowDepth="0" Opacity="0.16" Color="#000000"/>
-                        </Border.Effect>
                         <Grid x:Name="ContentInner" Margin="10">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1283,7 +1396,7 @@
                                         </Style>
                                     </Border.Style>
                                     <Grid>
-                                        <TextBlock Text="Search" Foreground="#666" Margin="10,0,28,0"
+                                        <TextBlock x:Name="TxtSearchPlaceholder" Text="Search" Foreground="#666" Margin="10,0,28,0"
                                                    VerticalAlignment="Center" FontSize="12"
                                                    IsHitTestVisible="False">
                                             <TextBlock.Style>
@@ -1302,16 +1415,17 @@
                                                  VerticalContentAlignment="Center" Padding="10,0,28,0"
                                                  TextChanged="TxtSearch_TextChanged"
                                                  PreviewKeyDown="TxtSearch_PreviewKeyDown"/>
-                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                        <TextBlock x:Name="IcoSearchGlyph" Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                                    Foreground="#777" HorizontalAlignment="Right" Margin="0,0,10,0"
                                                    VerticalAlignment="Center" IsHitTestVisible="False"/>
                                     </Grid>
                                 </Border>
 
-                                <Button Grid.Column="2" Width="32" Height="30"
+                                <Button x:Name="BtnToolbarSettings" Grid.Column="2" Width="32" Height="30"
                                         Style="{StaticResource ToolbarFlatButtonStyle}" Margin="0"
                                         Click="ToolbarSettings_Click" ToolTip="Ayarlar">
-                                    <TextBlock Text="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                    <TextBlock x:Name="IcoToolbarSettings" Text="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                               Foreground="#C8C8C8"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Button>
                             </Grid>
@@ -1417,14 +1531,17 @@
                                             <Grid Background="Transparent">
                                                 <Border x:Name="headerBorder"
                                                         Background="{TemplateBinding Background}"
-                                                        BorderBrush="#222222"
-                                                        BorderThickness="0,0,0,1"
+                                                        BorderBrush="Transparent"
+                                                        BorderThickness="1"
                                                         Padding="{TemplateBinding Padding}"
                                                         CornerRadius="0">
                                                     <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                                                       SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
                                                 </Border>
+                                                <Border Height="1" VerticalAlignment="Bottom"
+                                                        Background="{DynamicResource HeaderLineBrush}"
+                                                        IsHitTestVisible="False"/>
                                                 <Thumb x:Name="PART_LeftHeaderGripper"
                                                        HorizontalAlignment="Left"
                                                        Width="0"
@@ -1442,13 +1559,14 @@
                                                 <DataTrigger Binding="{Binding Column.CanUserResize, RelativeSource={RelativeSource TemplatedParent}}" Value="False">
                                                     <Setter TargetName="PART_RightHeaderGripper" Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
-                                                <!-- Sağ üst: aksiyon kolonu (Header işareti) -->
+                                                <!-- Sağ üst: aksiyon kolonu -->
                                                 <DataTrigger Binding="{Binding Column.SortMemberPath, RelativeSource={RelativeSource TemplatedParent}}" Value="__actions">
                                                     <Setter TargetName="headerBorder" Property="CornerRadius" Value="0,12,0,0"/>
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="headerBorder" Property="Background" Value="#222222"/>
-                                                    <Setter Property="Foreground" Value="#CCCCCC"/>
+                                                    <Setter TargetName="headerBorder" Property="Background" Value="{DynamicResource HeaderHoverBgBrush}"/>
+                                                    <Setter TargetName="headerBorder" Property="BorderBrush" Value="{DynamicResource HeaderHoverBorderBrush}"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource HeaderHoverForegroundBrush}"/>
                                                 </Trigger>
                                                 <Trigger Property="SortDirection" Value="Ascending">
                                                     <Setter Property="Foreground" Value="#FF6B00"/>
@@ -1548,6 +1666,7 @@
                                         <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                   Width="17" Height="17"
                                                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                  PreviewMouseLeftButtonDown="RowCheckBox_PreviewMouseLeftButtonDown"
                                                   Style="{StaticResource DarkCheckBoxStyle}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -1781,20 +1900,39 @@
                                    RadiusY="4"/>
                     </Canvas>
 
-                    <!-- Dosya surukle — Windows native gibi: ikon + ad, kutu yok -->
+                    <!-- Dosya sürükle — çoklu seçimde yığılmış ikon + adet rozeti -->
                     <Popup x:Name="FileDragPopup" AllowsTransparency="True" IsHitTestVisible="False"
                            Placement="Absolute" StaysOpen="True">
-                        <StackPanel Orientation="Horizontal" Opacity="0.58" MaxWidth="280">
-                            <Image x:Name="ImgFileDragGhost" Width="32" Height="32" Margin="0,0,8,0"
-                                   VerticalAlignment="Center" Stretch="Uniform" Opacity="0.9"/>
-                            <TextBlock x:Name="TxtFileDragGhost" Foreground="#FFFFFF" FontSize="12"
-                                       FontWeight="Normal" VerticalAlignment="Center" Opacity="0.95"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="230">
-                                <TextBlock.Effect>
-                                    <DropShadowEffect BlurRadius="2" ShadowDepth="1" Opacity="0.4" Color="#000"/>
-                                </TextBlock.Effect>
-                            </TextBlock>
-                        </StackPanel>
+                        <Border x:Name="FileDragGhostCard" Background="#CC1A1A1A" BorderBrush="#55FFFFFF" BorderThickness="1"
+                                CornerRadius="10" Padding="10,8" Opacity="0.97" MaxWidth="300">
+                            <StackPanel Orientation="Horizontal">
+                                <Grid Width="46" Height="38" Margin="0,0,10,0">
+                                    <Image x:Name="ImgFileDragGhost3" Width="20" Height="20"
+                                           HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                           Margin="14,0,0,2" Stretch="Uniform" Opacity="0.55"/>
+                                    <Image x:Name="ImgFileDragGhost2" Width="24" Height="24"
+                                           HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                           Margin="7,0,0,5" Stretch="Uniform" Opacity="0.78"/>
+                                    <Image x:Name="ImgFileDragGhost" Width="28" Height="28"
+                                           HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                           Stretch="Uniform"/>
+                                    <Border x:Name="FileDragCountBadge" Background="#CC2E2E2E" BorderBrush="#55FFFFFF"
+                                            BorderThickness="1" CornerRadius="9"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                            Margin="0,-5,-6,0" Padding="6,2" Visibility="Collapsed">
+                                        <TextBlock x:Name="TxtFileDragCount" Foreground="#F0F0F0"
+                                                   FontSize="10" FontWeight="SemiBold"/>
+                                    </Border>
+                                </Grid>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="TxtFileDragGhost" Foreground="#F0F0F0" FontSize="12"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
+                                    <TextBlock x:Name="TxtFileDragSub" Foreground="#999999" FontSize="10"
+                                               Margin="0,2,0,0" TextTrimming="CharacterEllipsis" MaxWidth="220"
+                                               Visibility="Collapsed"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </Popup>
                                 </Grid>
                             </Border>
@@ -1817,18 +1955,12 @@
                 </Grid>
             </Border>
 
-            <!-- Uygulama içi karartmalı modal popup -->
+            <!-- Uygulama içi karartmalı modal popup (ayarlar/kurallar üstünde) -->
             <Border x:Name="ModalOverlay" Grid.Row="0" Grid.RowSpan="2"
-                    Background="#CC000000" Visibility="Collapsed" Panel.ZIndex="1000"
+                    Background="#CC000000" Visibility="Collapsed" Panel.ZIndex="1200"
                     IsHitTestVisible="True" PreviewKeyDown="ModalOverlay_PreviewKeyDown"
                     UseLayoutRounding="True" SnapsToDevicePixels="True">
                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
-                    <!-- Gölge ayrı katmanda — kart metni bulanıklaşmasın -->
-                    <Border Background="#1B1B1B" CornerRadius="12" Margin="6" Opacity="0.01">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.45" Color="#000"/>
-                        </Border.Effect>
-                    </Border>
                     <Border x:Name="ModalCard" Background="#1E1E1E" BorderBrush="#3A3A3A" BorderThickness="1"
                             CornerRadius="12" MinWidth="360" MaxWidth="460"
                             UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -1875,7 +2007,7 @@
                             </StackPanel>
                             <StackPanel x:Name="ModalButtons" Grid.Row="2" Orientation="Horizontal"
                                         HorizontalAlignment="Right" Margin="18,8,18,16">
-                                <Button x:Name="ModalCancelBtn" Content="Vazgeç" MinWidth="84" Height="32" Margin="0,0,8,0"
+                                <Button x:Name="ModalCancelBtn" Content="İptal" MinWidth="84" Height="32" Margin="0,0,8,0"
                                         Click="ModalCancel_Click" Cursor="Hand" Foreground="#EEE" BorderThickness="0" FontSize="12">
                                     <Button.Template>
                                         <ControlTemplate TargetType="Button">

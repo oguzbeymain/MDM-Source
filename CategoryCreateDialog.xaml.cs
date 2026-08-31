@@ -1,6 +1,8 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace DownloadMuck
@@ -13,6 +15,7 @@ namespace DownloadMuck
         public CategoryCreateDialog(string defaultFolder)
         {
             InitializeComponent();
+            ApplyThemeSurface(ThemeService.IsLight);
             TxtName.Text = "Yeni kategori";
             TxtName.SelectAll();
             string suggested = Path.Combine(defaultFolder, "Yeni kategori");
@@ -22,7 +25,6 @@ namespace DownloadMuck
                 string n = CategoryStore.SanitizeFolderName(CategoryName);
                 if (string.IsNullOrWhiteSpace(n)) return;
                 string parent = Path.GetDirectoryName(TxtFolder.Text) ?? defaultFolder;
-                // Sadece varsayilan oneriyi otomatik guncelle
                 if (TxtFolder.Text.StartsWith(defaultFolder, System.StringComparison.OrdinalIgnoreCase)
                     || string.IsNullOrWhiteSpace(TxtFolder.Text))
                     TxtFolder.Text = Path.Combine(defaultFolder, n);
@@ -32,6 +34,101 @@ namespace DownloadMuck
                 TxtName.Focus();
                 Keyboard.Focus(TxtName);
             };
+        }
+
+        public void ApplyThemeSurface(bool light)
+        {
+            var card = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1B, 0x1B, 0x1B);
+            var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xEE, 0xEE, 0xEE);
+            var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x99, 0x99, 0x99);
+            var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
+            var soft = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2D, 0x2D, 0x2D);
+            var softHover = Color.FromRgb(0x1A, 0x1A, 0x1A);
+            var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xCC, 0xCC, 0xCC);
+            var softHoverFg = Colors.White;
+            var browse = light ? Color.FromRgb(0xE4, 0xE4, 0xE8) : Color.FromRgb(0x2D, 0x2D, 0x2D);
+            var browseHover = light ? Color.FromRgb(0xD4, 0xD4, 0xDA) : Color.FromRgb(0x3A, 0x3A, 0x3A);
+
+            if (DlgChrome != null)
+            {
+                DlgChrome.Background = Brush(card);
+                DlgChrome.BorderBrush = Brush(border);
+            }
+
+            if (TxtTitle != null) TxtTitle.Foreground = Brush(text);
+            if (LblName != null) LblName.Foreground = Brush(muted);
+            if (LblFolder != null) LblFolder.Foreground = Brush(muted);
+
+            foreach (var box in new[] { TxtName, TxtFolder })
+            {
+                if (box == null) continue;
+                box.Background = Brush(input);
+                box.Foreground = Brush(text);
+                box.BorderBrush = Brush(border);
+            }
+
+            StyleSoft(BtnCancel, soft, softHover, softFg, softHoverFg);
+            StyleBrowse(BtnBrowse, browse, browseHover, text);
+        }
+
+        private static void StyleSoft(Button? btn, Color soft, Color softHover, Color softFg, Color softHoverFg)
+        {
+            if (btn == null) return;
+            btn.ClearValue(Control.ForegroundProperty);
+            var style = new Style(typeof(Button));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, Brush(softFg)));
+            btn.Style = style;
+
+            var template = new ControlTemplate(typeof(Button));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.Name = "bd";
+            factory.SetValue(Border.BackgroundProperty, Brush(soft));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            factory.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            factory.AppendChild(cp);
+            template.VisualTree = factory;
+
+            var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            over.Setters.Add(new Setter(Border.BackgroundProperty, Brush(softHover), "bd"));
+            over.Setters.Add(new Setter(Control.ForegroundProperty, Brush(softHoverFg)));
+            template.Triggers.Add(over);
+            btn.Template = template;
+        }
+
+        private static void StyleBrowse(Button? btn, Color normal, Color hover, Color fg)
+        {
+            if (btn == null) return;
+            btn.ClearValue(Control.ForegroundProperty);
+            var style = new Style(typeof(Button));
+            style.Setters.Add(new Setter(Control.ForegroundProperty, Brush(fg)));
+            btn.Style = style;
+
+            var template = new ControlTemplate(typeof(Button));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.Name = "bd";
+            factory.SetValue(Border.BackgroundProperty, Brush(normal));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(0, 8, 8, 0));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            factory.AppendChild(cp);
+            template.VisualTree = factory;
+
+            var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            over.Setters.Add(new Setter(Border.BackgroundProperty, Brush(hover), "bd"));
+            template.Triggers.Add(over);
+            btn.Template = template;
+        }
+
+        private static SolidColorBrush Brush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
         }
 
         private void BtnBrowse_Click(object sender, RoutedEventArgs e)
@@ -49,7 +146,6 @@ namespace DownloadMuck
             {
                 string chosen = dialog.FolderName;
                 string name = CategoryStore.SanitizeFolderName(CategoryName);
-                // Secilen klasorun kendisi hedef; altinda kategori adi olusturulacak
                 TxtFolder.Text = Path.Combine(chosen, name);
             }
         }

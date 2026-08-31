@@ -10,7 +10,7 @@ namespace DownloadMuck
         public bool Confirmed { get; private set; }
 
         public ConfirmDialog(string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "Vazgeç", bool danger = false)
+            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false)
         {
             InitializeComponent();
             TxtTitle.Text = title;
@@ -115,7 +115,7 @@ namespace DownloadMuck
         /// false: owner MainWindow ise uygulama içi karartmalı modal.
         /// </param>
         public static bool Show(Window? owner, string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "Vazgeç", bool danger = false,
+            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false,
             bool forceFloating = false)
         {
             bool useAppModal = !forceFloating && (

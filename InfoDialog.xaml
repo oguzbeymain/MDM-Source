@@ -7,10 +7,7 @@
         Background="Transparent" ResizeMode="NoResize"
         FontFamily="Segoe UI" ShowInTaskbar="False">
 
-    <Border Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
-        </Border.Effect>
+    <Border Background="#1B1B1B" BorderBrush="#333333" BorderThickness="1" CornerRadius="12" Margin="0">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="32"/>

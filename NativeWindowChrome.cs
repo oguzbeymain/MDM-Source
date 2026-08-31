@@ -15,7 +15,10 @@ namespace DownloadMuck
         private const int MonitorDefaultToNearest = 2;
         private const int DwmwaWindowCornerPreference = 33;
         private const int DwmWcpRound = 2;
+        private const int DwmWcpDoNotRound = 1;
         private const int DwmwaTransitionsForceDisabled = 3;
+        private const int DwmwaNcRenderingPolicy = 2;
+        private const int DwmncrpDisabled = 1;
 
         private const int GwlStyle = -16;
         private const int GwlExStyle = -20;
@@ -84,6 +87,31 @@ namespace DownloadMuck
         private const uint SwpNoMove = 0x0002;
         private const uint SwpNoZOrder = 0x0004;
         private const uint SwpFrameChanged = 0x0020;
+
+        public static void ApplyNoOuterShadow(Window window)
+        {
+            void Apply()
+            {
+                try
+                {
+                    var hwnd = new WindowInteropHelper(window).Handle;
+                    if (hwnd == IntPtr.Zero) return;
+                    int policy = DwmncrpDisabled;
+                    DwmSetWindowAttribute(hwnd, DwmwaNcRenderingPolicy, ref policy, sizeof(int));
+                    if (window.WindowStyle == WindowStyle.None)
+                    {
+                        int noRound = DwmWcpDoNotRound;
+                        DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref noRound, sizeof(int));
+                    }
+                }
+                catch { /* ignore */ }
+            }
+
+            if (window.IsLoaded)
+                Apply();
+            else
+                window.SourceInitialized += (_, _) => Apply();
+        }
 
         public static void ApplyDwmNativeChrome(Window window)
         {

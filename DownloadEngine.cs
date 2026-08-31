@@ -36,6 +36,9 @@ namespace DownloadMuck
         private int _lastProgressBucket = -1;
         private long _lastStateSaveTick;
         private bool _singleStreamMode;
+        private bool _sourcePrepared;
+        private string? _resolvedUrl;
+        private GoFileMetadata? _goFileMetadata;
 
         public bool IsPaused { get; private set; }
         public bool IsDownloading { get; private set; }
@@ -68,13 +71,36 @@ namespace DownloadMuck
             _statePath = savePath + ".mdmstate";
         }
 
-        private string UrlForAttempt(int attempt) => _urls[attempt % _urls.Count];
+        private string UrlForAttempt(int attempt) => _resolvedUrl ?? _urls[attempt % _urls.Count];
 
         private HttpClient CreateClient()
         {
             bool https = _url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
             bool h3 = https && AppSettingsStore.Load().PreferHttp3;
-            return TransferHttp.CreateClient(_cookieContainer, h3);
+            var client = TransferHttp.CreateClient(_cookieContainer, h3);
+            if (_goFileMetadata != null)
+            {
+                client.DefaultRequestHeaders.Remove("User-Agent");
+                client.DefaultRequestHeaders.TryAddWithoutValidation(
+                    "User-Agent", _goFileMetadata.UserAgent);
+                try
+                {
+                    _cookieContainer.SetCookies(
+                        new Uri("https://gofile.io/"),
+                        $"accountToken={_goFileMetadata.AccountToken}; domain=gofile.io; path=/");
+                    if (Uri.TryCreate(_goFileMetadata.DownloadUrl, UriKind.Absolute, out Uri? downloadUri))
+                    {
+                        _cookieContainer.SetCookies(
+                            new Uri($"{downloadUri.Scheme}://{downloadUri.Host}/"),
+                            $"accountToken={_goFileMetadata.AccountToken}; path=/");
+                    }
+                }
+                catch
+                {
+                    // The explicit Cookie header below remains the fallback.
+                }
+            }
+            return client;
         }
 
         private static string HostOf(string url)
@@ -172,6 +198,14 @@ namespace DownloadMuck
 
         private async Task RunTransferAttemptAsync(string host)
         {
+            if (!_sourcePrepared)
+            {
+                _goFileMetadata = await GoFileResolver.TryResolveAsync(_url, _cts!.Token)
+                    .ConfigureAwait(false);
+                _resolvedUrl = _goFileMetadata?.DownloadUrl;
+                _sourcePrepared = true;
+            }
+
             using HttpClient client = CreateClient();
 
             if (!_isInitialized)
@@ -188,7 +222,8 @@ namespace DownloadMuck
                     using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(_cts!.Token);
                     headerCts.CancelAfter(TimeSpan.FromSeconds(30));
 
-                    using HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, _url);
+                    using HttpRequestMessage requestMessage = new HttpRequestMessage(HttpMethod.Get, UrlForAttempt(0));
+                    AddSourceHeaders(requestMessage);
                     HttpResponseMessage response;
                     var probeWatch = System.Diagnostics.Stopwatch.StartNew();
                     try
@@ -205,8 +240,17 @@ namespace DownloadMuck
 
                     using (response)
                     {
+                        EnsureBinaryResponse(response);
                         long? contentLength = response.Content.Headers.ContentLength;
                         bool supportsRange = response.Headers.AcceptRanges.Contains("bytes");
+
+                        if (_goFileMetadata?.Size > 0 &&
+                            contentLength.HasValue &&
+                            contentLength.Value != _goFileMetadata.Size)
+                        {
+                            throw new InvalidDataException(
+                                $"GoFile boyut doğrulaması başarısız ({contentLength.Value} / {_goFileMetadata.Size} bayt).");
+                        }
 
                         if (!response.IsSuccessStatusCode || !contentLength.HasValue || contentLength.Value <= 0 || !supportsRange)
                         {
@@ -529,11 +573,17 @@ namespace DownloadMuck
                 {
                     using HttpClient chunkClient = CreateClient();
                     var chunkRequest = new HttpRequestMessage(HttpMethod.Get, UrlForAttempt(attempt));
+                    AddSourceHeaders(chunkRequest);
                     chunkRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(chunk.CurrentOffset, chunk.End);
 
                     using HttpResponseMessage chunkResponse = await chunkClient.SendAsync(chunkRequest, HttpCompletionOption.ResponseHeadersRead, token);
                     if (token.IsCancellationRequested) return;
                     chunkResponse.EnsureSuccessStatusCode();
+                    if (chunkResponse.StatusCode != HttpStatusCode.PartialContent)
+                        throw new IOException("Sunucu aralık indirmesini desteklemedi; parça kaydedilmedi.");
+                    EnsureBinaryResponse(chunkResponse);
+                    if (chunkResponse.Content.Headers.ContentRange?.From != chunk.CurrentOffset)
+                        throw new IOException("Sunucu yanlış dosya aralığı döndürdü; parça kaydedilmedi.");
 
                     using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
                     byte[] buffer = new byte[65536];
@@ -642,7 +692,8 @@ namespace DownloadMuck
                 try
                 {
                     using HttpClient client = CreateClient();
-                    var req = new HttpRequestMessage(HttpMethod.Get, _url);
+                    var req = new HttpRequestMessage(HttpMethod.Get, UrlForAttempt(0));
+                    AddSourceHeaders(req);
                     req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(existing, null);
                     using var rangeResp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token);
                     if ((int)rangeResp.StatusCode == 206)
@@ -658,6 +709,7 @@ namespace DownloadMuck
             if (!initialResponse.IsSuccessStatusCode)
                 throw new HttpRequestException(
                     $"Response status code does not indicate success: {(int)initialResponse.StatusCode} ({initialResponse.StatusCode}).");
+            EnsureBinaryResponse(initialResponse);
 
             using Stream stream = await initialResponse.Content.ReadAsStreamAsync(token);
             using FileStream fileStream = new FileStream(_savePath, FileMode.Create, FileAccess.Write);
@@ -682,6 +734,9 @@ namespace DownloadMuck
                         ReportProgressThrottled(progress);
                     }
                 }
+
+                if (totalSize.HasValue && totalDownloaded != totalSize.Value)
+                    throw new IOException($"İndirme eksik kaldı ({totalDownloaded}/{totalSize.Value} bayt).");
 
                 ProgressChanged?.Invoke(100);
                 SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
@@ -724,12 +779,37 @@ namespace DownloadMuck
                     ReportProgressThrottled((double)totalDownloaded / totalSize.Value * 100);
             }
 
+            if (totalSize.HasValue && totalDownloaded != totalSize.Value)
+                throw new IOException($"İndirme eksik kaldı ({totalDownloaded}/{totalSize.Value} bayt).");
+
             ProgressChanged?.Invoke(100);
             SpeedAndTimeChanged?.Invoke("0 MB/s", "00:00:00");
             StatusChanged?.Invoke("İndirme Tamamlandı!");
             IsDownloading = false;
             IsPaused = false;
             CompletedSuccessfully = true;
+        }
+
+        private void AddSourceHeaders(HttpRequestMessage request)
+        {
+            if (_goFileMetadata != null)
+            {
+                GoFileResolver.AddWebsiteHeaders(
+                    request, _goFileMetadata.AccountToken, _goFileMetadata.WebsiteToken,
+                    _goFileMetadata.ContentId);
+            }
+        }
+
+        private static void EnsureBinaryResponse(HttpResponseMessage response)
+        {
+            string? mediaType = response.Content.Headers.ContentType?.MediaType;
+            if (!string.IsNullOrWhiteSpace(mediaType) &&
+                (mediaType.Equals("text/html", StringComparison.OrdinalIgnoreCase) ||
+                 mediaType.Equals("application/xhtml+xml", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidDataException(
+                    "Sunucu dosya yerine bir web sayfası döndürdü; dosya kaydedilmedi.");
+            }
         }
 
         private sealed class EngineStateDto

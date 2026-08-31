@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
+    <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>1.0.31</Version>
-    <AssemblyVersion>1.0.31.0</AssemblyVersion>
-    <FileVersion>1.0.31.0</FileVersion>
-    <InformationalVersion>1.0.31</InformationalVersion>
+    <UseAppHost>true</UseAppHost>
+    <Version>1.0.32</Version>
+    <AssemblyVersion>1.0.32.0</AssemblyVersion>
+    <FileVersion>1.0.32.0</FileVersion>
+    <InformationalVersion>1.0.32</InformationalVersion>
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MDM</AssemblyTitle>
     <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
@@ -38,4 +39,8 @@
   <ItemGroup>
     <None Include="DownloadMuck_Eklenti\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="DownloadMuck_Eklenti" />
   </ItemGroup>
+  <!-- Yanlış mimari hostfxr exe'yi bozar ve dotnet dll ile terminal açmak gerekir -->
+  <Target Name="RemoveBundledHostFxr" AfterTargets="Build">
+    <Delete Files="$(OutputPath)hostfxr.dll;$(OutputPath)hostpolicy.dll" ContinueOnError="true" />
+  </Target>
 </Project>

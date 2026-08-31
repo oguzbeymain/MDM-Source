@@ -139,22 +139,6 @@ namespace DownloadMuck
             stack.Children.Add(openBtn);
             stack.Children.Add(exitBtn);
 
-            // Gölge ayrı — metin bulanık olmasın
-            var shadow = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
-                CornerRadius = new CornerRadius(10),
-                Margin = new Thickness(4),
-                Opacity = 0.01,
-                Effect = new DropShadowEffect
-                {
-                    BlurRadius = 14,
-                    ShadowDepth = 0,
-                    Opacity = 0.5,
-                    Color = Colors.Black
-                }
-            };
-
             var chrome = new Border
             {
                 Background = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16)),
@@ -166,10 +150,6 @@ namespace DownloadMuck
                 SnapsToDevicePixels = true
             };
 
-            var root = new Grid();
-            root.Children.Add(shadow);
-            root.Children.Add(chrome);
-
             _menuWindow = new Window
             {
                 WindowStyle = WindowStyle.None,
@@ -179,7 +159,7 @@ namespace DownloadMuck
                 Topmost = true,
                 ResizeMode = ResizeMode.NoResize,
                 SizeToContent = SizeToContent.WidthAndHeight,
-                Content = root,
+                Content = chrome,
                 Left = pt.X - 8,
                 Top = pt.Y - 8,
                 Opacity = 0,
@@ -187,6 +167,7 @@ namespace DownloadMuck
             };
 
             _menuWindow.Deactivated += (_, _) => CloseMenu();
+            NativeWindowChrome.ApplyNoOuterShadow(_menuWindow);
             _menuWindow.Show();
             _menuWindow.Activate();
 

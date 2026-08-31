@@ -121,11 +121,11 @@ namespace DownloadMuck
             SetBrush("ChipBorder", chipBorder);
             SetBrush("ChipBoxBg", boxBg);
             SetBrush("ChipFg", light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xD0, 0xD0, 0xD0));
-            SetBrush("ChipCheckedBg", light ? Color.FromRgb(0xFF, 0xF5, 0xEC) : Color.FromRgb(0x2A, 0x21, 0x18));
-            SetBrush("ChipCheckedBorder", Color.FromRgb(0xFF, 0x6B, 0x00));
-            // Tik kutusu: turuncu çerçeve + siyah iç + beyaz ✓ (açık/koyu aynı)
+            SetBrush("ChipCheckedBg", light ? Color.FromRgb(0xF0, 0xF0, 0xF2) : Color.FromRgb(0x22, 0x22, 0x22));
+            SetBrush("ChipCheckedBorder", light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x66, 0x66, 0x66));
+            SetBrush("ChipHoverBorder", light ? Color.FromRgb(0x99, 0x99, 0xA0) : Color.FromRgb(0x77, 0x77, 0x77));
             SetBrush("ChipCheckedBoxBg", Color.FromRgb(0x1A, 0x1A, 0x1A));
-            SetBrush("ChipCheckedFg", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xFF, 0xB0, 0x6B));
+            SetBrush("ChipCheckedFg", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
             SetBrush("ChipCheckMark", Colors.White);
             SetBrush("SoftBtnBg", softBtn);
             SetBrush("SoftBtnFg", softFg);

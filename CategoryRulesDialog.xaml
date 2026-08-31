@@ -9,7 +9,8 @@
         <SolidColorBrush x:Key="ChipBoxBg" Color="#0C0C0C"/>
         <SolidColorBrush x:Key="ChipFg" Color="#D0D0D0"/>
         <SolidColorBrush x:Key="ChipCheckedBg" Color="#2A2118"/>
-        <SolidColorBrush x:Key="ChipCheckedBorder" Color="#FF6B00"/>
+        <SolidColorBrush x:Key="ChipCheckedBorder" Color="#666666"/>
+        <SolidColorBrush x:Key="ChipHoverBorder" Color="#777777"/>
         <SolidColorBrush x:Key="ChipCheckedBoxBg" Color="#1A1A1A"/>
         <SolidColorBrush x:Key="ChipCheckedFg" Color="#FFB06B"/>
         <SolidColorBrush x:Key="ChipCheckMark" Color="#FFFFFF"/>
@@ -54,16 +55,16 @@
                                 <Setter Property="Foreground" Value="{DynamicResource ChipCheckedFg}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="chip" Property="BorderBrush" Value="#FF6B00"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="#FF8533"/>
+                                <Setter TargetName="chip" Property="BorderBrush" Value="{DynamicResource ChipHoverBorder}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ChipHoverBorder}"/>
                             </Trigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="IsChecked" Value="True"/>
                                     <Condition Property="IsMouseOver" Value="True"/>
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="box" Property="Background" Value="#1A1A1A"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="#FF8533"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource ChipCheckedBoxBg}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ChipHoverBorder}"/>
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

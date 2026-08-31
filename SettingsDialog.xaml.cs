@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,6 +14,7 @@ namespace DownloadMuck
     public partial class SettingsDialog : UserControl
     {
         private AppSettings _settings = new();
+        private AppSettings _loadedSnapshot = new();
         private string _currentDefaultFolder = "";
         private CancellationTokenSource? _updateCts;
         private bool _updateBusy;
@@ -33,6 +35,7 @@ namespace DownloadMuck
         public void Load(AppSettings settings, string currentDefaultFolder, string? initialTab = null)
         {
             _settings = settings;
+            _loadedSnapshot = CloneSettings(settings);
             _currentDefaultFolder = currentDefaultFolder;
             _capturingHotkey = false;
 
@@ -232,8 +235,8 @@ namespace DownloadMuck
                 SetLocalBrush("CheckBoxIdleBgBrush", light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x2A, 0x2A, 0x2A));
                 SetLocalBrush("CheckBoxIdleBorderBrush", light ? Color.FromRgb(0xB8, 0xB8, 0xBE) : Color.FromRgb(0x55, 0x55, 0x55));
                 SetLocalBrush("CheckBoxCheckedFillBrush", Color.FromRgb(0x1A, 0x1A, 0x1A));
-                SetLocalBrush("CheckBoxAccentBrush", Color.FromRgb(0xFF, 0x6B, 0x00));
-                SetLocalBrush("CheckBoxAccentHoverBrush", Color.FromRgb(0xFF, 0x85, 0x33));
+                SetLocalBrush("CheckBoxCheckedBorderBrush", light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x66, 0x66, 0x66));
+                SetLocalBrush("CheckBoxHoverBorderBrush", light ? Color.FromRgb(0x99, 0x99, 0xA0) : Color.FromRgb(0x77, 0x77, 0x77));
                 SetLocalBrush("CheckBoxMarkBrush", Colors.White);
                 SetLocalBrush("SoftBtnBgBrush", light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x25, 0x25, 0x25));
                 SetLocalBrush("SoftBtnHoverBgBrush", light ? Color.FromRgb(0xE0, 0xE0, 0xE4) : Color.FromRgb(0x33, 0x33, 0x33));
@@ -261,7 +264,7 @@ namespace DownloadMuck
                 foreach (var borderEl in FindVisualBorders(this))
                 {
                     string? name = borderEl.Name;
-                    if (name is "SettingsCard" or "SettingsHeader" or "SettingsNavPane" or "SettingsFooter" or "SettingsShadow")
+                    if (name is "SettingsCard" or "SettingsHeader" or "SettingsNavPane" or "SettingsFooter")
                         continue;
                     // Tema seçim kartlarına dokunma
                     if (IsUnderThemePicker(borderEl))
@@ -720,73 +723,30 @@ namespace DownloadMuck
             catch { /* ignore */ }
         }
 
-        private void BtnSave_Click(object sender, RoutedEventArgs e)
+        private void BtnSave_Click(object sender, RoutedEventArgs e) => TrySave();
+
+        public bool HasUnsavedChanges() =>
+            !SettingsEqual(_loadedSnapshot, CaptureCurrentSettings());
+
+        public bool TrySave()
         {
             string folder = (TxtFolder.Text ?? "").Trim();
             if (string.IsNullOrWhiteSpace(folder))
             {
                 InfoDialog.Show(OwnerWindow, "Klasör", "Geçerli bir indirme klasörü girin.");
-                return;
+                return false;
             }
 
             try { Directory.CreateDirectory(folder); }
             catch (Exception ex)
             {
                 InfoDialog.Show(OwnerWindow, "Klasör", "Klasör oluşturulamadı.", ex.Message);
-                return;
+                return false;
             }
 
-            _settings.DefaultDownloadFolder = folder;
-            _settings.AutoStart = ChkAutoStart.IsChecked == true;
-            _settings.AutoStartMinimized = ChkAutoStartMin.IsChecked == true;
-            _settings.DeleteFilesFromDisk = ChkDeleteFromDisk.IsChecked == true;
-            _settings.AutoExtractArchives = ChkAutoExtract.IsChecked == true;
-            _settings.DeleteArchiveAfterExtract = ChkDeleteArchive.IsChecked == true;
-            _settings.AutoCreateCategoryFolders = ChkAutoFolders.IsChecked == true;
-            _settings.NotifyOnTrayMinimize = ChkNotifyTray.IsChecked == true;
-            _settings.NotifyOnComplete = ChkNotifyDone.IsChecked == true;
-            _settings.Theme = ThemeLight.IsChecked == true ? "Light" : "Dark";
-            _settings.CopyFilesHotkeyEnabled = ChkCopyHotkey.IsChecked == true;
-            _settings.CopyFilesHotkey = string.IsNullOrWhiteSpace(_copyHotkey) ? "Ctrl+C" : _copyHotkey;
-            _settings.ScheduleEnabled = ChkSchedule.IsChecked == true;
-            _ = int.TryParse(TxtSchedStart.Text, out int sh);
-            _ = int.TryParse(TxtSchedEnd.Text, out int eh);
-            _settings.ScheduleStartHour = Math.Clamp(sh, 0, 23);
-            _settings.ScheduleEndHour = Math.Clamp(eh, 0, 23);
-            _ = int.TryParse(TxtCrawlDepth.Text, out int depth);
-            _settings.CrawlDepth = Math.Clamp(depth, 0, 3);
-            _settings.RemoteApiLan = ChkRemoteLan.IsChecked == true;
-            _settings.RemoteApiToken = TxtApiToken.Text?.Trim() ?? "";
-            _settings.PreferHttp3 = ChkHttp3.IsChecked == true;
-            _settings.AutoReconnect = ChkAutoReconnect.IsChecked == true;
-            _ = int.TryParse(TxtSpeedLimit.Text, out int speedKb);
-            _settings.SpeedLimitKBps = Math.Clamp(speedKb, 0, 1_000_000);
-            _ = int.TryParse(TxtMaxConcurrent.Text, out int maxJobs);
-            _settings.MaxConcurrentDownloads = Math.Clamp(maxJobs, 0, 50);
-            _ = int.TryParse(TxtHttpChannels.Text, out int httpCh);
-            _settings.HttpMaxChannels = Math.Clamp(httpCh, 0, ChannelBudget.MaxPerJob);
-            _ = int.TryParse(TxtTorrentPort.Text, out int tport);
-            _settings.TorrentListenPort = tport <= 0 ? 6881 : Math.Clamp(tport, 1, 65535);
-            _settings.TorrentDht = ChkTorrentDht.IsChecked == true;
-            _settings.TorrentLocalPeers = ChkTorrentLpd.IsChecked == true;
-            _settings.TorrentPortForward = ChkTorrentUpnp.IsChecked == true;
-            _settings.TorrentSequential = ChkTorrentSeq.IsChecked == true;
-            _ = double.TryParse(TxtTorrentSeed.Text?.Replace(',', '.'), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out double seed);
-            _settings.TorrentSeedRatio = Math.Clamp(seed, 0, 100);
-            _settings.SkipDuplicateUrls = ChkSkipDup.IsChecked == true;
-            _settings.SkipExtensions = TxtSkipExt.Text?.Trim() ?? "";
-            _settings.SkipUrlContains = TxtSkipUrl.Text?.Trim() ?? "";
-            _settings.SkipDomains = TxtSkipDomains.Text?.Trim() ?? "";
-            _settings.SkipUrlRegex = TxtSkipRegex.Text?.Trim() ?? "";
-            _settings.SkipMimeContains = TxtSkipMime.Text?.Trim() ?? "";
-            _ = int.TryParse(TxtSkipMinMb.Text, out int minMb);
-            _ = int.TryParse(TxtSkipMaxMb.Text, out int maxMb);
-            _settings.SkipMinSizeMb = Math.Max(0, minMb);
-            _settings.SkipMaxSizeMb = Math.Max(0, maxMb);
-            _settings.RenamePattern = string.IsNullOrWhiteSpace(TxtRename.Text) ? "{name}{ext}" : TxtRename.Text.Trim();
-
+            _settings = CaptureCurrentSettings();
             AppSettingsStore.Save(_settings);
+            _loadedSnapshot = CloneSettings(_settings);
 
             if (_settings.AutoStart)
                 AutoStartHelper.Enable(_settings.AutoStartMinimized);
@@ -794,7 +754,79 @@ namespace DownloadMuck
                 AutoStartHelper.Disable();
 
             Saved?.Invoke();
+            return true;
         }
+
+        private AppSettings CaptureCurrentSettings()
+        {
+            var s = CloneSettings(_settings);
+            string folder = (TxtFolder.Text ?? "").Trim();
+            s.DefaultDownloadFolder = folder;
+            s.AutoStart = ChkAutoStart.IsChecked == true;
+            s.AutoStartMinimized = ChkAutoStartMin.IsChecked == true;
+            s.DeleteFilesFromDisk = ChkDeleteFromDisk.IsChecked == true;
+            s.AutoExtractArchives = ChkAutoExtract.IsChecked == true;
+            s.DeleteArchiveAfterExtract = ChkDeleteArchive.IsChecked == true;
+            s.AutoCreateCategoryFolders = ChkAutoFolders.IsChecked == true;
+            s.NotifyOnTrayMinimize = ChkNotifyTray.IsChecked == true;
+            s.NotifyOnComplete = ChkNotifyDone.IsChecked == true;
+            s.Theme = ThemeLight.IsChecked == true ? "Light" : "Dark";
+            s.CopyFilesHotkeyEnabled = ChkCopyHotkey.IsChecked == true;
+            s.CopyFilesHotkey = string.IsNullOrWhiteSpace(_copyHotkey) ? "Ctrl+C" : _copyHotkey;
+            s.ScheduleEnabled = ChkSchedule.IsChecked == true;
+            _ = int.TryParse(TxtSchedStart.Text, out int sh);
+            _ = int.TryParse(TxtSchedEnd.Text, out int eh);
+            s.ScheduleStartHour = Math.Clamp(sh, 0, 23);
+            s.ScheduleEndHour = Math.Clamp(eh, 0, 23);
+            _ = int.TryParse(TxtCrawlDepth.Text, out int depth);
+            s.CrawlDepth = Math.Clamp(depth, 0, 3);
+            s.RemoteApiLan = ChkRemoteLan.IsChecked == true;
+            s.RemoteApiToken = TxtApiToken.Text?.Trim() ?? "";
+            s.PreferHttp3 = ChkHttp3.IsChecked == true;
+            s.AutoReconnect = ChkAutoReconnect.IsChecked == true;
+            _ = int.TryParse(TxtSpeedLimit.Text, out int speedKb);
+            s.SpeedLimitKBps = Math.Clamp(speedKb, 0, 1_000_000);
+            _ = int.TryParse(TxtMaxConcurrent.Text, out int maxJobs);
+            s.MaxConcurrentDownloads = Math.Clamp(maxJobs, 0, 50);
+            _ = int.TryParse(TxtHttpChannels.Text, out int httpCh);
+            s.HttpMaxChannels = Math.Clamp(httpCh, 0, ChannelBudget.MaxPerJob);
+            _ = int.TryParse(TxtTorrentPort.Text, out int tport);
+            s.TorrentListenPort = tport <= 0 ? 6881 : Math.Clamp(tport, 1, 65535);
+            s.TorrentDht = ChkTorrentDht.IsChecked == true;
+            s.TorrentLocalPeers = ChkTorrentLpd.IsChecked == true;
+            s.TorrentPortForward = ChkTorrentUpnp.IsChecked == true;
+            s.TorrentSequential = ChkTorrentSeq.IsChecked == true;
+            _ = double.TryParse(TxtTorrentSeed.Text?.Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double seed);
+            s.TorrentSeedRatio = Math.Clamp(seed, 0, 100);
+            s.SkipDuplicateUrls = ChkSkipDup.IsChecked == true;
+            s.SkipExtensions = TxtSkipExt.Text?.Trim() ?? "";
+            s.SkipUrlContains = TxtSkipUrl.Text?.Trim() ?? "";
+            s.SkipDomains = TxtSkipDomains.Text?.Trim() ?? "";
+            s.SkipUrlRegex = TxtSkipRegex.Text?.Trim() ?? "";
+            s.SkipMimeContains = TxtSkipMime.Text?.Trim() ?? "";
+            _ = int.TryParse(TxtSkipMinMb.Text, out int minMb);
+            _ = int.TryParse(TxtSkipMaxMb.Text, out int maxMb);
+            s.SkipMinSizeMb = Math.Max(0, minMb);
+            s.SkipMaxSizeMb = Math.Max(0, maxMb);
+            s.RenamePattern = string.IsNullOrWhiteSpace(TxtRename.Text) ? "{name}{ext}" : TxtRename.Text.Trim();
+            return s;
+        }
+
+        private static AppSettings CloneSettings(AppSettings source)
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(source)) ?? new AppSettings();
+            }
+            catch
+            {
+                return new AppSettings();
+            }
+        }
+
+        private static bool SettingsEqual(AppSettings a, AppSettings b) =>
+            JsonSerializer.Serialize(a) == JsonSerializer.Serialize(b);
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
     }
