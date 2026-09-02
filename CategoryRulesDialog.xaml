@@ -33,11 +33,15 @@
                                         Background="{DynamicResource ChipBoxBg}"
                                         BorderBrush="{DynamicResource ChipBorder}"
                                         BorderThickness="1.2"
-                                        VerticalAlignment="Center" SnapsToDevicePixels="True">
-                                    <Path x:Name="mark" Data="M3.5,8.5 L6.8,11.8 L13.2,5.2"
-                                          Stroke="{DynamicResource ChipCheckMark}" StrokeThickness="1.6"
-                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                          Visibility="Collapsed" Margin="1.5,1.5,1.5,1.5"/>
+                                        VerticalAlignment="Center" SnapsToDevicePixels="True"
+                                        HorizontalAlignment="Center">
+                                    <Viewbox Width="11" Height="11" Stretch="Uniform"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Path x:Name="mark" Data="M3.5,8.5 L6.8,11.8 L13.2,5.2"
+                                              Stroke="{DynamicResource ChipCheckMark}" StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                              Visibility="Collapsed"/>
+                                    </Viewbox>
                                 </Border>
                                 <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"
                                                   RecognizesAccessKey="True"

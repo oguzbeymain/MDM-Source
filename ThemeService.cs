@@ -13,11 +13,22 @@ namespace DownloadMuck
     {
         private static bool _appliedLight;
 
+        /// <summary>Ayarlar önizlemesi sırasında geçici parlaklık (Kaydet/İptal sonrası temizlenir).</summary>
+        public static int? PreviewLightBrightness { get; set; }
+
+        public static int EffectiveLightBrightness => LightSurfaceDimmer.EffectiveBrightness;
+
         public static bool IsLight =>
             string.Equals(AppSettingsStore.Load().Theme, "Light", StringComparison.OrdinalIgnoreCase);
 
+        public static Color Surface(bool light, byte lr, byte lg, byte lb, byte dr, byte dg, byte db)
+            => light ? LightSurfaceDimmer.DimSurface(lr, lg, lb) : C(dr, dg, db);
+
         public static void ApplyFromSettings()
-            => Apply(AppSettingsStore.Load().Theme);
+        {
+            PreviewLightBrightness = null;
+            Apply(AppSettingsStore.Load().Theme);
+        }
 
         public static void Apply(string? theme)
         {
@@ -46,8 +57,6 @@ namespace DownloadMuck
                 session.ApplyThemeSurface(light);
             else if (window is ConfirmDialog confirm)
                 confirm.ApplyThemeSurface(light);
-            else if (window is NewUrlDialog newUrl)
-                newUrl.ApplyThemeSurface(light);
             else if (window is CategoryCreateDialog categoryCreate)
                 categoryCreate.ApplyThemeSurface(light);
         }
@@ -58,75 +67,75 @@ namespace DownloadMuck
             if (window.AllowsTransparency)
                 window.Background = Brushes.Transparent;
             else
-                window.Background = BrushOf(light ? C(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12));
+                window.Background = BrushOf(light ? Sf(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12));
             window.Foreground = BrushOf(light ? C(0x1A, 0x1A, 0x1A) : C(0xE0, 0xE0, 0xE0));
 
             var rd = window.Resources;
-            SetBrush(rd, "BgDark", light ? C(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12));
-            SetBrush(rd, "SidebarDark", light ? C(0xF0, 0xF0, 0xF3) : C(0x18, 0x18, 0x18));
-            SetBrush(rd, "CardDark", light ? C(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E));
-            SetBrush(rd, "InputDark", light ? C(0xF0, 0xF0, 0xF3) : C(0x26, 0x26, 0x26));
+            SetBrush(rd, "BgDark", light ? Sf(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12));
+            SetBrush(rd, "SidebarDark", light ? Sf(0xF0, 0xF0, 0xF3) : C(0x18, 0x18, 0x18));
+            SetBrush(rd, "CardDark", light ? Sf(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E));
+            SetBrush(rd, "InputDark", light ? Sf(0xF0, 0xF0, 0xF3) : C(0x26, 0x26, 0x26));
 
             // Dinamik yüzeyler — stiller/menüler bunları kullanır
-            SetBrush(rd, "SidebarTextBrush", light ? C(0x4A, 0x4A, 0x4A) : C(0xB0, 0xB0, 0xB0));
-            SetBrush(rd, "ToolbarTextBrush", light ? C(0x33, 0x33, 0x33) : C(0xC8, 0xC8, 0xC8));
-            SetBrush(rd, "HeaderBgBrush", light ? C(0xF3, 0xF3, 0xF5) : C(0x1A, 0x1A, 0x1A));
-            SetBrush(rd, "HeaderTextBrush", light ? C(0x55, 0x55, 0x55) : C(0x88, 0x88, 0x88));
+            SetBrush(rd, "SidebarTextBrush", light ? C(0x2E, 0x2E, 0x2E) : C(0xB0, 0xB0, 0xB0));
+            SetBrush(rd, "ToolbarTextBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xC8, 0xC8, 0xC8));
+            SetBrush(rd, "HeaderBgBrush", light ? Sf(0xF3, 0xF3, 0xF5) : C(0x1A, 0x1A, 0x1A));
+            SetBrush(rd, "HeaderTextBrush", light ? C(0x44, 0x44, 0x44) : C(0x88, 0x88, 0x88));
             // Hover: açık temada turuncu çerçeve vurgusu
             SetBrush(rd, "SidebarHoverBrush", C(0xFF, 0x6B, 0x00));
             SetBrush(rd, "SidebarHoverBrightBrush", C(0xFF, 0x85, 0x33));
-            SetBrush(rd, "ToolbarHoverBgBrush", light ? C(0x18, 0xFF, 0x6B, 0x00) : C(0x28, 0xFF, 0x6B, 0x00));
-            SetBrush(rd, "NavTextBrush", light ? C(0x66, 0x66, 0x66) : C(0xAA, 0xAA, 0xAA));
+            SetBrush(rd, "ToolbarHoverBgBrush", light ? Sfa(0x18, 0xFF, 0x6B, 0x00) : C(0x28, 0xFF, 0x6B, 0x00));
+            SetBrush(rd, "NavTextBrush", light ? C(0x3A, 0x3A, 0x3A) : C(0xAA, 0xAA, 0xAA));
             SetBrush(rd, "NavHoverBrush", C(0xFF, 0x6B, 0x00));
             // Sol nav seçim — soft charcoal (kategori + ayarlar ortak dil)
-            SetBrush(rd, "NavSelectedBgBrush", light ? C(0xEE, 0xEE, 0xF0) : C(0x25, 0x25, 0x25));
+            SetBrush(rd, "NavSelectedBgBrush", light ? Sf(0xEE, 0xEE, 0xF0) : C(0x25, 0x25, 0x25));
             SetBrush(rd, "CategorySelectedBgBrush", light ? Colors.Transparent : C(0x25, 0x25, 0x25));
-            SetBrush(rd, "CheckBoxIdleBgBrush", light ? C(0xFF, 0xFF, 0xFF) : C(0x2A, 0x2A, 0x2A));
-            SetBrush(rd, "CheckBoxIdleBorderBrush", light ? C(0xC0, 0xC0, 0xC6) : C(0x55, 0x55, 0x55));
+            SetBrush(rd, "CheckBoxIdleBgBrush", light ? Sf(0xFF, 0xFF, 0xFF) : C(0x2A, 0x2A, 0x2A));
+            SetBrush(rd, "CheckBoxIdleBorderBrush", light ? Sf(0xC0, 0xC0, 0xC6) : C(0x55, 0x55, 0x55));
             SetBrush(rd, "CheckBoxCheckedFillBrush", C(0x1A, 0x1A, 0x1A));
-            SetBrush(rd, "CheckBoxCheckedBorderBrush", light ? C(0x88, 0x88, 0x90) : C(0x66, 0x66, 0x66));
-            SetBrush(rd, "CheckBoxHoverBorderBrush", light ? C(0x99, 0x99, 0xA0) : C(0x77, 0x77, 0x77));
+            SetBrush(rd, "CheckBoxCheckedBorderBrush", light ? Sf(0x88, 0x88, 0x90) : C(0x66, 0x66, 0x66));
+            SetBrush(rd, "CheckBoxHoverBorderBrush", light ? Sf(0x99, 0x99, 0xA0) : C(0x77, 0x77, 0x77));
 
             // Liste satırları — seçili: açıkta soft turuncu, koyuda #1A1A1A
             SetBrush(rd, "RowTextBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xE0, 0xE0, 0xE0));
-            SetBrush(rd, "RowHoverBgBrush", light ? C(0xF0, 0xF0, 0xF2) : C(0x22, 0x22, 0x22));
-            SetBrush(rd, "RowHoverFgBrush", light ? C(0x00, 0x00, 0x00) : C(0xE0, 0x70, 0x30));
-            SetBrush(rd, "RowSelectedBgBrush", light ? C(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
+            SetBrush(rd, "RowHoverBgBrush", light ? Sf(0xF0, 0xF0, 0xF2) : C(0x22, 0x22, 0x22));
+            SetBrush(rd, "RowHoverFgBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xE0, 0x70, 0x30));
+            SetBrush(rd, "RowSelectedBgBrush", light ? Sf(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
             SetBrush(rd, "RowSelectedFgBrush", C(0xFF, 0x6B, 0x00));
-            SetBrush(rd, "RowSelectedHoverBgBrush", light ? C(0xFF, 0xDC, 0xC0) : C(0x24, 0x24, 0x24));
+            SetBrush(rd, "RowSelectedHoverBgBrush", light ? Sf(0xFF, 0xDC, 0xC0) : C(0x24, 0x24, 0x24));
             SetBrush(rd, "RowSelectedHoverFgBrush", light ? C(0xE0, 0x55, 0x00) : C(0xFF, 0x85, 0x33));
-            SetBrush(rd, "RowActionChromeBgBrush", light ? C(0xF0, 0xF0, 0xF3) : C(0x1A, 0x1A, 0x1A));
-            SetBrush(rd, "RowActionChromeBorderBrush", light ? C(0xD8, 0xD8, 0xDE) : C(0x2A, 0x2A, 0x2A));
-            SetBrush(rd, "RowActionSepBrush", light ? C(0xD0, 0xD0, 0xD6) : C(0x2E, 0x2E, 0x2E));
-            SetBrush(rd, "SearchBorderBrush", light ? C(0xD0, 0xD0, 0xD6) : C(0x33, 0x33, 0x33));
+            SetBrush(rd, "RowActionChromeBgBrush", light ? Sf(0xF0, 0xF0, 0xF3) : C(0x1A, 0x1A, 0x1A));
+            SetBrush(rd, "RowActionChromeBorderBrush", light ? Sf(0xD8, 0xD8, 0xDE) : C(0x2A, 0x2A, 0x2A));
+            SetBrush(rd, "RowActionSepBrush", light ? Sf(0xD0, 0xD0, 0xD6) : C(0x2E, 0x2E, 0x2E));
+            SetBrush(rd, "SearchBorderBrush", light ? Sf(0xD0, 0xD0, 0xD6) : C(0x33, 0x33, 0x33));
             SetBrush(rd, "SearchFocusBorderBrush", C(0xFF, 0x6B, 0x00));
             // Turuncu çerçeve/hover vurguları yalnızca açık temada
             SetBrush(rd, "AccentBorderBrush", light ? C(0xFF, 0x6B, 0x00) : Colors.Transparent);
-            SetBrush(rd, "HeaderLineBrush", light ? C(0xE4, 0xE4, 0xE8) : C(0x22, 0x22, 0x22));
+            SetBrush(rd, "HeaderLineBrush", light ? Sf(0xE4, 0xE4, 0xE8) : C(0x22, 0x22, 0x22));
             SetBrush(rd, "HeaderHoverBorderBrush", light ? C(0xFF, 0x6B, 0x00) : Colors.Transparent);
-            SetBrush(rd, "HeaderHoverBgBrush", light ? C(0x10, 0xFF, 0x6B, 0x00) : C(0x22, 0x22, 0x22));
-            SetBrush(rd, "HeaderHoverForegroundBrush", light ? C(0x55, 0x55, 0x55) : C(0xCC, 0xCC, 0xCC));
+            SetBrush(rd, "HeaderHoverBgBrush", light ? Sfa(0x10, 0xFF, 0x6B, 0x00) : C(0x22, 0x22, 0x22));
+            SetBrush(rd, "HeaderHoverForegroundBrush", light ? C(0x44, 0x44, 0x44) : C(0xCC, 0xCC, 0xCC));
             SetBrush(rd, "ToolbarHoverBorderBrush", light ? C(0xFF, 0x6B, 0x00) : Colors.Transparent);
-            SetBrush(rd, "ToolbarHoverForegroundBrush", light ? C(0x33, 0x33, 0x33) : C(0xFF, 0x6B, 0x00));
-            SetBrush(rd, "ToolbarPressedForegroundBrush", light ? C(0x33, 0x33, 0x33) : C(0xFF, 0x85, 0x33));
-            SetBrush(rd, "TitleBarButtonIdleBorderBrush", light ? C(0x55, 0xFF, 0x6B, 0x00) : Colors.Transparent);
+            SetBrush(rd, "ToolbarHoverForegroundBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xFF, 0x6B, 0x00));
+            SetBrush(rd, "ToolbarPressedForegroundBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xFF, 0x85, 0x33));
+            SetBrush(rd, "TitleBarButtonIdleBorderBrush", light ? Sfa(0x55, 0xFF, 0x6B, 0x00) : Colors.Transparent);
             SetBrush(rd, "TitleBarButtonHoverBorderBrush", light ? C(0xFF, 0x6B, 0x00) : Colors.Transparent);
-            SetBrush(rd, "TitleBarButtonHoverBgBrush", light ? C(0x30, 0xFF, 0x6B, 0x00) : C(0x28, 0xFF, 0x6B, 0x00));
-            SetBrush(rd, "TitleBarButtonHoverForegroundBrush", light ? C(0x88, 0x88, 0x88) : C(0xFF, 0x6B, 0x00));
-            SetBrush(rd, "TitleBarButtonPressedBgBrush", light ? C(0x45, 0xFF, 0x6B, 0x00) : C(0x40, 0xFF, 0x6B, 0x00));
-            SetBrush(rd, "TitleBarButtonPressedForegroundBrush", light ? C(0x88, 0x88, 0x88) : C(0xFF, 0x85, 0x33));
-            SetBrush(rd, "MenuSeparatorBrush", light ? C(0xE4, 0xE4, 0xE8) : C(0x33, 0x33, 0x33));
+            SetBrush(rd, "TitleBarButtonHoverBgBrush", light ? Sfa(0x30, 0xFF, 0x6B, 0x00) : C(0x28, 0xFF, 0x6B, 0x00));
+            SetBrush(rd, "TitleBarButtonHoverForegroundBrush", light ? C(0x55, 0x55, 0x55) : C(0xFF, 0x6B, 0x00));
+            SetBrush(rd, "TitleBarButtonPressedBgBrush", light ? Sfa(0x45, 0xFF, 0x6B, 0x00) : C(0x40, 0xFF, 0x6B, 0x00));
+            SetBrush(rd, "TitleBarButtonPressedForegroundBrush", light ? C(0x55, 0x55, 0x55) : C(0xFF, 0x85, 0x33));
+            SetBrush(rd, "MenuSeparatorBrush", light ? Sf(0xE4, 0xE4, 0xE8) : C(0x33, 0x33, 0x33));
             SetBrush(rd, "MarqueeStrokeBrush", C(0xFF, 0x6B, 0x00));
-            SetBrush(rd, "MarqueeFillBrush", light ? C(0x22, 0xFF, 0x6B, 0x00) : C(0x55, 0x00, 0x00, 0x00));
-            SetBrush(rd, "DownloadingStatusBrush", light ? C(0x33, 0x33, 0x33) : C(0xE0, 0xE0, 0xE0));
-            SetBrush(rd, "DownloadingTrackBrush", light ? C(0xE0, 0xE0, 0xE4) : C(0x33, 0x33, 0x33));
+            SetBrush(rd, "MarqueeFillBrush", light ? Sfa(0x22, 0xFF, 0x6B, 0x00) : C(0x55, 0x00, 0x00, 0x00));
+            SetBrush(rd, "DownloadingStatusBrush", light ? C(0x1A, 0x1A, 0x1A) : C(0xE0, 0xE0, 0xE0));
+            SetBrush(rd, "DownloadingTrackBrush", light ? Sf(0xE0, 0xE0, 0xE4) : C(0x33, 0x33, 0x33));
 
             if (light)
             {
-                SetBrush(rd, "MenuBgBrush", C(0xFF, 0xFF, 0xFF));
-                SetBrush(rd, "MenuBorderBrush", C(0xD8, 0xD8, 0xDE));
+                SetBrush(rd, "MenuBgBrush", Sf(0xFF, 0xFF, 0xFF));
+                SetBrush(rd, "MenuBorderBrush", Sf(0xD8, 0xD8, 0xDE));
                 SetBrush(rd, "MenuTextBrush", C(0x1A, 0x1A, 0x1A));
-                SetBrush(rd, "MenuHoverBgBrush", C(0xF0, 0xF0, 0xF2));
+                SetBrush(rd, "MenuHoverBgBrush", Sf(0xF0, 0xF0, 0xF2));
             }
             else
             {
@@ -137,24 +146,24 @@ namespace DownloadMuck
             }
 
             // Seçim: dark #1A1A1A + turuncu yazı; light soft turuncu
-            SetSys(rd, SystemColors.HighlightBrushKey, light ? C(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
+            SetSys(rd, SystemColors.HighlightBrushKey, light ? Sf(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
             SetSys(rd, SystemColors.HighlightTextBrushKey, C(0xFF, 0x6B, 0x00));
             SetSys(rd, SystemColors.InactiveSelectionHighlightBrushKey,
-                light ? C(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
+                light ? Sf(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A));
             SetSys(rd, SystemColors.InactiveSelectionHighlightTextBrushKey, C(0xFF, 0x6B, 0x00));
         }
 
         private static void ApplyMainWindow(MainWindow mw, bool light)
         {
-            Color bg = light ? C(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12);
-            Color title = light ? C(0xFF, 0xFF, 0xFF) : C(0x18, 0x18, 0x18);
-            Color border = light ? C(0xD0, 0xD0, 0xD6) : C(0x2A, 0x2A, 0x2A);
-            Color sidebar = light ? C(0xF0, 0xF0, 0xF3) : C(0x18, 0x18, 0x18);
-            Color card = light ? C(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E);
+            Color bg = light ? Sf(0xF5, 0xF5, 0xF7) : C(0x12, 0x12, 0x12);
+            Color title = light ? Sf(0xFF, 0xFF, 0xFF) : C(0x18, 0x18, 0x18);
+            Color border = light ? Sf(0xD0, 0xD0, 0xD6) : C(0x2A, 0x2A, 0x2A);
+            Color sidebar = light ? Sf(0xF0, 0xF0, 0xF3) : C(0x18, 0x18, 0x18);
+            Color card = light ? Sf(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E);
             Color text = light ? C(0x1A, 0x1A, 0x1A) : C(0xE0, 0xE0, 0xE0);
             Color muted = light ? C(0x55, 0x55, 0x55) : C(0x88, 0x88, 0x88);
-            Color line = light ? C(0xE4, 0xE4, 0xE8) : C(0x2A, 0x2A, 0x2A);
-            Color searchBg = light ? C(0xF0, 0xF0, 0xF3) : C(0x25, 0x25, 0x25);
+            Color line = light ? Sf(0xE4, 0xE4, 0xE8) : C(0x2A, 0x2A, 0x2A);
+            Color searchBg = light ? Sf(0xF0, 0xF0, 0xF3) : C(0x25, 0x25, 0x25);
 
             if (mw.RootChrome != null)
             {
@@ -167,7 +176,7 @@ namespace DownloadMuck
                 mw.ContentChrome.Background = BrushOf(bg);
             if (mw.ContentPanel != null)
             {
-                mw.ContentPanel.Background = BrushOf(light ? C(0xFF, 0xFF, 0xFF) : C(0x16, 0x16, 0x16));
+                mw.ContentPanel.Background = BrushOf(light ? Sf(0xFF, 0xFF, 0xFF) : C(0x16, 0x16, 0x16));
                 mw.ContentPanel.BorderBrush = BrushOf(border);
             }
             if (mw.SidebarPanel != null)
@@ -197,7 +206,7 @@ namespace DownloadMuck
                 mw.DgDownloads.VerticalGridLinesBrush = BrushOf(line);
 
                 // DataGrid kendi resource sözlüğünde Highlight tutuyor — pencere brush’ı yetmez
-                Color selBg = light ? C(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A);
+                Color selBg = light ? Sf(0xFF, 0xE8, 0xD6) : C(0x1A, 0x1A, 0x1A);
                 Color selFg = C(0xFF, 0x6B, 0x00);
                 SetSys(mw.DgDownloads.Resources, SystemColors.HighlightBrushKey, selBg);
                 SetSys(mw.DgDownloads.Resources, SystemColors.HighlightTextBrushKey, selFg);
@@ -223,7 +232,7 @@ namespace DownloadMuck
             foreach (var ico in new[] { mw.IcoSearchGlyph })
             {
                 if (ico != null)
-                    ico.Foreground = BrushOf(light ? C(0x99, 0x99, 0x99) : C(0x77, 0x77, 0x77));
+                    ico.Foreground = BrushOf(light ? C(0x77, 0x77, 0x77) : C(0x77, 0x77, 0x77));
             }
 
             if (mw.SelectionRect != null)
@@ -268,7 +277,6 @@ namespace DownloadMuck
             try { mw.RulesPanel?.ApplyThemeSurface(light); }
             catch { /* ignore */ }
 
-            // Uygulama içi onay popup
             ApplyModalSurface(mw, light);
 
             _ = _appliedLight;
@@ -276,17 +284,17 @@ namespace DownloadMuck
 
         public static void ApplyModalSurface(MainWindow mw, bool light)
         {
-            var border = light ? C(0xD8, 0xD8, 0xDE) : C(0x3A, 0x3A, 0x3A);
+            var border = light ? Sf(0xD8, 0xD8, 0xDE) : C(0x3A, 0x3A, 0x3A);
             var text = light ? C(0x1A, 0x1A, 0x1A) : C(0xF2, 0xF2, 0xF2);
-            var muted = light ? C(0x66, 0x66, 0x66) : C(0xB0, 0xB0, 0xB0);
+            var muted = light ? C(0x55, 0x55, 0x55) : C(0xB0, 0xB0, 0xB0);
 
             if (mw.ModalCard != null)
             {
-                mw.ModalCard.Background = BrushOf(light ? C(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E));
+                mw.ModalCard.Background = BrushOf(light ? Sf(0xFF, 0xFF, 0xFF) : C(0x1E, 0x1E, 0x1E));
                 mw.ModalCard.BorderBrush = BrushOf(border);
             }
             if (mw.ModalTitleBar != null)
-                mw.ModalTitleBar.Background = BrushOf(light ? C(0xF5, 0xF5, 0xF7) : C(0x24, 0x24, 0x24));
+                mw.ModalTitleBar.Background = BrushOf(light ? Sf(0xF5, 0xF5, 0xF7) : C(0x24, 0x24, 0x24));
             if (mw.ModalTitle != null)
                 mw.ModalTitle.Foreground = BrushOf(text);
             if (mw.ModalMessage != null)
@@ -296,8 +304,8 @@ namespace DownloadMuck
             if (mw.ModalCancelBtn != null)
             {
                 mw.ModalCancelBtn.Foreground = BrushOf(light ? C(0x33, 0x33, 0x33) : C(0xEE, 0xEE, 0xEE));
-                var soft = light ? C(0xEE, 0xEE, 0xF0) : C(0x2F, 0x2F, 0x2F);
-                var softHover = light ? C(0xE0, 0xE0, 0xE4) : C(0x3A, 0x3A, 0x3A);
+                var soft = light ? Sf(0xEE, 0xEE, 0xF0) : C(0x2F, 0x2F, 0x2F);
+                var softHover = light ? Sf(0xE0, 0xE0, 0xE4) : C(0x3A, 0x3A, 0x3A);
                 var template = new ControlTemplate(typeof(Button));
                 var factory = new FrameworkElementFactory(typeof(Border));
                 factory.Name = "bd";
@@ -321,11 +329,11 @@ namespace DownloadMuck
 
         public static void ApplyGlobalCheckBoxBrushes(ResourceDictionary rd, bool light)
         {
-            SetBrush(rd, "CheckBoxIdleBgBrush", light ? C(0xFF, 0xFF, 0xFF) : C(0x2A, 0x2A, 0x2A));
-            SetBrush(rd, "CheckBoxIdleBorderBrush", light ? C(0xB8, 0xB8, 0xBE) : C(0x55, 0x55, 0x55));
+            SetBrush(rd, "CheckBoxIdleBgBrush", light ? Sf(0xFF, 0xFF, 0xFF) : C(0x2A, 0x2A, 0x2A));
+            SetBrush(rd, "CheckBoxIdleBorderBrush", light ? Sf(0xB8, 0xB8, 0xBE) : C(0x55, 0x55, 0x55));
             SetBrush(rd, "CheckBoxCheckedFillBrush", C(0x1A, 0x1A, 0x1A));
-            SetBrush(rd, "CheckBoxCheckedBorderBrush", light ? C(0x88, 0x88, 0x90) : C(0x66, 0x66, 0x66));
-            SetBrush(rd, "CheckBoxHoverBorderBrush", light ? C(0x99, 0x99, 0xA0) : C(0x77, 0x77, 0x77));
+            SetBrush(rd, "CheckBoxCheckedBorderBrush", light ? Sf(0x88, 0x88, 0x90) : C(0x66, 0x66, 0x66));
+            SetBrush(rd, "CheckBoxHoverBorderBrush", light ? Sf(0x99, 0x99, 0xA0) : C(0x77, 0x77, 0x77));
             SetBrush(rd, "CheckBoxMarkBrush", C(0xFF, 0xFF, 0xFF));
         }
 
@@ -345,6 +353,10 @@ namespace DownloadMuck
 
         private static Color C(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
         private static Color C(byte a, byte r, byte g, byte b) => Color.FromArgb(a, r, g, b);
+
+        private static Color Sf(byte r, byte g, byte b) => LightSurfaceDimmer.DimSurface(r, g, b);
+
+        private static Color Sfa(byte a, byte r, byte g, byte b) => LightSurfaceDimmer.DimSurface(a, r, g, b);
 
         private static bool IsNeutralGray(Color c)
             => Math.Abs(c.R - c.G) < 20 && Math.Abs(c.G - c.B) < 20 && c.R >= 0x55 && c.R <= 0xC0;

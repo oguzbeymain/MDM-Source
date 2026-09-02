@@ -74,6 +74,7 @@ namespace DownloadMuck
         private bool _titleDragRestoring;
         private TrayIconService? _tray;
         private bool _sidebarUserSized;
+        private bool _sidebarInputActive;
         private bool _exitRequested;
         private bool _trayTipShown;
         private DateTime _captureQuietUntilUtc = DateTime.MinValue;
@@ -134,6 +135,12 @@ namespace DownloadMuck
             SettingsPanel.UpdateApplying += OnSettingsUpdateApplying;
             RulesPanel.Saved += OnRulesSaved;
             RulesPanel.Cancelled += CloseRulesOverlay;
+            NewUrlPanel.Accepted += OnNewUrlAccepted;
+            NewUrlPanel.Cancelled += CloseNewUrlOverlay;
+            PromptPanel.Accepted += OnPromptAccepted;
+            PromptPanel.Cancelled += ClosePromptOverlay;
+            CategoryEditPanel.Accepted += OnCategoryEditAccepted;
+            CategoryEditPanel.Cancelled += CloseCategoryEditOverlay;
         }
 
         private void InitTray()
@@ -404,6 +411,158 @@ namespace DownloadMuck
             }
         }
 
+        private void ModalOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource != ModalOverlay) return;
+            bool infoOnly = ModalCancelBtn.Visibility != Visibility.Visible;
+            CloseModal(infoOnly);
+            e.Handled = true;
+        }
+
+        // --- Yeni indirme / metin girişi overlay ---
+        private DispatcherFrame? _promptFrame;
+        private bool _promptAccepted;
+        private PromptDialogResult? _lastPromptResult;
+
+        private sealed record PromptDialogResult(string Text, bool AllowExtensionChange);
+
+        private bool ShowNewUrlOverlay(out NewUrlDialog panel)
+        {
+            panel = NewUrlPanel;
+            panel.Reset();
+            panel.ApplyThemeSurface(ThemeService.IsLight);
+            NewUrlOverlay.Visibility = Visibility.Visible;
+            NewUrlOverlay.Focusable = true;
+            Keyboard.Focus(NewUrlOverlay);
+            _promptAccepted = false;
+            _promptFrame = new DispatcherFrame();
+            Dispatcher.PushFrame(_promptFrame);
+            return _promptAccepted;
+        }
+
+        private void OnNewUrlAccepted()
+        {
+            _promptAccepted = true;
+            CloseNewUrlOverlay();
+        }
+
+        private void CloseNewUrlOverlay()
+        {
+            NewUrlOverlay.Visibility = Visibility.Collapsed;
+            if (_promptFrame != null)
+            {
+                _promptFrame.Continue = false;
+                _promptFrame = null;
+            }
+        }
+
+        private void NewUrlOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource == NewUrlOverlay)
+                CloseNewUrlOverlay();
+        }
+
+        private void NewUrlOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseNewUrlOverlay();
+                e.Handled = true;
+            }
+        }
+
+        private bool ShowPromptOverlay(string title, string prompt, string defaultValue = "", bool extensionLockMode = false)
+        {
+            PromptPanel.Configure(title, prompt, defaultValue, extensionLockMode);
+            _lastPromptResult = null;
+            _promptAccepted = false;
+            PromptOverlay.Visibility = Visibility.Visible;
+            PromptOverlay.Focusable = true;
+            Keyboard.Focus(PromptPanel);
+            _promptFrame = new DispatcherFrame();
+            Dispatcher.PushFrame(_promptFrame);
+            return _promptAccepted;
+        }
+
+        private void OnPromptAccepted()
+        {
+            _promptAccepted = true;
+            _lastPromptResult = new PromptDialogResult(PromptPanel.ResultText, PromptPanel.AllowExtensionChange);
+            ClosePromptOverlay();
+        }
+
+        private void ClosePromptOverlay()
+        {
+            PromptOverlay.Visibility = Visibility.Collapsed;
+            if (_promptFrame != null)
+            {
+                _promptFrame.Continue = false;
+                _promptFrame = null;
+            }
+        }
+
+        private void PromptOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource == PromptOverlay)
+                ClosePromptOverlay();
+        }
+
+        private CategoryItem? _categoryEditTarget;
+
+        private bool ShowCategoryEditOverlay(CategoryItem cat)
+        {
+            _categoryEditTarget = cat;
+            _promptAccepted = false;
+            CategoryEditPanel.Configure(cat);
+            CategoryEditPanel.ApplyThemeSurface(ThemeService.IsLight);
+            CategoryEditOverlay.Visibility = Visibility.Visible;
+            CategoryEditOverlay.Focusable = true;
+            Keyboard.Focus(CategoryEditPanel);
+            _promptFrame = new DispatcherFrame();
+            Dispatcher.PushFrame(_promptFrame);
+            return _promptAccepted;
+        }
+
+        private void OnCategoryEditAccepted()
+        {
+            _promptAccepted = true;
+            CloseCategoryEditOverlay();
+        }
+
+        private void CloseCategoryEditOverlay()
+        {
+            CategoryEditOverlay.Visibility = Visibility.Collapsed;
+            if (_promptFrame != null)
+            {
+                _promptFrame.Continue = false;
+                _promptFrame = null;
+            }
+        }
+
+        private void CategoryEditOverlay_BackdropClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource == CategoryEditOverlay)
+                CloseCategoryEditOverlay();
+        }
+
+        private void CategoryEditOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseCategoryEditOverlay();
+                e.Handled = true;
+            }
+        }
+
+        private void PromptOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                ClosePromptOverlay();
+                e.Handled = true;
+            }
+        }
+
         private void CategoryItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (sender is ListBoxItem lbi && lbi.DataContext is CategoryItem cat)
@@ -431,6 +590,9 @@ namespace DownloadMuck
 
             bool showDelete = selected.Any(c => !c.IsBuiltin && c.Id != "All");
             SetCategoryMenuItemVisible(menu, "Seçilen kategorileri sil", showDelete);
+
+            bool showUnnest = selected.Any(c => !c.IsBuiltin && !string.IsNullOrEmpty(c.ParentId));
+            SetCategoryMenuItemVisible(menu, "Kategoriyi çıkar", showUnnest);
         }
 
         private static void SetCategoryMenuItemVisible(ContextMenu menu, string header, bool visible)
@@ -1036,7 +1198,7 @@ namespace DownloadMuck
                 return;
             }
             foreach (var cat in targets)
-                MoveCategoryToRoot(cat);
+                UnnestCategory(cat);
         }
 
         private void MenuRenameCategory_Click(object sender, RoutedEventArgs e)
@@ -1047,18 +1209,82 @@ namespace DownloadMuck
                 return;
             }
 
-            var dlg = new PromptDialog("Yeniden adlandır", "Yeni kategori adı:", cat.Name)
-            {
-                Owner = this
-            };
-            if (dlg.ShowDialog() != true) return;
-            string name = dlg.ResultText.Trim();
-            if (string.IsNullOrWhiteSpace(name) || name == cat.Name) return;
+            if (!ShowCategoryEditOverlay(cat)) return;
 
-            cat.Name = name;
-            CategoryStore.Save(Categories);
+            string name = CategoryEditPanel.CategoryName;
+            string icon = CategoryEditPanel.SelectedIcon;
+
+            bool nameChanged = !string.Equals(name, cat.Name, StringComparison.Ordinal);
+            bool iconChanged = !string.Equals(icon, cat.Icon, StringComparison.Ordinal);
+            if (!nameChanged && !iconChanged) return;
+
+            if (iconChanged)
+                cat.Icon = icon;
+
+            if (nameChanged)
+                RenameCategory(cat, name);
+            else if (iconChanged)
+                CategoryStore.Save(Categories);
+
             RebuildVisibleCategories();
             LstCategories.SelectedItem = cat;
+        }
+
+        private void RenameCategory(CategoryItem cat, string newName)
+        {
+            string oldFolderPath = CategoryStore.GetCategoryFolderPath(Categories, cat.Id, _defaultFolder);
+            string? oldCustomPath = cat.CustomFolderPath;
+
+            cat.Name = newName;
+            string newFolderPath = CategoryStore.GetCategoryFolderPath(Categories, cat.Id, _defaultFolder);
+
+            if (!string.IsNullOrWhiteSpace(oldCustomPath))
+            {
+                string? parentDir = Path.GetDirectoryName(oldCustomPath);
+                string newCustom = !string.IsNullOrWhiteSpace(parentDir)
+                    ? Path.Combine(parentDir, CategoryStore.SanitizeFolderName(newName))
+                    : CategoryStore.SanitizeFolderName(newName);
+                if (Directory.Exists(oldCustomPath)
+                    && !string.Equals(oldCustomPath, newCustom, StringComparison.OrdinalIgnoreCase)
+                    && !Directory.Exists(newCustom))
+                {
+                    try { Directory.Move(oldCustomPath, newCustom); } catch { /* ignore */ }
+                }
+                cat.CustomFolderPath = newCustom;
+                newFolderPath = newCustom;
+            }
+            else if (Directory.Exists(oldFolderPath)
+                     && !string.Equals(oldFolderPath, newFolderPath, StringComparison.OrdinalIgnoreCase)
+                     && !Directory.Exists(newFolderPath))
+            {
+                try { Directory.Move(oldFolderPath, newFolderPath); } catch { /* ignore */ }
+            }
+
+            foreach (var item in DownloadList.Where(i => i.CategoryId == cat.Id))
+            {
+                if (string.IsNullOrWhiteSpace(item.FileName)) continue;
+                string newPath = Path.Combine(newFolderPath, item.FileName);
+                if (string.IsNullOrWhiteSpace(item.FilePath))
+                {
+                    item.FilePath = newPath;
+                    continue;
+                }
+                if (string.Equals(Path.GetFullPath(item.FilePath), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try
+                {
+                    if (File.Exists(item.FilePath))
+                    {
+                        Directory.CreateDirectory(newFolderPath);
+                        DownloadPathHelper.MoveFileAndState(item.FilePath, newPath);
+                    }
+                    item.FilePath = newPath;
+                    RebindEngineAfterPathChange(item, newPath);
+                }
+                catch { /* ignore */ }
+            }
+
+            CategoryStore.Save(Categories);
         }
 
         private void MenuOpenCategoryFolder_Click(object sender, RoutedEventArgs e)
@@ -1215,12 +1441,14 @@ namespace DownloadMuck
 
         private void LstCategories_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Delete)
+            if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None && DeleteKeyEnabled())
             {
                 MenuDeleteCategories_Click(sender, e);
                 e.Handled = true;
             }
         }
+
+        private static bool DeleteKeyEnabled() => AppSettingsStore.Load().DeleteKeyShortcutsEnabled;
 
         private void CatMarquee_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
@@ -1393,6 +1621,8 @@ namespace DownloadMuck
 
         private void LstCategories_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            _sidebarInputActive = true;
+            LstCategories.Focus();
             _categoryDragStart = e.GetPosition(null);
             _categoryDragItem = null;
             // Expand butonundan surukleme baslatma
@@ -1435,10 +1665,23 @@ namespace DownloadMuck
             finally
             {
                 CategoryDragPopup.IsOpen = false;
+                ClearCatDropVisuals();
+                _catDropKind = CatDropKind.None;
+                _catDropTarget = null;
                 if (LstCategories.ItemContainerGenerator.ContainerFromItem(dragged) is ListBoxItem lbi2)
                     lbi2.Opacity = 1;
                 _categoryDragItem = null;
             }
+        }
+
+        private void LstCategories_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Sol tık + sağ tık veya iptal: turuncu çizgi takılmasın
+            CategoryDragPopup.IsOpen = false;
+            ClearCatDropVisuals();
+            _catDropKind = CatDropKind.None;
+            _catDropTarget = null;
+            _categoryDragItem = null;
         }
 
         private void LstCategories_GiveFeedback(object sender, GiveFeedbackEventArgs e)
@@ -1473,11 +1716,14 @@ namespace DownloadMuck
 
         private void LstCategories_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
         {
-            if (e.EscapePressed)
+            if (e.EscapePressed || e.Action != DragAction.Continue)
             {
-                e.Action = DragAction.Cancel;
+                if (e.EscapePressed)
+                    e.Action = DragAction.Cancel;
                 CategoryDragPopup.IsOpen = false;
                 ClearCatDropVisuals();
+                _catDropKind = CatDropKind.None;
+                _catDropTarget = null;
             }
         }
 
@@ -1766,6 +2012,8 @@ namespace DownloadMuck
         {
             CatDropInsertLine.Visibility = Visibility.Collapsed;
             CatDropNestHighlight.Visibility = Visibility.Collapsed;
+            _catDropKind = CatDropKind.None;
+            _catDropTarget = null;
         }
 
         private void LstCategories_Drop(object sender, DragEventArgs e)
@@ -1858,6 +2106,48 @@ namespace DownloadMuck
                 Categories.Insert(insertAt, dragged);
             }
             FinishCategoryMove(dragged);
+        }
+
+        private void UnnestCategory(CategoryItem cat)
+        {
+            if (string.IsNullOrEmpty(cat.ParentId)) return;
+            var parent = CategoryStore.FindById(Categories, cat.ParentId!);
+            if (parent == null)
+            {
+                MoveCategoryToRoot(cat);
+                return;
+            }
+
+            DetachCategory(cat);
+            cat.ParentId = parent.ParentId;
+            cat.Depth = parent.Depth;
+
+            if (string.IsNullOrEmpty(parent.ParentId))
+            {
+                int idx = Categories.IndexOf(parent);
+                if (idx < 0) idx = Categories.Count - 1;
+                Categories.Insert(idx + 1, cat);
+            }
+            else
+            {
+                var grandParent = CategoryStore.FindById(Categories, parent.ParentId!);
+                if (grandParent != null)
+                {
+                    int idx = grandParent.Children.IndexOf(parent);
+                    if (idx < 0) idx = grandParent.Children.Count - 1;
+                    grandParent.Children.Insert(idx + 1, cat);
+                    grandParent.NotifyChildrenChanged();
+                }
+                else
+                {
+                    int idx = Categories.IndexOf(parent);
+                    if (idx < 0) idx = Categories.Count - 1;
+                    cat.ParentId = null;
+                    Categories.Insert(idx + 1, cat);
+                }
+            }
+
+            FinishCategoryMove(cat);
         }
 
         private void NestCategoryInto(CategoryItem dragged, CategoryItem target)
@@ -1972,7 +2262,7 @@ namespace DownloadMuck
 
         private void MenuMoveCategory_Click(object sender, RoutedEventArgs e)
         {
-            var selected = GetToolbarTargets();
+            var selected = DgDownloads.SelectedItems.OfType<DownloadItem>().ToList();
             if (selected.Count == 0 && DgDownloads.SelectedItem is DownloadItem one)
                 selected.Add(one);
             if (selected.Count == 0) return;
@@ -2079,15 +2369,10 @@ namespace DownloadMuck
             factory.AppendChild(cp);
             template.VisualTree = factory;
 
-            var trigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            var trigger = new Trigger { SourceName = "bd", Property = UIElement.IsMouseOverProperty, Value = true };
             trigger.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("MenuHoverBgBrush"), "bd"));
             trigger.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
             template.Triggers.Add(trigger);
-
-            var kf = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
-            kf.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("MenuHoverBgBrush"), "bd"));
-            kf.Setters.Add(new Setter(MenuItem.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
-            template.Triggers.Add(kf);
             return template;
         }
 
@@ -2498,8 +2783,7 @@ namespace DownloadMuck
 
         private async void ToolbarNew_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new NewUrlDialog { Owner = this };
-            if (dlg.ShowDialog() != true) return;
+            if (!ShowNewUrlOverlay(out var dlg)) return;
 
             var urls = dlg.Urls;
             if (dlg.GrabLinks)
@@ -2530,6 +2814,16 @@ namespace DownloadMuck
             {
                 string url = urls[i];
                 string name = BuildQuickFileName(url, "", null);
+                if (FileNameHelper.NeedsResolution(name))
+                {
+                    try
+                    {
+                        var (resolved, _) = await ResolveDownloadMetaAsync(url, name, null);
+                        if (!string.IsNullOrWhiteSpace(resolved))
+                            name = resolved;
+                    }
+                    catch { /* quick name fallback */ }
+                }
                 string categoryId = ResolveCategoryForNewFile(name);
                 string folder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
                 if (string.IsNullOrWhiteSpace(folder))
@@ -2602,32 +2896,24 @@ namespace DownloadMuck
         private void TryAutoExtract(DownloadItem item)
         {
             var settings = AppSettingsStore.Load();
-            if (!settings.AutoExtractArchives || !ArchiveExtractor.IsArchive(item.FilePath))
+            if (!File.Exists(item.FilePath) || !ArchiveExtractor.IsArchive(item.FilePath))
                 return;
+
+            bool openAfterDownload = settings.AutoExtractArchives;
+            bool deleteOnClose = settings.DeleteArchiveAfterExtract;
+            if (!openAfterDownload && !deleteOnClose)
+                return;
+
             try
             {
-                if (ArchiveExtractor.LooksEncrypted(item.FilePath))
-                {
-                    var dlg = new PromptDialog("Arşiv şifresi", "Bu arşiv şifreli. Şifreyi girin:");
-                    dlg.Owner = this;
-                    if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.ResultText))
-                    {
-                        item.StatusText = "Şifreli arşiv atlandı";
-                        return;
-                    }
-                    ArchiveExtractor.Extract(item.FilePath, settings.DeleteArchiveAfterExtract, dlg.ResultText);
-                    return;
-                }
-
-                ArchiveExtractor.Extract(item.FilePath, settings.DeleteArchiveAfterExtract);
-            }
-            catch (ArchivePasswordRequiredException)
-            {
-                item.StatusText = "Şifreli arşiv atlandı";
+                if (deleteOnClose)
+                    ArchiveExtractor.OpenAndDeleteWhenClosed(item.FilePath);
+                else
+                    ArchiveExtractor.OpenArchive(item.FilePath);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Extract: {ex.Message}");
+                Debug.WriteLine($"Archive open: {ex.Message}");
                 item.StatusText = "Arşiv açılamadı";
             }
         }
@@ -3021,19 +3307,16 @@ namespace DownloadMuck
             if (DgDownloads.SelectedItem is not DownloadItem item) return;
 
             string currentName = item.FileName;
-            var dlg = new PromptDialog("Yeniden adlandır", "Yeni dosya adı:", currentName, extensionLockMode: true)
-            {
-                Owner = this
-            };
-            if (dlg.ShowDialog() != true) return;
+            if (ShowPromptOverlay("Yeniden adlandır", "Yeni dosya adı:", currentName, extensionLockMode: true) != true)
+                return;
 
-            string newName = dlg.ResultText.Trim();
+            string newName = _lastPromptResult?.Text.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(newName) || newName == currentName) return;
             foreach (char c in Path.GetInvalidFileNameChars())
                 newName = newName.Replace(c, '_');
 
             // Tik yoksa uzantiyi zorla koru
-            if (!dlg.AllowExtensionChange)
+            if (_lastPromptResult is { AllowExtensionChange: false })
             {
                 string origExt = Path.GetExtension(currentName);
                 string baseName = Path.GetFileNameWithoutExtension(newName);
@@ -3497,7 +3780,7 @@ namespace DownloadMuck
         {
             try
             {
-                var (resolvedName, sizeLabel) = await ResolveMetaAsync(url, currentName, mimeHint)
+                var (resolvedName, sizeLabel) = await ResolveDownloadMetaAsync(url, currentName, mimeHint)
                     .ConfigureAwait(false);
 
                 await Dispatcher.InvokeAsync(() =>
@@ -3519,6 +3802,10 @@ namespace DownloadMuck
                 Debug.WriteLine($"EnrichSessionMeta: {ex.Message}");
             }
         }
+
+        public async Task<(string FileName, string SizeLabel)> ResolveDownloadMetaAsync(
+            string url, string suggestedName, string? mimeHint = null)
+            => await ResolveMetaAsync(url, suggestedName, mimeHint).ConfigureAwait(false);
 
         private async Task<(string FileName, string SizeLabel)> ResolveMetaAsync(
             string url, string suggestedName, string? mimeHint)
@@ -3551,11 +3838,7 @@ namespace DownloadMuck
 
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
-                client.DefaultRequestHeaders.TryAddWithoutValidation(
-                    "User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-
+                using var client = CreateMetaHttpClient(url);
                 HttpResponseMessage? response = null;
                 try
                 {
@@ -3568,6 +3851,7 @@ namespace DownloadMuck
                 {
                     response?.Dispose();
                     using var get = new HttpRequestMessage(HttpMethod.Get, url);
+                    get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 8191);
                     response = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead);
                 }
 
@@ -3576,6 +3860,9 @@ namespace DownloadMuck
                     contentType = response.Content.Headers.ContentType?.MediaType;
                     fromHeader = FileNameHelper.ExtractFromContentDisposition(response.Content.Headers);
                     contentLength = response.Content.Headers.ContentLength;
+                    if (contentLength is null or <= 0
+                        && response.Content.Headers.ContentRange?.Length is long rangeLen)
+                        contentLength = rangeLen;
 
                     bool isHtml = !string.IsNullOrWhiteSpace(contentType)
                         && contentType.Contains("html", StringComparison.OrdinalIgnoreCase);
@@ -3596,6 +3883,28 @@ namespace DownloadMuck
                         contentType = null;
                         contentLength = null;
                     }
+                    else if (string.IsNullOrWhiteSpace(fromHeader)
+                             && FileNameHelper.NeedsResolution(decodedSuggested))
+                    {
+                        try
+                        {
+                            await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                            byte[] buf = new byte[16];
+                            int n = await stream.ReadAsync(buf).ConfigureAwait(false);
+                            if (n > 0)
+                            {
+                                string? magicExt = FileNameHelper.GuessExtensionFromMagic(buf.AsSpan(0, n));
+                                if (!string.IsNullOrEmpty(magicExt))
+                                {
+                                    string baseName = FileNameHelper.IsPlaceholderName(decodedSuggested)
+                                        ? "download"
+                                        : Path.GetFileNameWithoutExtension(decodedSuggested);
+                                    fromHeader = baseName + magicExt;
+                                }
+                            }
+                        }
+                        catch { /* ignore */ }
+                    }
                 }
             }
             catch { /* ignore */ }
@@ -3608,6 +3917,26 @@ namespace DownloadMuck
 
             string sizeLabel = contentLength is > 0 ? FormatFileSize(contentLength.Value) : "—";
             return (chosen, sizeLabel);
+        }
+
+        private static HttpClient CreateMetaHttpClient(string url)
+        {
+            var client = new HttpClient(new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                AutomaticDecompression = System.Net.DecompressionMethods.All
+            })
+            { Timeout = TimeSpan.FromSeconds(15) };
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                && (uri.Host.Contains("googleusercontent.com", StringComparison.OrdinalIgnoreCase)
+                    || uri.Host.Contains("drive.google.com", StringComparison.OrdinalIgnoreCase)))
+            {
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://drive.google.com/");
+            }
+            return client;
         }
 
         private void RebindEngineAfterPathChange(DownloadItem item, string newPath)
@@ -4347,6 +4676,11 @@ namespace DownloadMuck
             SyncSelectAllCheckbox();
         }
 
+        private void DgDownloads_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _sidebarInputActive = false;
+        }
+
         private void DgDownloads_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control)
@@ -4367,7 +4701,7 @@ namespace DownloadMuck
                 }
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None)
+            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None && DeleteKeyEnabled())
             {
                 DeleteSelectedItems();
                 e.Handled = true;
@@ -4397,11 +4731,29 @@ namespace DownloadMuck
                 DgDownloads.SelectAll();
                 e.Handled = true;
             }
-            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None
-                     && DgDownloads.SelectedItems.Count > 0)
+            else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None && DeleteKeyEnabled())
             {
-                DeleteSelectedItems();
-                e.Handled = true;
+                var deletableCats = LstCategories.SelectedItems.OfType<CategoryItem>()
+                    .Where(c => !c.IsBuiltin && c.Id != "All").ToList();
+                bool sidebarActive = _sidebarInputActive
+                    || LstCategories.IsKeyboardFocusWithin
+                    || (SidebarPanel?.IsKeyboardFocusWithin ?? false);
+
+                if (sidebarActive && deletableCats.Count > 0)
+                {
+                    MenuDeleteCategories_Click(sender, e);
+                    e.Handled = true;
+                }
+                else if (DgDownloads.SelectedItems.Count > 0)
+                {
+                    DeleteSelectedItems();
+                    e.Handled = true;
+                }
+                else if (deletableCats.Count > 0)
+                {
+                    MenuDeleteCategories_Click(sender, e);
+                    e.Handled = true;
+                }
             }
         }
 

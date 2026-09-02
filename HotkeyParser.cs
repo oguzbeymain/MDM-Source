@@ -6,9 +6,15 @@ namespace DownloadMuck
     {
         public static Key NormalizeKey(KeyEventArgs e)
         {
-            Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+            Key key = e.Key;
+            if (key == Key.System)
+                key = e.SystemKey;
             if (key is Key.ImeProcessed or Key.DeadCharProcessed)
-                key = e.Key == Key.System ? e.SystemKey : e.Key;
+            {
+                key = e.SystemKey != Key.None ? e.SystemKey : e.Key;
+                if (key is Key.ImeProcessed or Key.DeadCharProcessed)
+                    key = e.SystemKey;
+            }
             return key;
         }
 
@@ -55,13 +61,15 @@ namespace DownloadMuck
         private static bool TryParseKey(string p, out Key key)
         {
             key = Key.None;
+            if (string.IsNullOrWhiteSpace(p))
+                return false;
+
             if (Enum.TryParse(p, ignoreCase: true, out Key k) && k != Key.None && !IsModifierKey(k))
             {
                 key = k;
                 return true;
             }
 
-            // "D1" / "NumPad1" / tek harf
             if (p.Length == 1)
             {
                 char c = char.ToUpperInvariant(p[0]);
@@ -87,8 +95,19 @@ namespace DownloadMuck
             if (mods.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
             if (mods.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
             if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
-            parts.Add(key.ToString());
+            parts.Add(DisplayKey(key));
             return string.Join("+", parts);
+        }
+
+        public static string DisplayKey(Key key)
+        {
+            if (key >= Key.D0 && key <= Key.D9)
+                return ((char)('0' + (key - Key.D0))).ToString();
+            if (key >= Key.A && key <= Key.Z)
+                return key.ToString();
+            if (key >= Key.NumPad0 && key <= Key.NumPad9)
+                return "NumPad" + (key - Key.NumPad0);
+            return key.ToString();
         }
 
         public static bool IsModifierKey(Key key) =>

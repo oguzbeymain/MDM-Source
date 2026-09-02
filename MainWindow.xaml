@@ -530,6 +530,7 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource RowHoverBgBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
@@ -638,11 +639,7 @@
                                     <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
-                                        <Setter Property="Foreground" Value="#FF6B00"/>
-                                    </Trigger>
-                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
                                         <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
@@ -725,11 +722,7 @@
                                     <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
-                                        <Setter Property="Foreground" Value="#FF6B00"/>
-                                    </Trigger>
-                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
                                         <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
@@ -938,11 +931,7 @@
                                     </DockPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
-                                        <Setter Property="Foreground" Value="#FF6B00"/>
-                                    </Trigger>
-                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
                                         <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                                         <Setter Property="Foreground" Value="#FF6B00"/>
                                     </Trigger>
@@ -1012,16 +1001,43 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
                         </Trigger>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
-                            <Setter Property="Foreground" Value="#FF6B00"/>
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
                             <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
+                <ControlTemplate x:Key="EmptySubmenuLeafTemplate" TargetType="MenuItem">
+                    <Border x:Name="itemBorder" Background="{TemplateBinding Background}"
+                            BorderThickness="0" CornerRadius="5" Padding="12,5" MinWidth="120">
+                        <Grid HorizontalAlignment="Stretch">
+                            <TextBlock x:Name="chk" Text="✓" FontSize="12" Foreground="#FF6B00"
+                                       HorizontalAlignment="Left" VerticalAlignment="Center"
+                                       Visibility="Collapsed"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              ContentSource="Header"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
+                            <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
+                            <Setter Property="Foreground" Value="#FF6B00"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+                <Style x:Key="EmptySubmenuLeafStyle" TargetType="MenuItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MenuTextBrush}"/>
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="Padding" Value="10,5"/>
+                    <Setter Property="Height" Value="28"/>
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    <Setter Property="Template" Value="{StaticResource EmptySubmenuLeafTemplate}"/>
+                </Style>
                 <ControlTemplate x:Key="EmptySubmenuTemplate" TargetType="MenuItem">
                     <Border x:Name="itemBorder" Background="{TemplateBinding Background}"
                             BorderThickness="0" CornerRadius="5" Padding="{TemplateBinding Padding}">
@@ -1046,7 +1062,7 @@
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
+                        <Trigger SourceName="itemBorder" Property="IsMouseOver" Value="True">
                             <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MenuHoverBgBrush}"/>
                             <Setter Property="Foreground" Value="#FF6B00"/>
                         </Trigger>
@@ -1082,7 +1098,7 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Görünüm" Tag="▦">
+            <MenuItem Header="Görünüm" Tag="▦" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
                 <MenuItem x:Name="MenuViewSmall" Header="Küçük" IsCheckable="True"
                           Click="MenuViewDensity_Click"/>
                 <MenuItem x:Name="MenuViewMedium" Header="Orta" IsCheckable="True"
@@ -1090,7 +1106,7 @@
                 <MenuItem x:Name="MenuViewLarge" Header="Büyük" IsCheckable="True"
                           Click="MenuViewDensity_Click"/>
             </MenuItem>
-            <MenuItem Header="Sıralama ölçütü" Tag="⇅">
+            <MenuItem Header="Sıralama ölçütü" Tag="⇅" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
                 <MenuItem x:Name="MenuSortName" Header="İsim" IsCheckable="True"
                           Click="MenuSortBy_Click"/>
                 <MenuItem x:Name="MenuSortSize" Header="Boyut" IsCheckable="True"
@@ -1219,12 +1235,14 @@
                                   LostMouseCapture="CatMarquee_LostMouseCapture">
                             <ListBox x:Name="LstCategories"
                                      Background="Transparent" BorderThickness="0"
+                                     Focusable="True"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ItemContainerStyle="{StaticResource CategoryListItemStyle}"
                                      SelectionMode="Extended"
                                      SelectionChanged="LstCategories_SelectionChanged"
                                      PreviewMouseLeftButtonDown="LstCategories_PreviewMouseLeftButtonDown"
+                                     PreviewMouseRightButtonDown="LstCategories_PreviewMouseRightButtonDown"
                                      PreviewMouseMove="LstCategories_PreviewMouseMove"
                                      GiveFeedback="LstCategories_GiveFeedback"
                                      QueryContinueDrag="LstCategories_QueryContinueDrag"
@@ -1250,7 +1268,7 @@
                                                                 <Setter.Value>
                                                                     <ControlTemplate TargetType="Button">
                                                                         <Border Background="Transparent">
-                                                                            <TextBlock x:Name="arrow" Text="▸" FontSize="10" Foreground="#888"
+                                                                            <TextBlock x:Name="arrow" Text="▸" FontSize="10" Foreground="{DynamicResource HeaderTextBrush}"
                                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -1269,11 +1287,11 @@
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Foreground="#444"
+                                                <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Opacity="0.45"
                                                            Margin="4,0,0,0" VerticalAlignment="Center"
                                                            ToolTip="Sürükle: üste/alta sıra · ortaya bırak = içine ekle · Tüm indirilenler = dışarı çıkar"/>
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding CountLabel}"
-                                                           FontSize="11" Foreground="#888888" Margin="0,0,6,0"
+                                                           FontSize="11" Opacity="0.75" Margin="0,0,6,0"
                                                            VerticalAlignment="Center" MinWidth="14"
                                                            HorizontalAlignment="Right"/>
                                                 <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center"
@@ -1455,6 +1473,7 @@
                               VirtualizingPanel.VirtualizationMode="Recycling"
                               ContextMenu="{StaticResource EmptyContextMenu}"
                               MouseDoubleClick="DgDownloads_MouseDoubleClick" Drop="DgDownloads_Drop"
+                              PreviewMouseLeftButtonDown="DgDownloads_PreviewMouseLeftButtonDown"
                               PreviewKeyDown="DgDownloads_PreviewKeyDown"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -1957,8 +1976,9 @@
 
             <!-- Uygulama içi karartmalı modal popup (ayarlar/kurallar üstünde) -->
             <Border x:Name="ModalOverlay" Grid.Row="0" Grid.RowSpan="2"
-                    Background="#CC000000" Visibility="Collapsed" Panel.ZIndex="1200"
+                    Background="#B3000000" Visibility="Collapsed" Panel.ZIndex="1200"
                     IsHitTestVisible="True" PreviewKeyDown="ModalOverlay_PreviewKeyDown"
+                    MouseLeftButtonDown="ModalOverlay_BackdropClick"
                     UseLayoutRounding="True" SnapsToDevicePixels="True">
                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
                     <Border x:Name="ModalCard" Background="#1E1E1E" BorderBrush="#3A3A3A" BorderThickness="1"
@@ -2062,6 +2082,36 @@
                 <local:CategoryRulesDialog x:Name="RulesPanel"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            MouseLeftButtonDown="OverlayCard_MouseLeftButtonDown"/>
+            </Border>
+
+            <!-- Yeni indirme — uygulama içi overlay -->
+            <Border x:Name="NewUrlOverlay" Grid.Row="0" Grid.RowSpan="2"
+                    Background="#B3000000" Visibility="Collapsed" Panel.ZIndex="1150"
+                    IsHitTestVisible="True" PreviewKeyDown="NewUrlOverlay_PreviewKeyDown"
+                    MouseLeftButtonDown="NewUrlOverlay_BackdropClick">
+                <local:NewUrlDialog x:Name="NewUrlPanel"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MouseLeftButtonDown="OverlayCard_MouseLeftButtonDown"/>
+            </Border>
+
+            <!-- Metin girişi — uygulama içi overlay -->
+            <Border x:Name="PromptOverlay" Grid.Row="0" Grid.RowSpan="2"
+                    Background="#B3000000" Visibility="Collapsed" Panel.ZIndex="1150"
+                    IsHitTestVisible="True" PreviewKeyDown="PromptOverlay_PreviewKeyDown"
+                    MouseLeftButtonDown="PromptOverlay_BackdropClick">
+                <local:PromptDialog x:Name="PromptPanel"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    MouseLeftButtonDown="OverlayCard_MouseLeftButtonDown"/>
+            </Border>
+
+            <!-- Kategori düzenle — uygulama içi overlay -->
+            <Border x:Name="CategoryEditOverlay" Grid.Row="0" Grid.RowSpan="2"
+                    Background="#B3000000" Visibility="Collapsed" Panel.ZIndex="1150"
+                    IsHitTestVisible="True" PreviewKeyDown="CategoryEditOverlay_PreviewKeyDown"
+                    MouseLeftButtonDown="CategoryEditOverlay_BackdropClick">
+                <local:CategoryEditDialog x:Name="CategoryEditPanel"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          MouseLeftButtonDown="OverlayCard_MouseLeftButtonDown"/>
             </Border>
         </Grid>
     </Border>

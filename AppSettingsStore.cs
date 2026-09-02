@@ -37,8 +37,11 @@ namespace DownloadMuck
         public bool NotifyOnTrayMinimize { get; set; }
         public bool AutoCreateCategoryFolders { get; set; } = true;
         public string Theme { get; set; } = "Dark";
+        /// <summary>Açık tema parlaklığı (70–100). Yalnızca beyaz modda uygulanır.</summary>
+        public int LightThemeBrightness { get; set; } = 100;
         public bool CopyFilesHotkeyEnabled { get; set; } = true;
         public string CopyFilesHotkey { get; set; } = "Ctrl+C";
+        public bool DeleteKeyShortcutsEnabled { get; set; }
         public int TorrentListenPort { get; set; } = 6881;
         public bool TorrentDht { get; set; } = true;
         public bool TorrentLocalPeers { get; set; } = true;

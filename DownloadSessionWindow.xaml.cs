@@ -503,9 +503,9 @@ namespace DownloadMuck
         public void ApplyResolvedMeta(string fileName, string? sizeLabel)
         {
             if (_started) return;
+            if (string.IsNullOrWhiteSpace(fileName)) return;
 
-            if (!string.IsNullOrWhiteSpace(fileName) &&
-                !string.Equals(_fileName, fileName, StringComparison.Ordinal))
+            if (FileNameHelper.IsBetterName(fileName, _fileName))
             {
                 _fileName = fileName;
                 TxtFileName.Text = fileName;
@@ -681,14 +681,31 @@ namespace DownloadMuck
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
 
+            BtnStart.IsEnabled = false;
+            BtnStart.Opacity = 0.55;
+            TxtStatus.Visibility = Visibility.Visible;
+            TxtStatus.Text = "Dosya bilgisi alınıyor...";
+
+            try
+            {
+                var (resolvedName, sizeLabel) = await _host.ResolveDownloadMetaAsync(_url, _fileName, null)
+                    .ConfigureAwait(true);
+                if (FileNameHelper.IsBetterName(resolvedName, _fileName))
+                    ApplyResolvedMeta(resolvedName, sizeLabel);
+                else if (IsKnownSizeLabel(sizeLabel))
+                    ApplyResolvedMeta(_fileName, sizeLabel);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Pre-start meta: {ex.Message}");
+            }
+
             _started = true;
             SetFolderPassive(true);
             BtnStart.IsEnabled = false;
-            BtnStart.Opacity = 0.55;
             BtnPause.IsEnabled = true;
             BtnCancelDl.IsEnabled = true;
             BtnPause.Content = "Duraklat";
-            TxtStatus.Visibility = Visibility.Visible;
             TxtStatus.Text = "İndiriliyor...";
 
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder,

@@ -7,45 +7,38 @@ using Microsoft.Win32;
 
 namespace DownloadMuck
 {
-    public partial class NewUrlDialog : Window
+    public partial class NewUrlDialog : UserControl
     {
-        public string Url => TxtUrl.Text?.Trim() ?? "";
-        public IReadOnlyList<string> Urls
-        {
-            get
-            {
-                var list = UrlClassifier.ExtractDownloadUrls(TxtUrl.Text);
-                if (list.Count > 0)
-                    return list;
-                if (UrlClassifier.CanDownloadNow(UrlClassifier.Classify(Url)))
-                    return new[] { Url };
-                return list;
-            }
-        }
-        public bool GrabLinks { get; private set; }
+        public event Action? Accepted;
+        public event Action? Cancelled;
 
-        private bool _busy;
+        public string Url => TxtUrl.Text?.Trim() ?? "";
+        public IReadOnlyList<string> Urls => UrlClassifier.ExtractDownloadUrls(TxtUrl.Text);
+        public bool GrabLinks { get; private set; }
 
         public NewUrlDialog()
         {
             InitializeComponent();
             ApplyThemeSurface(ThemeService.IsLight);
-            Loaded += (_, _) =>
-            {
-                TxtUrl.Focus();
-                Keyboard.Focus(TxtUrl);
-            };
+        }
+
+        public void Reset()
+        {
+            GrabLinks = false;
+            TxtUrl.Text = "";
+            ClearValidation();
+            TxtUrl.Focus();
+            Keyboard.Focus(TxtUrl);
         }
 
         public void ApplyThemeSurface(bool light)
         {
-            var card = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1B, 0x1B, 0x1B);
-            var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+            var card = ThemeService.Surface(light, 0xFF, 0xFF, 0xFF, 0x1B, 0x1B, 0x1B);
+            var border = ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x33, 0x33, 0x33);
             var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xEE, 0xEE, 0xEE);
             var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x88, 0x88, 0x88);
-            var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
-            var soft = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2D, 0x2D, 0x2D);
-            // Hover: siyah zemin + beyaz yazı (mouse geldiği belli olsun)
+            var input = ThemeService.Surface(light, 0xF0, 0xF0, 0xF3, 0x25, 0x25, 0x25);
+            var soft = ThemeService.Surface(light, 0xEE, 0xEE, 0xF0, 0x2D, 0x2D, 0x2D);
             var softHover = Color.FromRgb(0x1A, 0x1A, 0x1A);
             var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xCC, 0xCC, 0xCC);
             var softHoverFg = Colors.White;
@@ -120,21 +113,21 @@ namespace DownloadMuck
                 Filter = "Torrent (*.torrent)|*.torrent|Tüm dosyalar|*.*",
                 CheckFileExists = true
             };
-            if (dlg.ShowDialog(this) == true && !string.IsNullOrWhiteSpace(dlg.FileName))
+            if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(dlg.FileName))
+            {
                 TxtUrl.Text = dlg.FileName;
+                ClearValidation();
+            }
         }
 
-        private void BtnClose_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = false;
-        }
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
         private void BtnDownload_Click(object sender, RoutedEventArgs e) => TryAccept();
 
         private void BtnGrab_Click(object sender, RoutedEventArgs e)
         {
             GrabLinks = true;
-            DialogResult = true;
+            Accepted?.Invoke();
         }
 
         private void TxtUrl_KeyDown(object sender, KeyEventArgs e)
@@ -142,7 +135,7 @@ namespace DownloadMuck
             if (e.Key == Key.Escape)
             {
                 e.Handled = true;
-                DialogResult = false;
+                Cancelled?.Invoke();
                 return;
             }
             if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
@@ -152,32 +145,40 @@ namespace DownloadMuck
             }
         }
 
-        private async void TxtUrl_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            string t = Url;
-            var urls = UrlClassifier.ExtractHttpUrls(t);
-            if (_busy || urls.Count != 1 || t.Contains('\n') || t.Contains('\r'))
-                return;
-
-            _busy = true;
-            try
-            {
-                await System.Threading.Tasks.Task.Delay(180);
-                if (Url == t && UrlClassifier.ExtractHttpUrls(Url).Count == 1)
-                    TryAccept();
-            }
-            finally { _busy = false; }
-        }
-
         private void TryAccept()
         {
-            if (Urls.Count > 0 || UrlClassifier.CanDownloadNow(UrlClassifier.Classify(Url)))
+            ClearValidation();
+            var urls = Urls;
+            if (urls.Count > 0)
             {
-                DialogResult = true;
+                GrabLinks = false;
+                Accepted?.Invoke();
                 return;
             }
 
+            string raw = Url;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                ShowValidation("İndirmek için en az bir geçerli bağlantı girin.");
+                TxtUrl.Focus();
+                return;
+            }
+
+            var kind = UrlClassifier.Classify(raw);
+            ShowValidation(UrlClassifier.UnsupportedMessage(kind));
             TxtUrl.Focus();
+        }
+
+        private void ShowValidation(string message)
+        {
+            TxtValidation.Text = message;
+            TxtValidation.Visibility = Visibility.Visible;
+        }
+
+        private void ClearValidation()
+        {
+            TxtValidation.Text = "";
+            TxtValidation.Visibility = Visibility.Collapsed;
         }
     }
 }

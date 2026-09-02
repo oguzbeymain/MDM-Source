@@ -180,6 +180,22 @@ namespace DownloadMuck
                     !last.Equals("view", StringComparison.OrdinalIgnoreCase) &&
                     last != "/")
                     return last;
+
+                // Google Drive usercontent — sorgu parametrelerinden dosya adı
+                if (uri.Host.Contains("googleusercontent.com", StringComparison.OrdinalIgnoreCase)
+                    || uri.Host.Contains("drive.google.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (string key in new[] { "filename", "name", "title" })
+                    {
+                        string? val = GetQueryParam(uri.Query, key);
+                        if (!string.IsNullOrWhiteSpace(val))
+                        {
+                            string decoded = DecodeDisplayName(val);
+                            if (!IsPlaceholderName(decoded))
+                                return decoded;
+                        }
+                    }
+                }
             }
             catch { /* ignore */ }
 
@@ -219,12 +235,52 @@ namespace DownloadMuck
                 || n.Equals("file", StringComparison.OrdinalIgnoreCase))
                 return true;
 
+            // Chrome varsayılanı: download (1), download (2) ...
+            if (Regex.IsMatch(n, @"^download\s*\(\d+\)$", RegexOptions.IgnoreCase))
+                return true;
+
             // Chrome/octet-stream varsayılanı — gerçek ad henüz yok
             if (file.Equals("download.bin", StringComparison.OrdinalIgnoreCase)
                 || file.Equals("file.bin", StringComparison.OrdinalIgnoreCase))
                 return true;
 
             return false;
+        }
+
+        /// <summary>
+        /// Uzantısız veya geçici isimler sunucudan gerçek ad alınana kadar güncellenmeli.
+        /// </summary>
+        public static bool NeedsResolution(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return true;
+            if (IsPlaceholderName(name)) return true;
+            return string.IsNullOrEmpty(Path.GetExtension(name));
+        }
+
+        public static bool IsBetterName(string candidate, string current)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) return false;
+            if (string.Equals(candidate, current, StringComparison.OrdinalIgnoreCase)) return false;
+            if (IsPlaceholderName(current) && !IsPlaceholderName(candidate)) return true;
+            if (string.IsNullOrEmpty(Path.GetExtension(current))
+                && !string.IsNullOrEmpty(Path.GetExtension(candidate)))
+                return true;
+            return !IsPlaceholderName(candidate);
+        }
+
+        public static string? GuessExtensionFromMagic(ReadOnlySpan<byte> data)
+        {
+            if (data.Length >= 4 && data[0] == 0x50 && data[1] == 0x4B)
+                return ".zip";
+            if (data.Length >= 7 && data[0] == 0x52 && data[1] == 0x61 && data[2] == 0x72 && data[3] == 0x21)
+                return ".rar";
+            if (data.Length >= 6 && data[0] == 0x37 && data[1] == 0x7A && data[2] == 0xBC && data[3] == 0xAF)
+                return ".7z";
+            if (data.Length >= 3 && data[0] == 0x1F && data[1] == 0x8B)
+                return ".gz";
+            if (data.Length >= 4 && data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46)
+                return ".pdf";
+            return null;
         }
 
         /// <summary>

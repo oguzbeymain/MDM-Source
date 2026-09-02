@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -74,11 +75,68 @@ namespace DownloadMuck
             }
 
             if (deleteArchive)
-            {
-                try { File.Delete(archivePath); } catch { /* ignore */ }
-            }
+                _ = TryDeleteFile(archivePath);
 
             return dir;
+        }
+
+        public static void OpenArchive(string archivePath)
+        {
+            if (!File.Exists(archivePath)) return;
+            Process.Start(new ProcessStartInfo(archivePath) { UseShellExecute = true });
+        }
+
+        /// <summary>
+        /// Arşivi varsayılan uygulamayla açar; kullanıcı kapattıktan sonra dosyayı siler.
+        /// </summary>
+        public static void OpenAndDeleteWhenClosed(string archivePath)
+        {
+            if (!File.Exists(archivePath)) return;
+
+            try
+            {
+                OpenArchive(archivePath);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Archive open: {ex.Message}");
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                // Görüntüleyici açılsın; WinRAR vb. dosyayı her zaman kilitlemez
+                await Task.Delay(2500).ConfigureAwait(false);
+
+                for (int i = 0; i < 7200; i++)
+                {
+                    if (!File.Exists(archivePath))
+                        return;
+
+                    if (TryDeleteFile(archivePath))
+                        return;
+
+                    await Task.Delay(1000).ConfigureAwait(false);
+                }
+            });
+        }
+
+        private static bool TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
     }
 }

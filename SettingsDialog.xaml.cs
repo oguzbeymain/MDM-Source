@@ -61,9 +61,15 @@ namespace DownloadMuck
             }
             finally { _themePreviewBusy = false; }
 
+            int brightness = settings.LightThemeBrightness <= 0 ? 100 : settings.LightThemeBrightness;
+            SldLightBrightness.Value = Math.Clamp(brightness, 70, 100);
+            TxtLightBrightnessValue.Text = $"{(int)SldLightBrightness.Value}%";
+            UpdateLightBrightnessPanelVisibility();
+
             ChkCopyHotkey.IsChecked = settings.CopyFilesHotkeyEnabled;
             _copyHotkey = string.IsNullOrWhiteSpace(settings.CopyFilesHotkey) ? "Ctrl+C" : settings.CopyFilesHotkey.Trim();
             TxtHotkey.Text = _copyHotkey;
+            ChkDeleteKey.IsChecked = settings.DeleteKeyShortcutsEnabled;
             UpdateHotkeyUiEnabled();
 
             ChkSchedule.IsChecked = settings.ScheduleEnabled;
@@ -175,25 +181,47 @@ namespace DownloadMuck
             if (ThemeLight == null || ThemeDark == null) return;
             // Anında önizleme — Kaydet kalıcılar; İptal ayarı geri yükler
             string preview = ThemeLight.IsChecked == true ? "Light" : "Dark";
+            if (ThemeLight.IsChecked == true && SldLightBrightness != null)
+                ThemeService.PreviewLightBrightness = (int)SldLightBrightness.Value;
+            else
+                ThemeService.PreviewLightBrightness = null;
             ThemeService.Apply(preview);
             ApplyThemeSurface(ThemeLight.IsChecked == true);
+            UpdateLightBrightnessPanelVisibility();
         }
 
-        /// <summary>Ayarlar kartını açık/koyu temaya uyarlar (stil trigger’larını bozmadan).</summary>
+        private void LightBrightness_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!IsLoaded || _themePreviewBusy) return;
+            if (SldLightBrightness == null || ThemeLight?.IsChecked != true) return;
+            int v = (int)SldLightBrightness.Value;
+            if (TxtLightBrightnessValue != null)
+                TxtLightBrightnessValue.Text = $"{v}%";
+            ThemeService.PreviewLightBrightness = v;
+            ThemeService.Apply("Light");
+            ApplyThemeSurface(true);
+        }
+
+        private void UpdateLightBrightnessPanelVisibility()
+        {
+            if (LightBrightnessPanel == null) return;
+            bool light = ThemeLight?.IsChecked == true;
+            LightBrightnessPanel.Visibility = light ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Ayarlar kartını açık/koyu temaya uyarlar — yalnızca kaynak fırçaları; görsel ağaçta statik renk yazılmaz.</summary>
         public void ApplyThemeSurface(bool light)
         {
             _themePreviewBusy = true;
             try
             {
-                var card = light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1B, 0x1B, 0x1B);
-                var header = light ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x1F, 0x1F, 0x1F);
-                var nav = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x16, 0x16, 0x16);
-                var footer = light ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x1A, 0x1A, 0x1A);
-                var border = light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x33, 0x33, 0x33);
+                var card = ThemeService.Surface(light, 0xFF, 0xFF, 0xFF, 0x1B, 0x1B, 0x1B);
+                var header = ThemeService.Surface(light, 0xF5, 0xF5, 0xF7, 0x1F, 0x1F, 0x1F);
+                var nav = ThemeService.Surface(light, 0xF0, 0xF0, 0xF3, 0x16, 0x16, 0x16);
+                var footer = ThemeService.Surface(light, 0xF5, 0xF5, 0xF7, 0x1A, 0x1A, 0x1A);
+                var border = ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x33, 0x33, 0x33);
                 var text = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0);
-                var muted = light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x66, 0x66, 0x66);
-                var panel = light ? Color.FromRgb(0xF7, 0xF7, 0xF9) : Color.FromRgb(0x14, 0x14, 0x14);
-                var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
+                var input = ThemeService.Surface(light, 0xF0, 0xF0, 0xF3, 0x25, 0x25, 0x25);
 
                 if (SettingsCard != null)
                 {
@@ -214,10 +242,7 @@ namespace DownloadMuck
                 }
                 if (SettingsTitle != null)
                     SettingsTitle.Foreground = Solid(text);
-                if (SettingsNavLabel != null)
-                    SettingsNavLabel.Foreground = Solid(muted);
 
-                // Nav radio — local Foreground koyma (hover trigger bozulur)
                 foreach (var rb in new[] { NavGeneral, NavNotifications, NavTheme, NavExtension,
                              NavKeyboard, NavAdvanced, NavUpdate, NavAbout })
                 {
@@ -227,87 +252,31 @@ namespace DownloadMuck
                     rb.ClearValue(Control.FontWeightProperty);
                 }
 
-                // Ayarlar içi brush’lar (UserControl resource override)
                 SetLocalBrush("NavTextBrush", light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0xAA, 0xAA, 0xAA));
-                SetLocalBrush("NavHoverBrush", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xFF, 0x6B, 0x00));
-                SetLocalBrush("NavHoverBgBrush", light ? Color.FromArgb(0x14, 0x00, 0x00, 0x00) : Color.FromArgb(0x00, 0x00, 0x00, 0x00));
-                SetLocalBrush("NavSelectedBgBrush", light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x25, 0x25, 0x25));
-                SetLocalBrush("CheckBoxIdleBgBrush", light ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x2A, 0x2A, 0x2A));
-                SetLocalBrush("CheckBoxIdleBorderBrush", light ? Color.FromRgb(0xB8, 0xB8, 0xBE) : Color.FromRgb(0x55, 0x55, 0x55));
-                SetLocalBrush("CheckBoxCheckedFillBrush", Color.FromRgb(0x1A, 0x1A, 0x1A));
-                SetLocalBrush("CheckBoxCheckedBorderBrush", light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x66, 0x66, 0x66));
-                SetLocalBrush("CheckBoxHoverBorderBrush", light ? Color.FromRgb(0x99, 0x99, 0xA0) : Color.FromRgb(0x77, 0x77, 0x77));
-                SetLocalBrush("CheckBoxMarkBrush", Colors.White);
-                SetLocalBrush("SoftBtnBgBrush", light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x25, 0x25, 0x25));
-                SetLocalBrush("SoftBtnHoverBgBrush", light ? Color.FromRgb(0xE0, 0xE0, 0xE4) : Color.FromRgb(0x33, 0x33, 0x33));
+                SetLocalBrush("NavHoverBrush", Color.FromRgb(0xFF, 0x6B, 0x00));
+                SetLocalBrush("NavHoverBgBrush", light ? Color.FromArgb(0x18, 0xFF, 0x6B, 0x00) : Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+                SetLocalBrush("NavSelectedBgBrush", ThemeService.Surface(light, 0xEE, 0xEE, 0xF0, 0x25, 0x25, 0x25));
+                SetLocalBrush("SoftBtnBgBrush", ThemeService.Surface(light, 0xEE, 0xEE, 0xF0, 0x25, 0x25, 0x25));
+                SetLocalBrush("SoftBtnHoverBgBrush", ThemeService.Surface(light, 0xE0, 0xE0, 0xE4, 0x33, 0x33, 0x33));
                 SetLocalBrush("SoftBtnFgBrush", light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xDD, 0xDD, 0xDD));
-                SetLocalBrush("SettingsPanelBgBrush", light ? Color.FromRgb(0xF7, 0xF7, 0xF9) : Color.FromRgb(0x14, 0x14, 0x14));
-                SetLocalBrush("SettingsPanelBorderBrush", light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x2A, 0x2A, 0x2A));
+                SetLocalBrush("SettingsPanelBgBrush", ThemeService.Surface(light, 0xF7, 0xF7, 0xF9, 0x14, 0x14, 0x14));
+                SetLocalBrush("SettingsPanelBorderBrush", ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x2A, 0x2A, 0x2A));
                 SetLocalBrush("SettingsMutedBrush", light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x77, 0x77, 0x77));
                 SetLocalBrush("SettingsLabelBrush", light ? Color.FromRgb(0x55, 0x55, 0x55) : Color.FromRgb(0xBB, 0xBB, 0xBB));
                 SetLocalBrush("SettingsBodyBrush", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
                 SetLocalBrush("SettingsInputBgBrush", input);
                 SetLocalBrush("SettingsInputBorderBrush", border);
-                SetLocalBrush("BrowserCardBgBrush", light ? Color.FromRgb(0xF7, 0xF7, 0xF9) : Color.FromRgb(0x14, 0x14, 0x14));
-                SetLocalBrush("BrowserCardBorderBrush", light ? Color.FromRgb(0xD8, 0xD8, 0xDE) : Color.FromRgb(0x2A, 0x2A, 0x2A));
+                SetLocalBrush("BrowserCardBgBrush", ThemeService.Surface(light, 0xF7, 0xF7, 0xF9, 0x14, 0x14, 0x14));
+                SetLocalBrush("BrowserCardBorderBrush", ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x2A, 0x2A, 0x2A));
                 SetLocalBrush("BrowserCardTextBrush", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
                 SetLocalBrush("BrowserCardMutedBrush", light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x88, 0x88, 0x88));
-                SetLocalBrush("BrowserPillIdleBgBrush", light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2A, 0x2A, 0x2A));
+                SetLocalBrush("BrowserPillIdleBgBrush", ThemeService.Surface(light, 0xEE, 0xEE, 0xF0, 0x2A, 0x2A, 0x2A));
                 SetLocalBrush("BrowserPillIdleFgBrush", light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x99, 0x99, 0x99));
                 SetLocalBrush("BrowserPillActiveBgBrush", light ? Color.FromRgb(0xE8, 0xF5, 0xE9) : Color.FromRgb(0x1B, 0x3A, 0x24));
                 SetLocalBrush("BrowserPillActiveFgBrush", light ? Color.FromRgb(0x2E, 0x7D, 0x32) : Color.FromRgb(0x8B, 0xC3, 0x4A));
 
                 if (NavExtension?.IsChecked == true)
                     RefreshBrowserStatus();
-
-                // Soft buton / input yüzeyleri (eski hardcode kalıntıları)
-                foreach (var borderEl in FindVisualBorders(this))
-                {
-                    string? name = borderEl.Name;
-                    if (name is "SettingsCard" or "SettingsHeader" or "SettingsNavPane" or "SettingsFooter")
-                        continue;
-                    // Tema seçim kartlarına dokunma
-                    if (IsUnderThemePicker(borderEl))
-                        continue;
-                    if (borderEl.Background is SolidColorBrush sb)
-                    {
-                        var c = sb.Color;
-                        if (IsOrange(c) || c.A < 30) continue;
-                        if (light && c.R <= 0x30 && c.G <= 0x30 && c.B <= 0x30)
-                            borderEl.Background = Solid(panel);
-                        else if (!light && c.R >= 0xF0 && c.G >= 0xF0 && c.B >= 0xF0)
-                            borderEl.Background = Solid(Color.FromRgb(0x14, 0x14, 0x14));
-                    }
-                    if (borderEl.BorderBrush is SolidColorBrush bb)
-                    {
-                        var c = bb.Color;
-                        if (IsOrange(c)) continue;
-                        if (light && c.R <= 0x40)
-                            borderEl.BorderBrush = Solid(border);
-                        else if (!light && c.R >= 0xC0)
-                            borderEl.BorderBrush = Solid(Color.FromRgb(0x33, 0x33, 0x33));
-                    }
-                }
-
-                foreach (var tb in FindLogicalTextBlocks(this))
-                {
-                    if (tb == SettingsTitle || tb == SettingsNavLabel) continue;
-                    if (IsUnderThemePicker(tb)) continue;
-                    if (tb.Foreground is not SolidColorBrush sb) continue;
-                    var c = sb.Color;
-                    if (IsOrange(c)) continue;
-                    if (light && c.R >= 0xA0 && c.G >= 0xA0 && c.B >= 0xA0)
-                        tb.Foreground = Solid(Color.FromRgb(0x33, 0x33, 0x33));
-                    else if (!light && c.R <= 0x40 && c.G <= 0x40 && c.B <= 0x40)
-                        tb.Foreground = Solid(Color.FromRgb(0xE0, 0xE0, 0xE0));
-                }
-
-                foreach (var box in FindVisualTextBoxes(this))
-                {
-                    box.Background = Solid(input);
-                    box.Foreground = Solid(text);
-                    box.BorderBrush = Solid(border);
-                }
             }
             finally
             {
@@ -324,69 +293,11 @@ namespace DownloadMuck
                 Resources.Add(key, brush);
         }
 
-        private static bool IsUnderThemePicker(DependencyObject d)
-        {
-            DependencyObject? cur = d;
-            while (cur != null)
-            {
-                if (cur is FrameworkElement fe && (fe.Name == "ThemeDark" || fe.Name == "ThemeLight"))
-                    return true;
-                cur = System.Windows.Media.VisualTreeHelper.GetParent(cur)
-                      ?? LogicalTreeHelper.GetParent(cur);
-            }
-            return false;
-        }
-
-        private static bool IsOrange(Color c)
-            => c.R >= 0xE0 && c.G >= 0x50 && c.G <= 0xA0 && c.B <= 0x50;
-
         private static SolidColorBrush Solid(Color c)
         {
             var b = new SolidColorBrush(c);
             b.Freeze();
             return b;
-        }
-
-        private static IEnumerable<TextBlock> FindLogicalTextBlocks(DependencyObject root)
-        {
-            if (root is not System.Windows.Media.Visual and not System.Windows.Media.Media3D.Visual3D)
-                yield break;
-            int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < n; i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                if (child is TextBlock tb) yield return tb;
-                foreach (var nested in FindLogicalTextBlocks(child))
-                    yield return nested;
-            }
-        }
-
-        private static IEnumerable<Border> FindVisualBorders(DependencyObject root)
-        {
-            if (root is not System.Windows.Media.Visual and not System.Windows.Media.Media3D.Visual3D)
-                yield break;
-            int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < n; i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                if (child is Border b) yield return b;
-                foreach (var nested in FindVisualBorders(child))
-                    yield return nested;
-            }
-        }
-
-        private static IEnumerable<TextBox> FindVisualTextBoxes(DependencyObject root)
-        {
-            if (root is not System.Windows.Media.Visual and not System.Windows.Media.Media3D.Visual3D)
-                yield break;
-            int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < n; i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-                if (child is TextBox t) yield return t;
-                foreach (var nested in FindVisualTextBoxes(child))
-                    yield return nested;
-            }
         }
 
         private void ChkCopyHotkey_Changed(object sender, RoutedEventArgs e) => UpdateHotkeyUiEnabled();
@@ -423,7 +334,15 @@ namespace DownloadMuck
                 BtnCaptureHotkey_Click(sender, e);
         }
 
-        private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e) => ProcessHotkeyCapture(e);
+
+        private void SettingsDialog_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (_capturingHotkey)
+                ProcessHotkeyCapture(e);
+        }
+
+        private void ProcessHotkeyCapture(KeyEventArgs e)
         {
             if (!_capturingHotkey) return;
             e.Handled = true;
@@ -441,9 +360,11 @@ namespace DownloadMuck
             }
 
             var mods = Keyboard.Modifiers;
-            if (mods == ModifierKeys.None && key is not (Key.F1 or Key.F2 or Key.F3 or Key.F4 or Key.F5
-                or Key.F6 or Key.F7 or Key.F8 or Key.F9 or Key.F10 or Key.F11 or Key.F12
-                or Key.Delete or Key.Insert or Key.Home or Key.End or Key.PageUp or Key.PageDown))
+            bool allowNoModifier = key is >= Key.F1 and <= Key.F12
+                or Key.Delete or Key.Insert or Key.Home or Key.End
+                or Key.PageUp or Key.PageDown;
+
+            if (mods == ModifierKeys.None && !allowNoModifier)
             {
                 TxtHotkeyHint.Text = "En az bir değiştirici (Ctrl / Alt / Shift) kullanın.";
                 return;
@@ -452,7 +373,7 @@ namespace DownloadMuck
             _copyHotkey = HotkeyParser.Format(key, mods);
             TxtHotkey.Text = _copyHotkey;
             StopHotkeyCapture();
-            TxtHotkeyHint.Text = "Kısayol güncellendi. Kaydet’e basın.";
+            TxtHotkeyHint.Text = "Kısayol güncellendi. Kaydet'e basın.";
         }
 
         private void StopHotkeyCapture()
@@ -460,7 +381,8 @@ namespace DownloadMuck
             _capturingHotkey = false;
             try
             {
-                HotkeyBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
+                HotkeyBox.BorderBrush = TryFindResource("SettingsInputBorderBrush") as Brush
+                    ?? new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
             }
             catch { /* ignore */ }
         }
@@ -771,8 +693,10 @@ namespace DownloadMuck
             s.NotifyOnTrayMinimize = ChkNotifyTray.IsChecked == true;
             s.NotifyOnComplete = ChkNotifyDone.IsChecked == true;
             s.Theme = ThemeLight.IsChecked == true ? "Light" : "Dark";
+            s.LightThemeBrightness = SldLightBrightness != null ? (int)SldLightBrightness.Value : 100;
             s.CopyFilesHotkeyEnabled = ChkCopyHotkey.IsChecked == true;
             s.CopyFilesHotkey = string.IsNullOrWhiteSpace(_copyHotkey) ? "Ctrl+C" : _copyHotkey;
+            s.DeleteKeyShortcutsEnabled = ChkDeleteKey.IsChecked == true;
             s.ScheduleEnabled = ChkSchedule.IsChecked == true;
             _ = int.TryParse(TxtSchedStart.Text, out int sh);
             _ = int.TryParse(TxtSchedEnd.Text, out int eh);

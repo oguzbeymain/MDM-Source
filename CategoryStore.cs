@@ -72,6 +72,30 @@ namespace DownloadMuck
             };
         }
 
+        public static string GetDefaultIcon(string categoryId) => categoryId switch
+        {
+            "All" => "⚡",
+            "Documents" => "📁",
+            "Videos" => "🎬",
+            "Audio" => "🎵",
+            "Archives" => "📦",
+            "Images" => "🖼️",
+            "Apps" => "🚀",
+            _ => "📁"
+        };
+
+        public static string? GetDefaultName(string categoryId) => categoryId switch
+        {
+            "All" => "Tüm İndirilenler",
+            "Documents" => "Dökümanlar",
+            "Videos" => "Videolar",
+            "Audio" => "Sesler",
+            "Archives" => "Arşivler",
+            "Images" => "Resimler",
+            "Apps" => "Uygulamalar",
+            _ => null
+        };
+
         public static ObservableCollection<CategoryItem> Load()
         {
             try
