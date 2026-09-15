@@ -2,7 +2,7 @@ using System.IO;
 using System.Net;
 using MonoTorrent.Client;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class TorrentEngineHost
     {

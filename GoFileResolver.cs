@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace DownloadMuck
+namespace MDM
 {
     internal sealed record GoFileMetadata(
         string DownloadUrl,

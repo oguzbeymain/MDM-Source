@@ -20,7 +20,7 @@ namespace MDM.Updater
     public static class AppUpdater
     {
         public const string ReleasesLatestUrl = "https://api.github.com/repos/oguzbeymain/MDM-App/releases/latest";
-        public const string MainExeName = "DownloadMuck.exe";
+        public const string MainExeName = "MDM.exe";
         public const string UpdaterExeName = "MDM.Updater.exe";
 
         private static readonly HttpClient Http = CreateClient();
@@ -117,7 +117,7 @@ namespace MDM.Updater
                     return new UpdateResult
                     {
                         HadError = true,
-                        Message = "Pakette DownloadMuck.exe bulunamadi."
+                        Message = "Pakette MDM.exe bulunamadi."
                     };
                 }
 
@@ -168,28 +168,34 @@ namespace MDM.Updater
 
         private static void KillMainAppProcesses(string appDir)
         {
-            // Yol kontrolu olmadan tum DownloadMuck sureclerini kapat (MainModule erisimi sikca basarisiz)
-            foreach (Process process in Process.GetProcessesByName("DownloadMuck"))
+            // Yol kontrolu olmadan tum MDM (ve eski DownloadMuck) sureclerini kapat
+            foreach (string name in new[] { "MDM", "DownloadMuck" })
             {
-                try
+                foreach (Process process in Process.GetProcessesByName(name))
                 {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(8000);
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(8000);
+                    }
+                    catch { /* ignore */ }
                 }
-                catch { /* ignore */ }
             }
 
             try
             {
-                using var kill = Process.Start(new ProcessStartInfo
+                foreach (string im in new[] { "MDM.exe", "DownloadMuck.exe" })
                 {
-                    FileName = "taskkill",
-                    Arguments = "/IM DownloadMuck.exe /F /T",
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    WindowStyle = ProcessWindowStyle.Hidden
-                });
-                kill?.WaitForExit(5000);
+                    using var kill = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "taskkill",
+                        Arguments = $"/IM {im} /F /T",
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    });
+                    kill?.WaitForExit(5000);
+                }
             }
             catch { /* ignore */ }
 
@@ -214,6 +220,7 @@ namespace MDM.Updater
             sb.AppendLine("  goto wait");
             sb.AppendLine(")");
             // Kalan MDM sureclerini zorla kapat
+            sb.AppendLine("taskkill /IM MDM.exe /F /T >nul 2>&1");
             sb.AppendLine("taskkill /IM DownloadMuck.exe /F /T >nul 2>&1");
             sb.AppendLine("timeout /t 2 /nobreak >nul");
             sb.AppendLine("set RETRIES=0");
@@ -222,6 +229,7 @@ namespace MDM.Updater
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("  set /a RETRIES+=1");
             sb.AppendLine("  if %RETRIES% LSS 8 (");
+            sb.AppendLine("    taskkill /IM MDM.exe /F /T >nul 2>&1");
             sb.AppendLine("    taskkill /IM DownloadMuck.exe /F /T >nul 2>&1");
             sb.AppendLine("    timeout /t 1 /nobreak >nul");
             sb.AppendLine("    goto copy");

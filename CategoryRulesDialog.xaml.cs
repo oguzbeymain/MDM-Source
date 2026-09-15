@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class CategoryRulesDialog : UserControl
     {

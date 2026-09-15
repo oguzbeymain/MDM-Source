@@ -3,7 +3,7 @@ using System.Net.Http;
 using MonoTorrent;
 using MonoTorrent.Client;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class TorrentTransferBackend : ITransferBackend
     {

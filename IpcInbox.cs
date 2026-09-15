@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.Json;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class IpcInbox
     {

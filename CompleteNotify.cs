@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class CompleteNotify
     {

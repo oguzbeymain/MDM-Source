@@ -1,11 +1,11 @@
 using System.Net;
 using System.Security.Cryptography;
-using DownloadMuck;
+using MDM;
 using MonoTorrent;
 using MonoTorrent.Client;
 using Xunit;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 [Collection("Torrent")]
 public class TorrentTransferTests

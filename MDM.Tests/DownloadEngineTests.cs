@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
-using DownloadMuck;
+using MDM;
 using Xunit;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 [Collection("Network")]
 public class DownloadEngineTests

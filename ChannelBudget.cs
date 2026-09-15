@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Dosya boyutu, RTT ve eşzamanlı iş yüküne göre kanal sayısı.

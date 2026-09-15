@@ -1,4 +1,4 @@
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>Uygulama genelinde tutarlı onay / bilgi metinleri.</summary>
     internal static class DialogTexts

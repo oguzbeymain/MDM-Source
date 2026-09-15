@@ -1,7 +1,7 @@
 using System.IO;
 using FluentFTP;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class FtpTransferBackend : StreamCopyBackend
     {

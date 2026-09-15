@@ -5,7 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class CategoryCreateDialog : Window
     {

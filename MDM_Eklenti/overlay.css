@@ -1,0 +1,50 @@
+/* MDM overlay */
+.mdm-host {
+  position: fixed;
+  z-index: 2147483646;
+  pointer-events: none;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+.mdm-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(20, 20, 20, 0.82);
+  color: #fff;
+  border: 1px solid rgba(255, 107, 0, 0.7);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: transform 0.12s ease, background 0.12s;
+}
+.mdm-btn:hover { transform: scale(1.06); background: rgba(255, 107, 0, 0.92); }
+.mdm-btn.offline { opacity: 0.55; border-color: #666; }
+.mdm-panel {
+  pointer-events: auto;
+  margin-top: 6px;
+  min-width: 200px;
+  max-width: 280px;
+  background: rgba(24, 24, 24, 0.96);
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 10px;
+  color: #eee;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.mdm-panel h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #ccc; }
+.mdm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.mdm-row:hover { background: rgba(255, 107, 0, 0.18); }
+.mdm-row.sent { color: #8bc34a; cursor: default; }
+.mdm-muted { color: #888; font-size: 11px; padding: 6px 0; }
+.mdm-skel { height: 10px; background: #333; border-radius: 4px; margin: 6px 0; animation: mdm-pulse 1s infinite; }
+@keyframes mdm-pulse { 50% { opacity: 0.5; } }

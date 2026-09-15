@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -10,7 +11,7 @@ using System.Windows.Media;
 using Ellipse = System.Windows.Shapes.Ellipse;
 using Shape = System.Windows.Shapes.Shape;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class DownloadSessionWindow : Window
     {
@@ -21,10 +22,13 @@ namespace DownloadMuck
         private ITransferBackend? _engine;
         private bool _started;
         private TorrentFetchMode _torrentMode = TorrentFetchMode.FullContent;
+        private ExtCaptureRequest? _ytdlpCapture;
+        private bool _sizeLocked;
 
         public DownloadItem? BoundItem => _item;
         public string SessionUrl => _url;
         public bool HasStarted => _started;
+        public bool IsYtDlpSession => _ytdlpCapture != null;
 
         public void ApplyThemeSurface(bool light)
         {
@@ -36,8 +40,8 @@ namespace DownloadMuck
             var input = light ? Color.FromRgb(0xF0, 0xF0, 0xF3) : Color.FromRgb(0x25, 0x25, 0x25);
             var soft = light ? Color.FromRgb(0xEE, 0xEE, 0xF0) : Color.FromRgb(0x2D, 0x2D, 0x2D);
             // Açık: hover koyu; koyu: gri vurgu (siyah değil)
-            var softHover = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0x40, 0x40, 0x40);
-            var softHoverFg = light ? Colors.White : Color.FromRgb(0xF0, 0xF0, 0xF0);
+            var softHover = light ? Color.FromRgb(0xE0, 0xE0, 0xE4) : Color.FromRgb(0x3A, 0x3A, 0x3A);
+            var softHoverFg = light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xF0, 0xF0, 0xF0);
             var softFg = light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xEE, 0xEE, 0xEE);
             var track = light ? Color.FromRgb(0xE8, 0xE8, 0xEC) : Color.FromRgb(0x2A, 0x2A, 0x2A);
 
@@ -286,12 +290,14 @@ namespace DownloadMuck
             return b;
         }
 
-        public DownloadSessionWindow(MainWindow host, string url, string fileName, string defaultFolder, string sizeLabel)
+        public DownloadSessionWindow(MainWindow host, string url, string fileName, string defaultFolder, string sizeLabel,
+            ExtCaptureRequest? ytdlpCapture = null)
         {
             InitializeComponent();
             _host = host;
             _url = url;
             _fileName = fileName;
+            _ytdlpCapture = ytdlpCapture;
             ApplyMeta(fileName, url, defaultFolder, sizeLabel);
             ThemeService.ApplyToWindow(this);
             Background = Brushes.Transparent;
@@ -301,6 +307,13 @@ namespace DownloadMuck
         private async void SessionWindow_Loaded(object sender, RoutedEventArgs e)
         {
             if (_started || _item != null) return;
+
+            if (_ytdlpCapture != null)
+            {
+                await LoadYtDlpSizeAsync();
+                return;
+            }
+
             var kind = UrlClassifier.Classify(_url);
             if (kind is not TransferKind.Torrent and not TransferKind.Magnet)
                 return;
@@ -312,6 +325,91 @@ namespace DownloadMuck
                 RbTorrentFile.Visibility = Visibility.Collapsed;
 
             await LoadTorrentPickerSizesAsync(kind);
+        }
+
+        private async Task LoadYtDlpSizeAsync()
+        {
+            if (_ytdlpCapture == null) return;
+
+            // Eklentiden gelen filesize çoğu zaman eksik (sadece video/ses parçası) — her zaman probe et
+            TxtSize.Text = "…";
+            _sizeLocked = false;
+            try
+            {
+                string pageUrl = !string.IsNullOrWhiteSpace(_ytdlpCapture.PageUrl)
+                    ? _ytdlpCapture.PageUrl
+                    : _url;
+                // YouTube: watch URL; film/HLS: medya (m3u8) URL'si
+                string probeUrl = _url;
+                bool yt = YtDlpHelper.IsYouTubeUrl(pageUrl) || YtDlpHelper.IsYouTubeUrl(_url);
+                if (yt)
+                {
+                    probeUrl = YtDlpHelper.NormalizeYouTubeWatchUrl(pageUrl) ?? pageUrl;
+                }
+                else
+                {
+                    probeUrl = !string.IsNullOrWhiteSpace(_ytdlpCapture.Url) ? _ytdlpCapture.Url : _url;
+                }
+
+                string formatId = string.IsNullOrWhiteSpace(_ytdlpCapture.FormatId)
+                                 || _ytdlpCapture.FormatId is "best" or "playing"
+                    ? (yt
+                        ? "bv*[protocol^=http][vcodec^=avc1]+ba[protocol^=http]/bv*[protocol^=http]+ba/b"
+                        : "best")
+                    : YtDlpHelper.NormalizeFormatForProbe(_ytdlpCapture.FormatId, probeUrl);
+
+                long? bytes = await Task.Run(() =>
+                    YtDlpHelper.ProbeApproxBytes(
+                        probeUrl,
+                        formatId,
+                        _ytdlpCapture.Cookies ?? "",
+                        _ytdlpCapture.Headers,
+                        TimeSpan.FromSeconds(25),
+                        sitePageUrl: pageUrl)).ConfigureAwait(true);
+
+                // YouTube HD için <8MB şüpheli — https+avc1 zorla yeniden dene
+                bool looksHd = Regex.IsMatch(_fileName ?? "", @"\b(720|1080|1440|2160)p\b", RegexOptions.IgnoreCase);
+                if (yt && looksHd && bytes is null or < 8_000_000)
+                {
+                    bytes = await Task.Run(() =>
+                        YtDlpHelper.ProbeApproxBytes(
+                            probeUrl,
+                            "bv*[protocol^=http][vcodec^=avc1]+ba[protocol^=http]/b",
+                            _ytdlpCapture.Cookies ?? "",
+                            _ytdlpCapture.Headers,
+                            TimeSpan.FromSeconds(25),
+                            sitePageUrl: pageUrl)).ConfigureAwait(true);
+                }
+
+                if (_started || _item != null) return;
+                if (bytes is > 0)
+                {
+                    TxtSize.Text = MainWindow.FormatFileSize(bytes.Value);
+                    _ytdlpCapture.Filesize = bytes.Value;
+                    _sizeLocked = true;
+                }
+                else if (_ytdlpCapture.Filesize > 0)
+                {
+                    TxtSize.Text = MainWindow.FormatFileSize(_ytdlpCapture.Filesize);
+                    _sizeLocked = true;
+                }
+                else
+                    TxtSize.Text = "—";
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"YtDlp size probe: {ex.Message}");
+                if (!_started && _item == null)
+                {
+                    if (_ytdlpCapture.Filesize > 0)
+                    {
+                        TxtSize.Text = MainWindow.FormatFileSize(_ytdlpCapture.Filesize);
+                        _sizeLocked = true;
+                    }
+                    else
+                        TxtSize.Text = "—";
+                }
+            }
         }
 
         private async Task LoadTorrentPickerSizesAsync(TransferKind kind)
@@ -417,18 +515,21 @@ namespace DownloadMuck
             {
                 BtnStart.IsEnabled = true;
                 BtnStart.Content = "Devam Et";
+                BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = true;
             }
             else if (item.IsDownloading || (engine != null && engine.IsDownloading))
             {
                 BtnStart.IsEnabled = false;
+                BtnPause.Visibility = Visibility.Visible;
                 BtnPause.IsEnabled = true;
                 BtnCancelDl.IsEnabled = true;
             }
             else
             {
                 BtnStart.IsEnabled = false;
+                BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = false;
             }
@@ -659,6 +760,7 @@ namespace DownloadMuck
             if (_started && _engine != null && _item != null
                 && (_engine.IsPaused || _item.IsPausedState || _item.IsErrorState))
             {
+                BtnPause.Visibility = Visibility.Visible;
                 BtnPause.IsEnabled = true;
                 BtnStart.IsEnabled = false;
                 BtnStart.Content = "Başlat";
@@ -684,16 +786,19 @@ namespace DownloadMuck
             BtnStart.IsEnabled = false;
             BtnStart.Opacity = 0.55;
             TxtStatus.Visibility = Visibility.Visible;
-            TxtStatus.Text = "Dosya bilgisi alınıyor...";
+            TxtStatus.Text = _ytdlpCapture != null ? "Hazır — Başlat'a basın" : "Dosya bilgisi alınıyor...";
 
             try
             {
-                var (resolvedName, sizeLabel) = await _host.ResolveDownloadMetaAsync(_url, _fileName, null)
-                    .ConfigureAwait(true);
-                if (FileNameHelper.IsBetterName(resolvedName, _fileName))
-                    ApplyResolvedMeta(resolvedName, sizeLabel);
-                else if (IsKnownSizeLabel(sizeLabel))
-                    ApplyResolvedMeta(_fileName, sizeLabel);
+                if (_ytdlpCapture == null)
+                {
+                    var (resolvedName, sizeLabel) = await _host.ResolveDownloadMetaAsync(_url, _fileName, null)
+                        .ConfigureAwait(true);
+                    if (FileNameHelper.IsBetterName(resolvedName, _fileName))
+                        ApplyResolvedMeta(resolvedName, sizeLabel);
+                    else if (IsKnownSizeLabel(sizeLabel))
+                        ApplyResolvedMeta(_fileName, sizeLabel);
+                }
             }
             catch (Exception ex)
             {
@@ -703,18 +808,20 @@ namespace DownloadMuck
             _started = true;
             SetFolderPassive(true);
             BtnStart.IsEnabled = false;
+            BtnPause.Visibility = Visibility.Visible;
             BtnPause.IsEnabled = true;
             BtnCancelDl.IsEnabled = true;
             BtnPause.Content = "Duraklat";
             TxtStatus.Text = "İndiriliyor...";
 
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder,
-                torrentMode: _torrentMode, sizeHint: TxtSize.Text);
+                torrentMode: _torrentMode, sizeHint: TxtSize.Text, ytdlpCapture: _ytdlpCapture);
             if (run == null)
             {
                 _started = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;
+                BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 SetFolderPassive(false);
                 TxtStatus.Text = "Kural nedeniyle eklenmedi";
@@ -739,7 +846,14 @@ namespace DownloadMuck
         {
             if (_item == null) return;
 
-            TxtSize.Text = _item.FileSize;
+            // Boyut kilitliyse (yt-dlp probe) indirme sırasında değiştirme
+            if (!_sizeLocked)
+            {
+                if (IsKnownSizeLabel(_item.FileSize))
+                    TxtSize.Text = _item.FileSize;
+                else if (!IsKnownSizeLabel(TxtSize.Text))
+                    TxtSize.Text = string.IsNullOrWhiteSpace(_item.FileSize) ? "—" : _item.FileSize;
+            }
             TxtSpeed.Text = string.IsNullOrWhiteSpace(_item.CurrentSpeed) ? "—" : _item.CurrentSpeed;
             BarProgress.Value = _item.ProgressValue;
             TxtPercent.Text = $"%{_item.ProgressValue:F0}";
@@ -771,11 +885,13 @@ namespace DownloadMuck
                 BtnStart.IsEnabled = false;
                 BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
+                BtnPause.Visibility = Visibility.Collapsed;
             }
             else if (_item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = "Duraklatıldı";
+                BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;
@@ -804,6 +920,7 @@ namespace DownloadMuck
             {
                 TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = string.IsNullOrWhiteSpace(_item.Status) ? "Torrent hatası" : _item.Status;
+                BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;
@@ -818,6 +935,7 @@ namespace DownloadMuck
             {
                 TxtStatus.Visibility = Visibility.Visible;
                 TxtStatus.Text = string.IsNullOrWhiteSpace(_item.StatusText) ? "İndiriliyor..." : _item.StatusText;
+                BtnPause.Visibility = Visibility.Visible;
                 BtnPause.IsEnabled = true;
                 BtnPause.Content = "Duraklat";
                 BtnStart.IsEnabled = false;

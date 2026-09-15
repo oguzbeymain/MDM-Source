@@ -1,8 +1,8 @@
 using System.IO.Compression;
-using DownloadMuck;
+using MDM;
 using Xunit;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 public class FeatureMatrixTests
 {

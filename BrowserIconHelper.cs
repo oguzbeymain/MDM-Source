@@ -6,7 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class BrowserIconHelper
     {

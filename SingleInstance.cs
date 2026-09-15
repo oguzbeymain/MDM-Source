@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace DownloadMuck
+namespace MDM
 {
     internal static class SingleInstance
     {

@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseAppHost>true</UseAppHost>
+    <AssemblyName>MDM</AssemblyName>
+    <RootNamespace>MDM</RootNamespace>
+    <Product>MuckDownloadManager</Product>
+    <AssemblyTitle>MDM</AssemblyTitle>
+    <Version>1.0.34</Version>
+    <AssemblyVersion>1.0.34.0</AssemblyVersion>
+    <FileVersion>1.0.34.0</FileVersion>
+    <InformationalVersion>1.0.34</InformationalVersion>
+    <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
+    <!-- NuGet uydu (tr/es/fr/â€¦) klasÃ¶rlerini Ã§Ä±ktÄ±dan Ã§Ä±kar â€” UI zaten TR sabit -->
+    <SatelliteResourceLanguages>
+    </SatelliteResourceLanguages>
+    <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**;MDM.Tests\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="MDM.Updater\**" />
+    <Page Remove="MDM.Updater\**" />
+    <EmbeddedResource Remove="MDM.Updater\**" />
+    <None Remove="MDM.Updater\**" />
+    <Compile Remove="MDM.Tests\**" />
+    <None Remove="MDM.Tests\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\mdm.ico" />
+    <Resource Include="Assets\mdm-logo.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentFTP" Version="52.1.0" />
+    <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="SharpCompress" Version="0.40.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MDM.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MDM_Eklenti\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="MDM_Eklenti" />
+  </ItemGroup>
+  <!-- YanlÄ±ÅŸ mimari hostfxr exe'yi bozar ve dotnet dll ile terminal aÃ§mak gerekir -->
+  <Target Name="RemoveBundledHostFxr" AfterTargets="Build">
+    <Delete Files="$(OutputPath)hostfxr.dll;$(OutputPath)hostpolicy.dll" ContinueOnError="true" />
+  </Target>
+  <!-- Kalan dil klasÃ¶rlerini locales altÄ±na taÅŸÄ± (varsa) -->
+  <Target Name="OrganizeLocaleFolders" AfterTargets="Build">
+    <Exec WorkingDirectory="$(OutputPath)" Condition="Exists('$(OutputPath)')" IgnoreExitCode="true" Command="powershell -NoProfile -Command &quot;$cultures=@('cs','de','es','fr','it','ja','ko','pl','pt-BR','ru','tr','zh-Hans','zh-Hant'); $moved=$false; foreach($c in $cultures){ if(Test-Path $c){ New-Item -ItemType Directory -Force locales | Out-Null; if(Test-Path (Join-Path 'locales' $c)){ Remove-Item (Join-Path 'locales' $c) -Recurse -Force }; Move-Item $c (Join-Path 'locales' $c) -Force; $moved=$true } }; if($moved){ Write-Host 'Organized culture folders under locales/' }&quot;" />
+  </Target>
+</Project>

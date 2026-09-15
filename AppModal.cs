@@ -4,7 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Ana pencere içinde karartmalı modal popup (uygulama dışına çıkmaz).

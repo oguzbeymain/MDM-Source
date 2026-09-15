@@ -1,7 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class ChecksumUtil
     {

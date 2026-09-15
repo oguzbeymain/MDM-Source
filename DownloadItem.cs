@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 
-namespace DownloadMuck
+namespace MDM
 {
     public class DownloadItem : INotifyPropertyChanged
     {

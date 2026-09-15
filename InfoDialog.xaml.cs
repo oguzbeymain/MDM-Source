@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class InfoDialog : Window
     {

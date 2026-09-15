@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class BrowserExtensionStatus
     {
@@ -27,9 +27,9 @@ namespace DownloadMuck
         private static readonly string[] NameNeedles =
         {
             "MDM Integration",
-            "DownloadMuck",
             "MuckDownloadManager",
-            "Muck Download"
+            "Muck Download",
+            "DownloadMuck" // eski eklenti adı
         };
 
         public static IReadOnlyList<BrowserExtensionStatus> ProbeAll()
@@ -161,7 +161,7 @@ namespace DownloadMuck
                 if (!string.IsNullOrWhiteSpace(path))
                 {
                     string n = Normalize(path);
-                    if (n.Contains("downloadmuck_eklenti", StringComparison.OrdinalIgnoreCase)
+                    if (n.Contains("MDM_Eklenti", StringComparison.OrdinalIgnoreCase)
                         || n.Contains("browserextension", StringComparison.OrdinalIgnoreCase)
                            && n.Contains("muck", StringComparison.OrdinalIgnoreCase)
                         || (!string.IsNullOrEmpty(needle)

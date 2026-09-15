@@ -1,4 +1,4 @@
-<Window x:Class="DownloadMuck.CategoryCreateDialog"
+<Window x:Class="MDM.CategoryCreateDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Yeni kategori" Width="440" SizeToContent="Height"

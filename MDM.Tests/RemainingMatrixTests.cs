@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
-using DownloadMuck;
+using MDM;
 using Xunit;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 public class RemainingMatrixTests
 {

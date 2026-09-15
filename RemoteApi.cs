@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class RemoteJobDto
     {
@@ -48,7 +48,8 @@ namespace DownloadMuck
             bool lanEnabled,
             string token,
             Action<string, string, string> onCapture,
-            IRemoteJobHost? jobs)
+            IRemoteJobHost? jobs,
+            Action<ExtCaptureRequest>? onExtCapture = null)
         {
             method = (method ?? "GET").ToUpperInvariant();
             string rawPath = path ?? "/";
@@ -156,6 +157,30 @@ namespace DownloadMuck
                 return RemoteApiResult.Text(200, "OK");
             }
 
+            if ((method == "GET" || method == "POST") && p == "/ext/formats")
+            {
+                var req = TryReadFormatsRequest(body);
+                if (req == null)
+                    return RemoteApiResult.Text(400, "Bad Request");
+                ExtensionPresence.NotifyPing();
+                var formats = MediaFormatService.GetFormats(req);
+                return RemoteApiResult.Json(200, MediaFormatService.SerializeFormats(formats));
+            }
+
+            if (method == "POST" && p == "/ext/capture")
+            {
+                var ext = TryReadExtCapture(body);
+                if (ext == null || string.IsNullOrWhiteSpace(ext.Url) && string.IsNullOrWhiteSpace(ext.PageUrl))
+                    return RemoteApiResult.Text(400, "Bad Request");
+                ExtensionPresence.NotifyPing();
+                ext = MediaFormatService.ResolveCapture(ext);
+                if (onExtCapture != null)
+                    onExtCapture(ext);
+                else
+                    onCapture(ext.Url, ext.Filename, ext.Mime);
+                return RemoteApiResult.Text(200, "OK");
+            }
+
             if (method != "GET" && method != "POST" && method != "OPTIONS")
                 return RemoteApiResult.Text(405, "Method Not Allowed");
 
@@ -211,6 +236,104 @@ namespace DownloadMuck
                 return false;
             }
             return !string.IsNullOrWhiteSpace(url);
+        }
+
+        private static ExtCaptureRequest? TryReadExtCapture(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var req = new ExtCaptureRequest();
+                if (root.TryGetProperty("url", out var urlEl))
+                    req.Url = urlEl.GetString() ?? "";
+                if (root.TryGetProperty("filename", out var nameEl))
+                    req.Filename = FileNameHelper.DecodeDisplayName(nameEl.GetString() ?? "");
+                if (root.TryGetProperty("mime", out var mimeEl))
+                    req.Mime = mimeEl.GetString() ?? "";
+                if (root.TryGetProperty("pageUrl", out var pageEl))
+                    req.PageUrl = pageEl.GetString() ?? "";
+                if (root.TryGetProperty("referrer", out var refEl))
+                    req.Referrer = refEl.GetString() ?? "";
+                if (root.TryGetProperty("kind", out var kindEl))
+                    req.Kind = kindEl.GetString() ?? "";
+                if (root.TryGetProperty("formatId", out var fmtEl))
+                    req.FormatId = fmtEl.GetString() ?? "";
+                if (root.TryGetProperty("title", out var titleEl))
+                    req.Title = titleEl.GetString() ?? "";
+                if (root.TryGetProperty("filesize", out var sizeEl))
+                {
+                    if (sizeEl.ValueKind == JsonValueKind.Number && sizeEl.TryGetInt64(out long fs))
+                        req.Filesize = fs;
+                    else if (sizeEl.ValueKind == JsonValueKind.String
+                             && long.TryParse(sizeEl.GetString(), out long fs2))
+                        req.Filesize = fs2;
+                }
+                if (root.TryGetProperty("cookies", out var cookieEl))
+                    req.Cookies = cookieEl.GetString() ?? "";
+                if (root.TryGetProperty("headers", out var hdrEl) && hdrEl.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in hdrEl.EnumerateObject())
+                        req.Headers[prop.Name] = prop.Value.GetString() ?? "";
+                }
+                return req;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static FormatsRequest? TryReadFormatsRequest(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var req = new FormatsRequest();
+                if (root.TryGetProperty("pageUrl", out var pageEl))
+                    req.PageUrl = pageEl.GetString() ?? "";
+                if (root.TryGetProperty("mediaUrl", out var mediaEl))
+                    req.MediaUrl = mediaEl.GetString() ?? "";
+                if (root.TryGetProperty("playlistBody", out var bodyEl))
+                    req.PlaylistBody = bodyEl.GetString() ?? "";
+                if (root.TryGetProperty("cookies", out var cookieEl))
+                    req.Cookies = cookieEl.GetString() ?? "";
+                if (root.TryGetProperty("referrer", out var refEl))
+                    req.Referrer = refEl.GetString() ?? "";
+                if (root.TryGetProperty("site", out var siteEl))
+                    req.Site = siteEl.GetString() ?? "";
+                if (root.TryGetProperty("title", out var titleEl))
+                    req.Title = titleEl.GetString() ?? "";
+                if (root.TryGetProperty("candidates", out var candEl) && candEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var c in candEl.EnumerateArray())
+                    {
+                        string? s = c.GetString();
+                        if (!string.IsNullOrWhiteSpace(s))
+                            req.Candidates.Add(s);
+                    }
+                }
+                if (root.TryGetProperty("videoMeta", out var metaEl) && metaEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (metaEl.TryGetProperty("videoWidth", out var vw) && vw.TryGetInt32(out int w))
+                        req.VideoWidth = w;
+                    if (metaEl.TryGetProperty("videoHeight", out var vh) && vh.TryGetInt32(out int h))
+                        req.VideoHeight = h;
+                }
+                if (root.TryGetProperty("headers", out var hdrEl) && hdrEl.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in hdrEl.EnumerateObject())
+                        req.Headers[prop.Name] = prop.Value.GetString() ?? "";
+                }
+                return req;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

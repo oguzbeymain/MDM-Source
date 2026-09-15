@@ -1,12 +1,41 @@
-﻿<Application x:Class="DownloadMuck.App"
+<Application x:Class="MDM.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:DownloadMuck">
+             xmlns:local="clr-namespace:MDM">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/ModernCheckBoxStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Modern koyu tooltip -->
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="#111111"/>
+                <Setter Property="Foreground" Value="#F0F0F0"/>
+                <Setter Property="BorderBrush" Value="#2A2A2A"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="10,6"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="FontFamily" Value="Segoe UI"/>
+                <Setter Property="HasDropShadow" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToolTip">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8" Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="Button">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

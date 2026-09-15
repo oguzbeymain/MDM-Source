@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Açık temada yüzey renklerini grimsi tona çeker; yazı ve vurgu renkleri etkilenmez.

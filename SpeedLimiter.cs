@@ -1,4 +1,4 @@
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Global download throttle. 0 KB/s = unlimited.

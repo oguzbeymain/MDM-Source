@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class UpdateCheckResult
     {
@@ -125,13 +125,13 @@ namespace DownloadMuck
                     payloadDir = extractDir;
                 }
 
-                if (!File.Exists(Path.Combine(payloadDir, "DownloadMuck.exe")) &&
+                if (!File.Exists(Path.Combine(payloadDir, "MDM.exe")) &&
                     Directory.GetFiles(payloadDir, "*.exe").Length == 0)
                 {
                     return new UpdateCheckResult
                     {
                         HadError = true,
-                        Message = "Pakette DownloadMuck.exe bulunamadı."
+                        Message = "Pakette MDM.exe bulunamadı."
                     };
                 }
 
@@ -160,7 +160,7 @@ namespace DownloadMuck
         {
             string scriptPath = Path.Combine(Path.GetTempPath(), $"MDM-Apply-{Guid.NewGuid():N}.cmd");
             int pid = Environment.ProcessId;
-            string mainExe = Path.Combine(appDir, "DownloadMuck.exe");
+            string mainExe = Path.Combine(appDir, "MDM.exe");
 
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
@@ -171,7 +171,7 @@ namespace DownloadMuck
             sb.AppendLine("  timeout /t 1 /nobreak >nul");
             sb.AppendLine("  goto wait");
             sb.AppendLine(")");
-            sb.AppendLine("taskkill /IM DownloadMuck.exe /F /T >nul 2>&1");
+            sb.AppendLine("taskkill /IM MDM.exe /F /T >nul 2>&1");
             sb.AppendLine("timeout /t 1 /nobreak >nul");
             sb.AppendLine("set RETRIES=0");
             sb.AppendLine(":copy");
@@ -179,7 +179,7 @@ namespace DownloadMuck
             sb.AppendLine("if errorlevel 1 (");
             sb.AppendLine("  set /a RETRIES+=1");
             sb.AppendLine("  if %RETRIES% LSS 8 (");
-            sb.AppendLine("    taskkill /IM DownloadMuck.exe /F /T >nul 2>&1");
+            sb.AppendLine("    taskkill /IM MDM.exe /F /T >nul 2>&1");
             sb.AppendLine("    timeout /t 1 /nobreak >nul");
             sb.AppendLine("    goto copy");
             sb.AppendLine("  )");
@@ -269,7 +269,7 @@ namespace DownloadMuck
 
             foreach (string dir in subDirs)
             {
-                if (File.Exists(Path.Combine(dir, "DownloadMuck.exe")))
+                if (File.Exists(Path.Combine(dir, "MDM.exe")))
                     return dir;
             }
 

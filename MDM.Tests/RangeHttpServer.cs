@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 /// <summary>
 /// Minimal HTTP/1.1 Range sunucusu — HttpListener URL ACL gerektirmez.

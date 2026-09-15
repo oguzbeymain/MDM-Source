@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class HotkeyParser
     {

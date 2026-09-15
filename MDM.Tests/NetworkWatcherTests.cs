@@ -1,9 +1,9 @@
 using System.Net.Http;
 using System.Net.Sockets;
-using DownloadMuck;
+using MDM;
 using Xunit;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 [Collection("Network")]
 public class NetworkWatcherTests

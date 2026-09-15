@@ -1,4 +1,4 @@
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Eklentinin periyodik /ext/ping sinyali (tarayıcı başına).

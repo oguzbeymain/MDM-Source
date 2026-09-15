@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// DWM native min/max/restore için: work-area maximize, köşeler, transitions açık.

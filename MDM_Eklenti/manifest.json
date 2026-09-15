@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "MDM Integration",
+  "version": "3.1.8",
+  "description": "MDM (Muck Download Manager) masaüstü entegrasyonu — evrensel video yakalama",
+  "permissions": [
+    "downloads",
+    "downloads.shelf",
+    "storage",
+    "alarms",
+    "webRequest",
+    "webNavigation",
+    "cookies",
+    "scripting",
+    "tabs",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "http://127.0.0.1:18680/*",
+    "http://127.0.0.1:18681/*",
+    "http://127.0.0.1:18682/*",
+    "http://127.0.0.1:18700/*",
+    "http://127.0.0.1:27182/*",
+    "http://127.0.0.1:38472/*",
+    "http://127.0.0.1:6800/*",
+    "http://localhost:18680/*",
+    "http://localhost:18681/*",
+    "http://localhost:18682/*",
+    "http://localhost:18700/*",
+    "http://localhost:27182/*",
+    "http://localhost:38472/*",
+    "http://localhost:6800/*"
+  ],
+  "action": {
+    "default_title": "MDM — bu sekmede yakalamayı aç/kapat"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["magnet.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["overlay.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["inject-main.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

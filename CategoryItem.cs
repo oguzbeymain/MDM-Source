@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 
-namespace DownloadMuck
+namespace MDM
 {
     public class CategoryItem : INotifyPropertyChanged
     {

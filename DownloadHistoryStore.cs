@@ -4,7 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class DownloadHistoryStore
     {

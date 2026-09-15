@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace DownloadMuck
+namespace MDM
 {
     internal static class DownloadPathHelper
     {

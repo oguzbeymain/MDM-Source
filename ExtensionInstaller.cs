@@ -2,16 +2,16 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
-    /// Eklenti çıktı klasörü: uygulamanın yanındaki DownloadMuck_Eklenti
+    /// Eklenti çıktı klasörü: uygulamanın yanındaki MDM_Eklenti
     /// (tarayıcıda paketlenmemiş olarak bu klasör yüklenir). Kurulum HTML'i açılmaz.
     /// </summary>
     public static class ExtensionInstaller
     {
         public static string InstallRoot =>
-            Path.Combine(AppContext.BaseDirectory, "DownloadMuck_Eklenti");
+            Path.Combine(AppContext.BaseDirectory, "MDM_Eklenti");
 
         public static void EnsureInstalled()
         {

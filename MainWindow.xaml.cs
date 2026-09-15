@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -20,7 +20,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class MainWindow : Window
     {
@@ -150,6 +150,9 @@ namespace DownloadMuck
                 _tray = new TrayIconService();
                 _tray.OpenRequested += () => Dispatcher.BeginInvoke(ShowFromTray);
                 _tray.ExitRequested += () => Dispatcher.BeginInvoke(ExitFromTray);
+                _tray.CheckUpdateRequested += () => Dispatcher.BeginInvoke(CheckUpdatesFromTray);
+                _tray.SettingsRequested += () => Dispatcher.BeginInvoke(OpenSettingsFromTray);
+                _tray.RecentFilesProvider = GetTrayRecentFiles;
             }
             catch (Exception ex)
             {
@@ -211,6 +214,60 @@ namespace DownloadMuck
             Close();
         }
 
+        private bool _trayUpdateBusy;
+
+        private async void CheckUpdatesFromTray()
+        {
+            if (_trayUpdateBusy) return;
+            _trayUpdateBusy = true;
+            try
+            {
+                ShowFromTray();
+                var result = await UpdateService.CheckAndApplyAsync(null, CancellationToken.None);
+                if (result.Applying)
+                {
+                    ExitForUpdate();
+                    return;
+                }
+
+                if (result.HadError)
+                    InfoDialog.Show(this, "Güncelleme", "Denetim başarısız.", result.Message);
+                else if (result.IsUpToDate)
+                    InfoDialog.Show(this, "Güncelleme", "Güncelsiniz.", $"Yüklü sürüm: v{UpdateService.CurrentVersionText}");
+                else if (!string.IsNullOrWhiteSpace(result.Message))
+                    InfoDialog.Show(this, "Güncelleme", result.Message);
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(this, "Güncelleme", "Denetim başarısız.", ex.Message);
+            }
+            finally
+            {
+                _trayUpdateBusy = false;
+            }
+        }
+
+        private void OpenSettingsFromTray()
+        {
+            ShowFromTray();
+            OpenSettingsOverlay();
+        }
+
+        private IReadOnlyList<TrayRecentFile> GetTrayRecentFiles()
+        {
+            return DownloadList
+                .Where(i => i.IsCompleted && !string.IsNullOrWhiteSpace(i.FilePath) && File.Exists(i.FilePath))
+                .OrderByDescending(i => i.DateAdded)
+                .Take(6)
+                .Select(i => new TrayRecentFile
+                {
+                    DisplayName = string.IsNullOrWhiteSpace(i.FileName) ? Path.GetFileName(i.FilePath) : i.FileName,
+                    FilePath = i.FilePath,
+                    Icon = i.FileIcon ?? IconHelper.GetIconForExtension(i.FileName ?? i.FilePath, 16)
+                })
+                .ToList();
+        }
+
         /// <summary>Updater yeni sürüm kurmadan önce eski örneği kapatır.</summary>
         public void ExitForUpdate()
         {
@@ -251,6 +308,17 @@ namespace DownloadMuck
                     {
                         try { CategoryStore.EnsureDiskFolders(Categories, _defaultFolder); }
                         catch (Exception ex) { Debug.WriteLine($"EnsureDiskFolders: {ex.Message}"); }
+                    });
+                    // YouTube kalite listesi için yt-dlp'yi arka planda hazırla (soğuk açılış)
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await YtDlpHelper.EnsureAvailableAsync(TimeSpan.FromSeconds(90));
+                            await YtDlpHelper.EnsureFfmpegAsync(TimeSpan.FromMinutes(4));
+                            await YtDlpHelper.EnsureDenoAsync(TimeSpan.FromMinutes(4));
+                        }
+                        catch (Exception ex) { Debug.WriteLine($"yt-dlp/ffmpeg/deno ensure: {ex.Message}"); }
                     });
                     try
                     {
@@ -341,9 +409,12 @@ namespace DownloadMuck
             Panel.SetZIndex(ModalOverlay, 1200);
             ModalOverlay.Visibility = Visibility.Visible;
             ModalOverlay.Focusable = true;
+            ModalOverlay.FocusVisualStyle = null;
             ModalOverlay.UpdateLayout();
             ModalOverlay.BringIntoView();
-            Keyboard.Focus(ModalConfirmBtn);
+            ModalConfirmBtn.FocusVisualStyle = null;
+            // Focus kırmızı noktalı kutu çıkmasın — Enter zaten PreviewKeyDown'da
+            Keyboard.Focus(ModalOverlay);
 
             _modalFrame = new DispatcherFrame();
             Dispatcher.PushFrame(_modalFrame);
@@ -374,9 +445,12 @@ namespace DownloadMuck
             Panel.SetZIndex(ModalOverlay, 1200);
             ModalOverlay.Visibility = Visibility.Visible;
             ModalOverlay.Focusable = true;
+            ModalOverlay.FocusVisualStyle = null;
             ModalOverlay.UpdateLayout();
             ModalOverlay.BringIntoView();
-            Keyboard.Focus(ModalConfirmBtn);
+            ModalConfirmBtn.FocusVisualStyle = null;
+            // Focus kırmızı noktalı kutu çıkmasın — Enter zaten PreviewKeyDown'da
+            Keyboard.Focus(ModalOverlay);
 
             _modalFrame = new DispatcherFrame();
             Dispatcher.PushFrame(_modalFrame);
@@ -767,7 +841,21 @@ namespace DownloadMuck
                             Debug.WriteLine($"Capture download error: {ex.Message}");
                         }
                     }, System.Windows.Threading.DispatcherPriority.Background);
-                }, AppSettingsStore.Load().RemoteApiLan, AppSettingsStore.Load().RemoteApiToken, new WindowJobHost(this));
+                }, AppSettingsStore.Load().RemoteApiLan, AppSettingsStore.Load().RemoteApiToken, new WindowJobHost(this),
+                onExtCapture: ext =>
+                {
+                    Dispatcher.BeginInvoke(async () =>
+                    {
+                        try
+                        {
+                            await StartExtCaptureDownloadAsync(ext);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Ext capture error: {ex.Message}");
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                });
                 _captureServer.Start();
             }
             catch (Exception ex)
@@ -2433,7 +2521,7 @@ namespace DownloadMuck
         private void UpdateListPanelClip()
         {
             if (ListPanelBorder == null) return;
-            const double r = 12;
+            const double r = 14;
             double w = Math.Max(0, ListPanelBorder.ActualWidth);
             double h = Math.Max(0, ListPanelBorder.ActualHeight);
             if (w <= 0 || h <= 0) return;
@@ -2467,7 +2555,7 @@ namespace DownloadMuck
             SidebarInner.Margin = new Thickness(pad * 0.8, pad, pad * 0.8, pad * 0.8);
 
             if (TitleBarRow != null)
-                TitleBarRow.Height = new GridLength(34);
+                TitleBarRow.Height = new GridLength(36);
 
             if (!_sidebarUserSized)
             {
@@ -2713,15 +2801,16 @@ namespace DownloadMuck
         {
             bool max = WindowState == WindowState.Maximized;
             _isPseudoMaximized = max;
-            BtnMaximize.Content = max ? "❐" : "☐";
+            BtnMaximize.Content = max ? "\uE923" : "\uE922"; // ChromeRestore / ChromeMaximize
+            BtnMaximize.ToolTip = max ? "Geri yükle" : "Büyüt";
             RootChrome.CornerRadius = new CornerRadius(0);
             TitleBarChrome.CornerRadius = new CornerRadius(0);
             ContentChrome.CornerRadius = new CornerRadius(0);
-            RootChrome.BorderThickness = max ? new Thickness(0) : new Thickness(1);
+            RootChrome.BorderThickness = max ? new Thickness(0) : new Thickness(1, 0, 1, 1);
             // Tam ekranda da liste paneli oval kalsın
             if (ListPanelBorder.ActualWidth > 0)
             {
-                const double r = 12;
+                const double r = 14;
                 ListPanelBorder.Clip = new RectangleGeometry(
                     new Rect(0, 0, ListPanelBorder.ActualWidth, ListPanelBorder.ActualHeight),
                     r, r);
@@ -2919,6 +3008,20 @@ namespace DownloadMuck
         }
 
         private void ToolbarSettings_Click(object sender, RoutedEventArgs e) => OpenSettingsOverlay();
+
+        private void ToolbarSettings_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (IcoToolbarSettings != null)
+                IcoToolbarSettings.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+        }
+
+        private void ToolbarSettings_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (IcoToolbarSettings == null) return;
+            bool light = ThemeService.IsLight;
+            IcoToolbarSettings.Foreground = new SolidColorBrush(
+                light ? Color.FromRgb(0xFF, 0x6B, 0x00) : Color.FromRgb(0xC8, 0xC8, 0xC8));
+        }
 
         private void OpenSettingsOverlay(string? tab = null)
         {
@@ -3775,6 +3878,191 @@ namespace DownloadMuck
             return FileNameHelper.ChooseDisplayName(null, decodedSuggested, fromUrl, mimeHint);
         }
 
+        private async Task StartExtCaptureDownloadAsync(ExtCaptureRequest ext)
+        {
+            string kind = (ext.Kind ?? "").Trim().ToLowerInvariant();
+            string name = BuildExtCaptureFilename(ext);
+            string url = ext.Url;
+            if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(ext.PageUrl))
+                url = ext.PageUrl;
+
+            // Altyazı / junk URL → master adayı dene veya reddet
+            if (MediaFormatService.IsJunkMediaUrl(url)
+                && !YtDlpHelper.IsYouTubeUrl(ext.PageUrl)
+                && !YtDlpHelper.IsYouTubeUrl(url))
+            {
+                string? fixedUrl = null;
+                foreach (string cand in MediaFormatService.GuessHlsMasterUrls(url))
+                {
+                    fixedUrl = cand;
+                    break;
+                }
+                if (!string.IsNullOrWhiteSpace(fixedUrl))
+                {
+                    url = fixedUrl;
+                    ext.Url = fixedUrl;
+                    kind = "hls";
+                }
+                else
+                    return;
+            }
+
+            // Header'a PageUrl Referer ekle (CDN hotlink)
+            EnsureCaptureReferer(ext);
+
+            bool isYouTube = YtDlpHelper.IsYouTubeUrl(ext.PageUrl) || YtDlpHelper.IsYouTubeUrl(url);
+            bool urlIsHls = MediaFormatService.LooksLikeHlsUrl(url);
+            bool urlIsDash = MediaFormatService.LooksLikeDashUrl(url);
+            bool isPlaylist = urlIsHls || urlIsDash || kind is "hls" or "dash";
+            bool isHtmlPage = MediaFormatService.LooksLikeHtmlPageUrl(url);
+
+            // Progressive HTTP dosya → normal mini oturum (yt-dlp yok)
+            // HTML player sayfası progressive sayılmaz
+            if (!isYouTube && !isPlaylist && kind is not "yt-dlp" && !isHtmlPage)
+            {
+                if (string.IsNullOrWhiteSpace(url) || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+                    return;
+                await StartDownloadProcess(url, name, ext.Mime, selectItem: true);
+                return;
+            }
+
+            // kind=hls ama URL gerçekten mp4 ise (yanlış etiket) → düz indirme
+            if (!isYouTube && kind is "hls" or "dash"
+                && MediaFormatService.LooksLikeProgressiveFile(url)
+                && !urlIsHls && !urlIsDash)
+            {
+                await StartDownloadProcess(url, name, ext.Mime, selectItem: true);
+                return;
+            }
+
+            // kind boş/progressive ama URL /hls/... → yine yt-dlp
+            if (!isYouTube && isPlaylist)
+                kind = urlIsDash || kind == "dash" ? "dash" : "hls";
+
+            // Film sitelerinde player HTML → yt-dlp sayfa URL (extractor yoksa yine fail; en azından HTML kaydetme)
+            string targetUrl = url;
+            string pageKeep = ext.PageUrl;
+            if (isYouTube)
+            {
+                targetUrl = !string.IsNullOrWhiteSpace(ext.PageUrl) ? ext.PageUrl! : url;
+                if (YtDlpHelper.IsYouTubeUrl(targetUrl))
+                    targetUrl = YtDlpHelper.NormalizeYouTubeWatchUrl(targetUrl) ?? targetUrl;
+                if (string.IsNullOrWhiteSpace(ext.FormatId) || ext.FormatId is "best" or "playing")
+                    ext.FormatId = "bv*[protocol^=http][vcodec^=avc1]+ba[protocol^=http]/bv*[protocol^=http]+ba/b";
+                ext.PageUrl = targetUrl;
+                ext.Url = targetUrl;
+                ext.Kind = "yt-dlp";
+            }
+            else
+            {
+                // Film / HLS / DASH: medya URL ile yt-dlp; player HTML asla hedef olmasın
+                if (isHtmlPage
+                    || string.IsNullOrWhiteSpace(targetUrl)
+                    || targetUrl.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!isPlaylist)
+                        return; // gerçek stream yakalanmadan indirme başlatma
+                }
+                if (string.IsNullOrWhiteSpace(ext.FormatId) || ext.FormatId is "playing")
+                    ext.FormatId = "best";
+                ext.FormatId = YtDlpHelper.NormalizeFormatForProbe(ext.FormatId, targetUrl);
+                if (!string.IsNullOrWhiteSpace(pageKeep))
+                    ext.PageUrl = pageKeep;
+                ext.Url = targetUrl;
+                ext.Kind = "yt-dlp";
+            }
+
+            // Mini indirme ekranı — kullanıcı Başlat'a basınca iner
+            OpenYtDlpSessionWindow(ext, name, targetUrl);
+            await Task.CompletedTask;
+        }
+
+        private static void EnsureCaptureReferer(ExtCaptureRequest ext)
+        {
+            string page = !string.IsNullOrWhiteSpace(ext.Referrer) ? ext.Referrer
+                : (!string.IsNullOrWhiteSpace(ext.PageUrl) ? ext.PageUrl : "");
+            if (string.IsNullOrWhiteSpace(page)) return;
+            ext.Headers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!ext.Headers.TryGetValue("Referer", out string? r) || string.IsNullOrWhiteSpace(r)
+                || MediaFormatService.LooksLikeHlsUrl(r) || MediaFormatService.LooksLikeDashUrl(r))
+                ext.Headers["Referer"] = page;
+            if (string.IsNullOrWhiteSpace(ext.Referrer))
+                ext.Referrer = page;
+        }
+
+        private void OpenYtDlpSessionWindow(ExtCaptureRequest ext, string fileName, string sessionUrl)
+        {
+            string urlKey = NormalizeCaptureUrl(sessionUrl) + "|" + (ext.FormatId ?? "");
+            lock (_captureGate)
+            {
+                if (_pendingSessionUrls.Contains(urlKey))
+                    return;
+                _pendingSessionUrls.Add(urlKey);
+                _recentCaptureUrls[NormalizeCaptureUrl(sessionUrl)] = DateTime.UtcNow;
+            }
+
+            try
+            {
+                string categoryId = ResolveCategoryForNewFile(fileName);
+                string defaultFolder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+                if (string.IsNullOrWhiteSpace(defaultFolder))
+                    defaultFolder = _defaultFolder;
+
+                string sizeLabel = "—"; // yt-dlp: eklenti filesize güvenilmez; pencere probe ile doldurur
+                var session = new DownloadSessionWindow(this, sessionUrl, fileName, defaultFolder, sizeLabel, ext)
+                {
+                    Owner = null,
+                    Topmost = false,
+                    ShowInTaskbar = true
+                };
+                session.Closed += (_, _) =>
+                {
+                    lock (_captureGate)
+                        _pendingSessionUrls.Remove(urlKey);
+                };
+                session.Show();
+                session.Activate();
+                session.BringToFrontSoft();
+            }
+            catch
+            {
+                lock (_captureGate)
+                    _pendingSessionUrls.Remove(urlKey);
+                throw;
+            }
+        }
+        private static string BuildExtCaptureFilename(ExtCaptureRequest ext)
+        {
+            string baseName = FileNameHelper.DecodeDisplayName(ext.Filename);
+            if (string.IsNullOrWhiteSpace(baseName) && !string.IsNullOrWhiteSpace(ext.Title))
+                baseName = FileNameHelper.DecodeDisplayName(ext.Title);
+            if (string.IsNullOrWhiteSpace(baseName))
+                baseName = "video";
+
+            // FormatId teknik id ise (h-1080-..., bv*+ba) veya yükseklik etiketi ise isme ekleme
+            bool technicalId = !string.IsNullOrWhiteSpace(ext.FormatId)
+                && (ext.FormatId.Contains('+') || ext.FormatId.StartsWith("h-", StringComparison.Ordinal)
+                    || ext.FormatId.StartsWith("hls-", StringComparison.Ordinal)
+                    || ext.FormatId.StartsWith("dash-", StringComparison.Ordinal)
+                    || ext.FormatId.StartsWith("prog-", StringComparison.Ordinal)
+                    || ext.FormatId is "best" or "playing" or "progressive"
+                    || YtDlpHelper.TryParseHeightHint(ext.FormatId, out _));
+            if (!technicalId && !string.IsNullOrWhiteSpace(ext.FormatId)
+                && !baseName.Contains(ext.FormatId, StringComparison.OrdinalIgnoreCase))
+                baseName += $" - {ext.FormatId}";
+
+            if (!baseName.Contains('.'))
+            {
+                if (!string.IsNullOrWhiteSpace(ext.Mime) && ext.Mime.Contains("audio", StringComparison.OrdinalIgnoreCase))
+                    baseName += ".m4a";
+                else if (string.Equals(ext.Kind, "audio", StringComparison.OrdinalIgnoreCase))
+                    baseName += ".m4a";
+                else
+                    baseName += ".mp4";
+            }
+            return baseName;
+        }
+
         private async Task EnrichSessionMetaAsync(
             DownloadSessionWindow session, string url, string currentName, string? mimeHint)
         {
@@ -3851,7 +4139,8 @@ namespace DownloadMuck
                 {
                     response?.Dispose();
                     using var get = new HttpRequestMessage(HttpMethod.Get, url);
-                    get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 8191);
+                    // bytes 0-0 → Content-Range Length = toplam boyut; 0-8191 ise Content-Length=8192 yanıltır
+                    get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
                     response = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead);
                 }
 
@@ -3859,10 +4148,7 @@ namespace DownloadMuck
                 {
                     contentType = response.Content.Headers.ContentType?.MediaType;
                     fromHeader = FileNameHelper.ExtractFromContentDisposition(response.Content.Headers);
-                    contentLength = response.Content.Headers.ContentLength;
-                    if (contentLength is null or <= 0
-                        && response.Content.Headers.ContentRange?.Length is long rangeLen)
-                        contentLength = rangeLen;
+                    contentLength = ResolveTotalContentLength(response);
 
                     bool isHtml = !string.IsNullOrWhiteSpace(contentType)
                         && contentType.Contains("html", StringComparison.OrdinalIgnoreCase);
@@ -3915,8 +4201,37 @@ namespace DownloadMuck
             string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
             string chosen = FileNameHelper.ChooseDisplayName(fromHeader, decodedSuggested, fromUrl, contentType);
 
+            // ZIP/RAR vb. için şüpheli küçük boyut (partial/HTML) gösterme
+            if (contentLength is > 0 and < 64 * 1024
+                && LooksLikeArchiveName(chosen, url, contentType))
+                contentLength = null;
+
             string sizeLabel = contentLength is > 0 ? FormatFileSize(contentLength.Value) : "—";
             return (chosen, sizeLabel);
+        }
+
+        /// <summary>Content-Range Length öncelikli; partial Content-Length (8 KB) dosya boyutu değildir.</summary>
+        private static long? ResolveTotalContentLength(HttpResponseMessage response)
+        {
+            if (response.Content.Headers.ContentRange?.Length is long rangeTotal && rangeTotal > 0)
+                return rangeTotal;
+
+            long? len = response.Content.Headers.ContentLength;
+            if (len is null or <= 0)
+                return null;
+
+            if (response.StatusCode == System.Net.HttpStatusCode.PartialContent && len <= 64 * 1024)
+                return null;
+
+            return len;
+        }
+
+        private static bool LooksLikeArchiveName(string? fileName, string? url, string? contentType)
+        {
+            string s = $"{fileName}|{url}|{contentType}".ToLowerInvariant();
+            return s.Contains(".zip") || s.Contains(".rar") || s.Contains(".7z")
+                   || s.Contains(".tar") || s.Contains("application/zip")
+                   || s.Contains("x-rar") || s.Contains("x-7z") || s.Contains("x-tar");
         }
 
         private static HttpClient CreateMetaHttpClient(string url)
@@ -4021,16 +4336,33 @@ namespace DownloadMuck
         {
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-                client.DefaultRequestHeaders.TryAddWithoutValidation(
-                    "User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                using var client = CreateMetaHttpClient(url);
+                HttpResponseMessage? response = null;
+                try
+                {
+                    using var head = new HttpRequestMessage(HttpMethod.Head, url);
+                    response = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
+                }
+                catch { /* ignore */ }
 
-                using var head = new HttpRequestMessage(HttpMethod.Head, url);
-                using var response = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
-                long? len = response.Content.Headers.ContentLength;
-                if (len.HasValue && len.Value > 0)
-                    return FormatFileSize(len.Value);
+                if (response == null || !response.IsSuccessStatusCode)
+                {
+                    response?.Dispose();
+                    using var get = new HttpRequestMessage(HttpMethod.Get, url);
+                    get.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
+                    response = await client.SendAsync(get, HttpCompletionOption.ResponseHeadersRead);
+                }
+
+                using (response)
+                {
+                    long? len = ResolveTotalContentLength(response);
+                    if (len is > 0)
+                    {
+                        if (len < 64 * 1024 && LooksLikeArchiveName(null, url, response.Content.Headers.ContentType?.MediaType))
+                            return "—";
+                        return FormatFileSize(len.Value);
+                    }
+                }
             }
             catch { /* ignore */ }
             return "—";
@@ -4043,7 +4375,8 @@ namespace DownloadMuck
         }
 
         public DownloadRun? BeginDownloadFromSession(string url, string fileName, string folder, bool notify = true,
-            TorrentFetchMode torrentMode = TorrentFetchMode.FullContent, string? sizeHint = null)
+            TorrentFetchMode torrentMode = TorrentFetchMode.FullContent, string? sizeHint = null,
+            ExtCaptureRequest? ytdlpCapture = null)
         {
             var settings = AppSettingsStore.Load();
             fileName = SmartRules.ApplyRename(fileName, url, DateTime.Now, settings.RenamePattern);
@@ -4101,7 +4434,33 @@ namespace DownloadMuck
             int threadCount = DownloadQueue.HttpChannels(settings);
             var kind = UrlClassifier.Classify(url);
             ITransferBackend engine;
-            if (torrentMode == TorrentFetchMode.TorrentFileOnly && kind == TransferKind.Torrent)
+            if (ytdlpCapture != null)
+            {
+                string pageUrl = !string.IsNullOrWhiteSpace(ytdlpCapture.PageUrl)
+                    ? ytdlpCapture.PageUrl
+                    : url;
+                bool yt = YtDlpHelper.IsYouTubeUrl(pageUrl) || YtDlpHelper.IsYouTubeUrl(url);
+                // İndirme adresi: YouTube=watch; HLS/film=medya URL (m3u8/mp4)
+                string downloadUrl = yt
+                    ? (YtDlpHelper.NormalizeYouTubeWatchUrl(pageUrl) ?? pageUrl)
+                    : (!string.IsNullOrWhiteSpace(ytdlpCapture.Url) ? ytdlpCapture.Url : url);
+                if (yt && YtDlpHelper.IsYouTubeUrl(pageUrl))
+                    pageUrl = YtDlpHelper.NormalizeYouTubeWatchUrl(pageUrl) ?? pageUrl;
+                string formatId = string.IsNullOrWhiteSpace(ytdlpCapture.FormatId)
+                                  || ytdlpCapture.FormatId is "best" or "playing"
+                    ? (yt
+                        ? "bv*[protocol^=http][vcodec^=avc1]+ba[protocol^=http]/bv*[protocol^=http]+ba/b"
+                        : "best")
+                    : YtDlpHelper.NormalizeFormatForProbe(ytdlpCapture.FormatId, downloadUrl);
+                string stem = Path.Combine(saveFolder, Path.GetFileNameWithoutExtension(finalFileName));
+                long expectedBytes = ytdlpCapture.Filesize;
+                if (expectedBytes <= 0 && TryParseSizeLabel(sizeHint, out long ytdlpHintBytes, out _))
+                    expectedBytes = ytdlpHintBytes;
+                engine = new YtDlpTransferBackend(
+                    downloadUrl, formatId, stem, ytdlpCapture.Cookies, ytdlpCapture.Headers, expectedBytes,
+                    sitePageUrl: pageUrl);
+            }
+            else if (torrentMode == TorrentFetchMode.TorrentFileOnly && kind == TransferKind.Torrent)
             {
                 if (!finalFileName.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase))
                 {
@@ -4368,6 +4727,10 @@ namespace DownloadMuck
             {
                 Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
+                    // Boyut zaten biliniyorsa (session probe / sizeHint) indirme boyunca sabitle —
+                    // anlık stream tahmini ile güncelleme.
+                    if (item.FileSizeBytes > 0)
+                        return;
                     SetItemFileSize(item, totalBytes);
                     TrySkipBySize(item, engine, totalBytes);
                 });
@@ -4405,7 +4768,8 @@ namespace DownloadMuck
                         return;
                     }
 
-                    item.StatusText = $"İndiriliyor %{progress:F1}";
+                    // Tam sayı — %48,0 gibi titreşimli ondalık gösterme
+                    item.StatusText = $"İndiriliyor %{progress:F0}";
                     if (!item.IsDownloading)
                         item.Status = "İndiriliyor";
                 });
@@ -4437,6 +4801,17 @@ namespace DownloadMuck
                         RefreshCategoryCounts();
                         // Bildirim RunEngineAsync finally içinde (çift tetiklenmesin)
                     }
+                    else if (status.StartsWith("Hata", StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.Status = "Hata";
+                        item.StatusText = status.Length > 5
+                            ? status[5..].Trim().TrimStart(':').Trim()
+                            : status;
+                        item.CurrentSpeed = "";
+                        item.IsDownloading = false;
+                        UpdateTransportButtons();
+                        QueueHistorySave();
+                    }
                     else if (status.Contains('%'))
                     {
                         if (!engine.IsCancelled && engine.IsDownloading)
@@ -4450,8 +4825,21 @@ namespace DownloadMuck
                         UpdateTransportButtons();
                         QueueHistorySave();
                     }
-                    else if (!status.StartsWith("İndiriliyor", StringComparison.OrdinalIgnoreCase)
-                             && !status.Contains("kanal", StringComparison.OrdinalIgnoreCase)
+                    else if (status.StartsWith("Birleştir", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (engine.IsDownloading && !engine.IsCancelled)
+                            item.StatusText = status;
+                    }
+                    else if (status.StartsWith("İndiriliyor", StringComparison.OrdinalIgnoreCase)
+                             || status.StartsWith("Hazırlan", StringComparison.OrdinalIgnoreCase)
+                             || status.StartsWith("Yeniden", StringComparison.OrdinalIgnoreCase)
+                             || status.StartsWith("Tek dosya", StringComparison.OrdinalIgnoreCase)
+                             || status.StartsWith("YouTube için Deno", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // ProgressChanged "İndiriliyor %N" kalsın — yt-dlp faz metni
+                        // (görüntü/ses) normal indirmeden farklı görünmesin
+                    }
+                    else if (!status.Contains("kanal", StringComparison.OrdinalIgnoreCase)
                              && !status.Contains("Dosya bilgileri", StringComparison.OrdinalIgnoreCase)
                              && !status.Contains("Tek kanal", StringComparison.OrdinalIgnoreCase))
                     {
@@ -4540,7 +4928,8 @@ namespace DownloadMuck
                     item.StatusText = "";
                     item.Status = "Tamamlandı";
                     item.ProgressValue = 100;
-                    if (File.Exists(item.FilePath))
+                    // Boyut zaten probe ile sabitlendiyse dokunma
+                    if (item.FileSizeBytes <= 0 && File.Exists(item.FilePath))
                         SetItemFileSize(item, new FileInfo(item.FilePath).Length);
                     TryAutoExtract(item);
                     _engines.Remove(item);
@@ -4981,7 +5370,41 @@ namespace DownloadMuck
             {
                 DgDownloads.UnselectAll();
                 DgDownloads.CurrentCell = new DataGridCellInfo();
+                ClearColumnSortHighlight();
             }
+        }
+
+        private void ClearColumnSortHighlight()
+        {
+            if (DgDownloads == null) return;
+            foreach (var col in DgDownloads.Columns)
+                col.SortDirection = null;
+            if (_downloadView != null)
+                _downloadView.SortDescriptions.Clear();
+
+            if (FindVisualChild<DataGridColumnHeadersPresenter>(DgDownloads) is { } headers)
+            {
+                foreach (var h in FindVisualChildren<DataGridColumnHeader>(headers))
+                {
+                    h.Tag = null;
+                    h.ClearValue(Control.ForegroundProperty);
+                }
+            }
+        }
+
+        private void ColumnHeader_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not DataGridColumnHeader clicked) return;
+            if (FindParent<Thumb>(e.OriginalSource as DependencyObject) != null) return;
+
+            if (FindVisualChild<DataGridColumnHeadersPresenter>(DgDownloads) is { } headers)
+            {
+                foreach (var h in FindVisualChildren<DataGridColumnHeader>(headers))
+                    h.Tag = null;
+            }
+
+            clicked.Tag = "active";
+            clicked.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
         }
 
         private void Marquee_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -5117,6 +5540,18 @@ namespace DownloadMuck
             {
                 _dragSelectionSnapshot = DgDownloads.SelectedItems.Cast<DownloadItem>().ToList();
                 return;
+            }
+
+            // Tek tıkla satırı seç (turuncu vurgu)
+            if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+                && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                if (!row.IsSelected || DgDownloads.SelectedItems.Count != 1)
+                {
+                    DgDownloads.SelectedItems.Clear();
+                    row.IsSelected = true;
+                    DgDownloads.CurrentItem = item;
+                }
             }
 
             var snap = GetToolbarTargets();

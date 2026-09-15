@@ -6,7 +6,7 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 using SharpCompress.Readers;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed class ArchivePasswordRequiredException : Exception
     {

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Tek akışlı protokoller (FTP/SFTP) için ortak kopyalama, pause ve resume.

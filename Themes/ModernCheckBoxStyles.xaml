@@ -3,7 +3,7 @@
     <SolidColorBrush x:Key="CheckBoxIdleBgBrush" Color="#2A2A2A"/>
     <SolidColorBrush x:Key="CheckBoxIdleBorderBrush" Color="#555555"/>
     <SolidColorBrush x:Key="CheckBoxHoverBorderBrush" Color="#777777"/>
-    <SolidColorBrush x:Key="CheckBoxCheckedFillBrush" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="CheckBoxCheckedFillBrush" Color="#3E3E3E"/>
     <SolidColorBrush x:Key="CheckBoxCheckedBorderBrush" Color="#666666"/>
     <SolidColorBrush x:Key="CheckBoxMarkBrush" Color="#FFFFFF"/>
 

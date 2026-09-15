@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds DownloadMuck + MDM.Updater and uploads a GitHub Release to MDM-App.
+  Builds MDM + MDM.Updater and uploads a GitHub Release to MDM-App.
 
 .EXAMPLE
   .\scripts\Publish-Release.ps1 -Version 1.0.1
@@ -25,14 +25,14 @@ $Version = $Version.Trim().TrimStart("v", "V")
 $Tag = "v$Version"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-if (-not (Test-Path (Join-Path $ProjectRoot "DownloadMuck.csproj"))) {
+if (-not (Test-Path (Join-Path $ProjectRoot "MDM.csproj"))) {
     $ProjectRoot = $PSScriptRoot
-    if (-not (Test-Path (Join-Path $ProjectRoot "DownloadMuck.csproj"))) {
-        throw "DownloadMuck.csproj not found."
+    if (-not (Test-Path (Join-Path $ProjectRoot "MDM.csproj"))) {
+        throw "MDM.csproj not found."
     }
 }
 
-$MainCsproj = Join-Path $ProjectRoot "DownloadMuck.csproj"
+$MainCsproj = Join-Path $ProjectRoot "MDM.csproj"
 $UpdaterCsproj = Join-Path $ProjectRoot "MDM.Updater\MDM.Updater.csproj"
 $PublishDir = Join-Path $ProjectRoot "artifacts\publish\$Runtime"
 $ZipPath = Join-Path $ProjectRoot "artifacts\MDM-$Version-$Runtime.zip"
@@ -67,7 +67,7 @@ $commonArgs = @(
     "-o", $PublishDir
 )
 
-Write-Host "==> Publishing DownloadMuck..."
+Write-Host "==> Publishing MDM..."
 dotnet publish $MainCsproj @commonArgs
 if ($LASTEXITCODE -ne 0) { throw "Main publish failed." }
 
@@ -76,12 +76,40 @@ dotnet publish $UpdaterCsproj @commonArgs
 if ($LASTEXITCODE -ne 0) { throw "Updater publish failed." }
 
 # Eklentiyi paketle
-$ExtSrc = Join-Path $ProjectRoot "DownloadMuck_Eklenti"
-$ExtDst = Join-Path $PublishDir "DownloadMuck_Eklenti"
+$ExtSrc = Join-Path $ProjectRoot "MDM_Eklenti"
+$ExtDst = Join-Path $PublishDir "MDM_Eklenti"
 if (Test-Path $ExtSrc) {
     if (Test-Path $ExtDst) { Remove-Item $ExtDst -Recurse -Force }
     Copy-Item $ExtSrc $ExtDst -Recurse -Force
     Write-Host "==> Extension copied into package"
+}
+
+# Dil klasörlerini locales altına topla (publish çıktısı sadeleşsin)
+$cultures = @('cs','de','es','fr','it','ja','ko','pl','pt-BR','ru','tr','zh-Hans','zh-Hant')
+$locales = Join-Path $PublishDir "locales"
+$moved = $false
+foreach ($c in $cultures) {
+    $src = Join-Path $PublishDir $c
+    if (Test-Path $src) {
+        New-Item -ItemType Directory -Force -Path $locales | Out-Null
+        $dst = Join-Path $locales $c
+        if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
+        Move-Item $src $dst -Force
+        $moved = $true
+    }
+}
+if ($moved) { Write-Host "==> Culture folders moved under locales/" }
+
+# runtimeconfig'e locales probing ekle (yoksa)
+$runtimeConfigs = Get-ChildItem $PublishDir -Filter "*.runtimeconfig.json"
+foreach ($rc in $runtimeConfigs) {
+    $json = Get-Content $rc.FullName -Raw | ConvertFrom-Json
+    if (-not $json.runtimeOptions) { continue }
+    $paths = @($json.runtimeOptions.additionalProbingPaths)
+    if ($paths -notcontains "locales") {
+        $json.runtimeOptions | Add-Member -NotePropertyName additionalProbingPaths -NotePropertyValue @("locales") -Force
+        $json | ConvertTo-Json -Depth 10 | Set-Content $rc.FullName -Encoding UTF8
+    }
 }
 
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
@@ -108,4 +136,4 @@ Write-Host "Done." -ForegroundColor Green
 Write-Host "  Tag: $Tag"
 Write-Host "  Zip: $ZipPath"
 Write-Host "  URL: https://github.com/$AppRepo/releases/tag/$Tag"
-Write-Host "  Run: MDM.Updater.exe  (or DownloadMuck.exe which redirects to updater)"
+Write-Host "  Run: MDM.Updater.exe  (or MDM.exe which redirects to updater)"

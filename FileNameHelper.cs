@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class FileNameHelper
     {

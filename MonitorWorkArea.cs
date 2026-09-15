@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>Pencerenin bulunduğu monitörün görev çubuğu hariç çalışma alanı.</summary>
     internal static class MonitorWorkArea

@@ -1,4 +1,4 @@
-namespace DownloadMuck
+namespace MDM
 {
     public static class HlsPlaylist
     {

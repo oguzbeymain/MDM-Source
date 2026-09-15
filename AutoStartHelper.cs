@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>Windows açılışında uygulamayı otomatik başlatır (HKCU Run).</summary>
     public static class AutoStartHelper
@@ -12,7 +12,7 @@ namespace DownloadMuck
 
         public static string ExePath =>
             Environment.ProcessPath
-            ?? Path.Combine(AppContext.BaseDirectory, "DownloadMuck.exe");
+            ?? Path.Combine(AppContext.BaseDirectory, "MDM.exe");
 
         public static bool IsEnabled()
         {

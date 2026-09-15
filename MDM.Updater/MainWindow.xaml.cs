@@ -36,11 +36,11 @@ namespace MDM.Updater
         public void LaunchMainAppAndExit()
         {
             string appDir = AppUpdater.GetInstallDirectory();
-            string mainExe = Path.Combine(appDir, "DownloadMuck.exe");
+            string mainExe = Path.Combine(appDir, "MDM.exe");
 
             if (!File.Exists(mainExe))
             {
-                SetStatus("DownloadMuck.exe bulunamadi.");
+                SetStatus("MDM.exe bulunamadi.");
                 return;
             }
 

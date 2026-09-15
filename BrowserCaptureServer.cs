@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Tarayici eklentisi icin 127.0.0.1 uzerinde hafif HTTP sunucu.
@@ -17,6 +17,7 @@ namespace DownloadMuck
         public static readonly int[] CandidatePorts = { 18680, 18681, 18682, 18700, 27182, 38472, 6800 };
 
         private readonly Action<string, string, string> _onDownloadRequested;
+        private readonly Action<ExtCaptureRequest>? _onExtCapture;
         private readonly bool _lan;
         private readonly string _token;
         private readonly IRemoteJobHost? _jobs;
@@ -32,9 +33,11 @@ namespace DownloadMuck
             Action<string, string, string> onDownloadRequested,
             bool lan = false,
             string? token = null,
-            IRemoteJobHost? jobs = null)
+            IRemoteJobHost? jobs = null,
+            Action<ExtCaptureRequest>? onExtCapture = null)
         {
             _onDownloadRequested = onDownloadRequested;
+            _onExtCapture = onExtCapture;
             _lan = lan;
             _token = token ?? "";
             _jobs = jobs;
@@ -100,7 +103,6 @@ namespace DownloadMuck
         private static void TryWritePortFile(int port)
         {
             string text = port.ToString();
-            // Eski yol + ayarlar/eklenti klasörü (MuckDownloadManager)
             foreach (string folder in new[] { "MDM", "MuckDownloadManager" })
             {
                 try
@@ -144,31 +146,68 @@ namespace DownloadMuck
                 try
                 {
                     using NetworkStream stream = client.GetStream();
-                    using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
-                    string? requestLine = await reader.ReadLineAsync();
-                    if (string.IsNullOrWhiteSpace(requestLine))
+                    // StreamReader KULLANMA — Content-Length bayt cinsinden; UTF-8 başlık/gövde
+                    // Türkçe title vb. ile char-okuma kilitlenmesine yol açıyordu.
+                    var headerBuf = new MemoryStream();
+                    var window = new byte[1];
+                    int matched = 0;
+                    // header sonu: \r\n\r\n
+                    while (matched < 4)
+                    {
+                        int n = await stream.ReadAsync(window.AsMemory(0, 1));
+                        if (n <= 0) return;
+                        headerBuf.WriteByte(window[0]);
+                        byte b = window[0];
+                        if (matched == 0 && b == (byte)'\r') matched = 1;
+                        else if (matched == 1 && b == (byte)'\n') matched = 2;
+                        else if (matched == 2 && b == (byte)'\r') matched = 3;
+                        else if (matched == 3 && b == (byte)'\n') matched = 4;
+                        else if (b == (byte)'\r') matched = 1;
+                        else matched = 0;
+                        if (headerBuf.Length > 64_000) return;
+                    }
+
+                    string headerText = Encoding.ASCII.GetString(headerBuf.ToArray());
+                    string[] headerLines = headerText.Split(new[] { "\r\n" }, StringSplitOptions.None);
+                    if (headerLines.Length == 0 || string.IsNullOrWhiteSpace(headerLines[0]))
                     {
                         await WriteResponseAsync(stream, RemoteApiResult.Text(400, "Bad Request"));
                         return;
                     }
 
+                    string requestLine = headerLines[0];
                     string method = requestLine.Split(' ')[0].ToUpperInvariant();
                     string path = "/";
                     var parts = requestLine.Split(' ');
                     if (parts.Length > 1)
                         path = parts[1];
+
                     int contentLength = 0;
                     string auth = "";
+                    bool expectContinue = false;
+                    bool chunked = false;
 
-                    while (true)
+                    for (int i = 1; i < headerLines.Length; i++)
                     {
-                        string? header = await reader.ReadLineAsync();
-                        if (header == null || header.Length == 0) break;
-
+                        string header = headerLines[i];
+                        if (string.IsNullOrEmpty(header)) continue;
                         if (header.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                            _ = int.TryParse(header.Substring("Content-Length:".Length).Trim(), out contentLength);
-                        if (header.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
-                            auth = header.Substring("Authorization:".Length).Trim();
+                            _ = int.TryParse(header.AsSpan("Content-Length:".Length).Trim(), out contentLength);
+                        else if (header.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
+                            auth = header["Authorization:".Length..].Trim();
+                        else if (header.StartsWith("Expect:", StringComparison.OrdinalIgnoreCase)
+                                 && header.Contains("100-continue", StringComparison.OrdinalIgnoreCase))
+                            expectContinue = true;
+                        else if (header.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                                 && header.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                            chunked = true;
+                    }
+
+                    if (expectContinue)
+                    {
+                        byte[] cont = Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n");
+                        await stream.WriteAsync(cont);
+                        await stream.FlushAsync();
                     }
 
                     if (contentLength > 512_000)
@@ -184,20 +223,18 @@ namespace DownloadMuck
                     }
 
                     bool isLoopback = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.Equals(IPAddress.Loopback) == true
-                        || ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.Equals(IPAddress.IPv6Loopback) == true;
+                        || ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.Equals(IPAddress.IPv6Loopback) == true
+                        || IPAddress.IsLoopback(((IPEndPoint?)client.Client.RemoteEndPoint)?.Address ?? IPAddress.None);
 
-                    char[] bodyBuffer = new char[Math.Max(contentLength, 0)];
-                    int read = 0;
-                    while (read < contentLength)
-                    {
-                        int n = await reader.ReadAsync(bodyBuffer, read, contentLength - read);
-                        if (n <= 0) break;
-                        read += n;
-                    }
+                    byte[] bodyBytes;
+                    if (chunked)
+                        bodyBytes = await ReadChunkedBodyAsync(stream);
+                    else
+                        bodyBytes = await ReadExactAsync(stream, Math.Max(contentLength, 0));
 
-                    string json = new string(bodyBuffer, 0, read);
+                    string json = bodyBytes.Length == 0 ? "" : Encoding.UTF8.GetString(bodyBytes);
                     var result = RemoteApiRouter.Route(
-                        method, path, json, isLoopback, auth, _lan, _token, _onDownloadRequested, _jobs);
+                        method, path, json, isLoopback, auth, _lan, _token, _onDownloadRequested, _jobs, _onExtCapture);
                     await WriteResponseAsync(stream, result);
                 }
                 catch (Exception ex)
@@ -205,6 +242,69 @@ namespace DownloadMuck
                     Debug.WriteLine($"Client handle error: {ex.Message}");
                 }
             }
+        }
+
+        private static async Task<byte[]> ReadExactAsync(NetworkStream stream, int length)
+        {
+            if (length <= 0) return Array.Empty<byte>();
+            byte[] buf = new byte[length];
+            int read = 0;
+            while (read < length)
+            {
+                int n = await stream.ReadAsync(buf.AsMemory(read, length - read));
+                if (n <= 0) break;
+                read += n;
+            }
+            if (read == length) return buf;
+            if (read == 0) return Array.Empty<byte>();
+            var partial = new byte[read];
+            Buffer.BlockCopy(buf, 0, partial, 0, read);
+            return partial;
+        }
+
+        private static async Task<byte[]> ReadChunkedBodyAsync(NetworkStream stream)
+        {
+            using var ms = new MemoryStream();
+            while (true)
+            {
+                string sizeLine = await ReadLineAsciiAsync(stream);
+                if (string.IsNullOrEmpty(sizeLine)) break;
+                int semi = sizeLine.IndexOf(';');
+                if (semi >= 0) sizeLine = sizeLine[..semi];
+                if (!int.TryParse(sizeLine.Trim(), System.Globalization.NumberStyles.HexNumber, null, out int size))
+                    break;
+                if (size == 0)
+                {
+                    // trailing headers
+                    while (true)
+                    {
+                        string t = await ReadLineAsciiAsync(stream);
+                        if (string.IsNullOrEmpty(t)) break;
+                    }
+                    break;
+                }
+                byte[] chunk = await ReadExactAsync(stream, size);
+                await ms.WriteAsync(chunk);
+                await ReadLineAsciiAsync(stream); // CRLF after chunk
+                if (ms.Length > 512_000) break;
+            }
+            return ms.ToArray();
+        }
+
+        private static async Task<string> ReadLineAsciiAsync(NetworkStream stream)
+        {
+            var ms = new MemoryStream();
+            var b = new byte[1];
+            while (true)
+            {
+                int n = await stream.ReadAsync(b.AsMemory(0, 1));
+                if (n <= 0) break;
+                if (b[0] == (byte)'\n') break;
+                if (b[0] != (byte)'\r')
+                    ms.WriteByte(b[0]);
+                if (ms.Length > 4096) break;
+            }
+            return Encoding.ASCII.GetString(ms.ToArray());
         }
 
         private static async Task WriteResponseAsync(NetworkStream stream, RemoteApiResult result)
@@ -226,7 +326,8 @@ namespace DownloadMuck
             sb.Append($"HTTP/1.1 {statusCode} {reason}\r\n");
             sb.Append("Access-Control-Allow-Origin: *\r\n");
             sb.Append("Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n");
-            sb.Append("Access-Control-Allow-Headers: Content-Type, Accept, Authorization\r\n");
+            sb.Append("Access-Control-Allow-Headers: Content-Type, Accept, Authorization, Access-Control-Request-Private-Network\r\n");
+            sb.Append("Access-Control-Allow-Private-Network: true\r\n");
             sb.Append($"Content-Type: {result.ContentType}\r\n");
             sb.Append($"Content-Length: {bodyBytes.Length}\r\n");
             sb.Append("Connection: close\r\n");

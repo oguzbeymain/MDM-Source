@@ -2,7 +2,7 @@ using System.IO;
 using System.Net.Http;
 using MonoTorrent;
 
-namespace DownloadMuck
+namespace MDM
 {
     public sealed record TorrentInfoPreview(string Name, long Size, int FileCount);
 

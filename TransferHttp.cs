@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http;
 
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// Paylaşılan HttpClient ayarı. HTTPS'te HTTP/3 dene (RequestVersionOrLower

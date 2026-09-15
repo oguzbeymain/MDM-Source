@@ -1,7 +1,7 @@
 using System.IO;
 using System.Linq;
 
-namespace DownloadMuck
+namespace MDM
 {
     public static class PluginRegistry
     {

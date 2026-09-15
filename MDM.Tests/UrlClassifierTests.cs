@@ -1,7 +1,7 @@
 using Xunit;
-using DownloadMuck;
+using MDM;
 
-namespace DownloadMuck.Tests;
+namespace MDM.Tests;
 
 public class UrlClassifierTests
 {

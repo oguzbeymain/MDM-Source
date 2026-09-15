@@ -1,11 +1,11 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class App : Application
     {
@@ -85,7 +85,7 @@ namespace DownloadMuck
             {
                 MessageBox.Show(
                     $"Uygulama başlatılamadı:\n{ex.Message}",
-                    "DownloadMuck",
+                    "MDM",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 SingleInstance.Release();

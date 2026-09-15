@@ -3,7 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class ConfirmDialog : Window
     {
@@ -36,10 +36,21 @@ namespace DownloadMuck
 
             ApplyThemeSurface(ThemeService.IsLight);
 
+            FocusVisualStyle = null;
+            if (FindName("BtnConfirm") is Button confBtn)
+                confBtn.FocusVisualStyle = null;
+
             PreviewKeyDown += (_, e) =>
             {
                 if (e.Key == Key.Escape) { Confirmed = false; Close(); }
                 else if (e.Key == Key.Enter) { Confirmed = true; Close(); }
+            };
+
+            Loaded += (_, _) =>
+            {
+                // Focus kutusu çıkmasın
+                Keyboard.ClearFocus();
+                Focus();
             };
         }
 

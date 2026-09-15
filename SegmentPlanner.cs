@@ -1,4 +1,4 @@
-namespace DownloadMuck
+namespace MDM
 {
     /// <summary>
     /// HTTP Range iş parçası planı — sabit eşit dilimler yerine boyuta göre parça sayısı.

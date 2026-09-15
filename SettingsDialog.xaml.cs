@@ -9,7 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
-namespace DownloadMuck
+namespace MDM
 {
     public partial class SettingsDialog : UserControl
     {
@@ -265,7 +265,10 @@ namespace DownloadMuck
                 SetLocalBrush("SettingsLabelBrush", light ? Color.FromRgb(0x55, 0x55, 0x55) : Color.FromRgb(0xBB, 0xBB, 0xBB));
                 SetLocalBrush("SettingsBodyBrush", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
                 SetLocalBrush("SettingsInputBgBrush", input);
-                SetLocalBrush("SettingsInputBorderBrush", border);
+                // Arama kutusu ile aynı koyu çerçeve — sistem mavisi yok
+                SetLocalBrush("SettingsInputBorderBrush", light
+                    ? ThemeService.Surface(light, 0xD0, 0xD0, 0xD6, 0x2E, 0x2E, 0x2E)
+                    : Color.FromRgb(0x2E, 0x2E, 0x2E));
                 SetLocalBrush("BrowserCardBgBrush", ThemeService.Surface(light, 0xF7, 0xF7, 0xF9, 0x14, 0x14, 0x14));
                 SetLocalBrush("BrowserCardBorderBrush", ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x2A, 0x2A, 0x2A));
                 SetLocalBrush("BrowserCardTextBrush", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
