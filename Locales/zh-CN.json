@@ -448,5 +448,9 @@
   "setup.error_payload": "缺少安装包。请重新下载安装文件。",
   "setup.error_install_path": "请选择有效的安装文件夹。",
   "setup.error_download_path": "请选择有效的下载文件夹。",
-  "setup.pick_folder": "选择文件夹"
+  "setup.pick_folder": "选择文件夹",
+  "settings.about.uninstall_title": "卸载应用",
+  "settings.about.uninstall_hint": "MuckDownloadManager 将从你的电脑中移除。已下载的文件会保留。",
+  "settings.about.uninstall_button": "卸载",
+  "settings.about.uninstall_failed": "无法启动卸载程序。"
 }

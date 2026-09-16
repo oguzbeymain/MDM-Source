@@ -41,6 +41,24 @@ namespace MDM.Setup
             _step = App.UninstallMode ? Step.Uninstall : Step.Welcome;
             ApplyTexts();
             ShowStep(_step);
+
+            if (App.Silent)
+                Loaded += RunSilentAsync;
+        }
+
+        /// <summary>
+        /// /silent: Windows'un QuietUninstallString çağrısı ve otomatik testler onay
+        /// beklemeden çalışır; iş bitince pencere kendini kapatır.
+        /// </summary>
+        private async void RunSilentAsync(object sender, RoutedEventArgs e)
+        {
+            Loaded -= RunSilentAsync;
+            if (App.UninstallMode)
+                await RunUninstallAsync();
+            else if (ReadOptions())
+                await RunInstallAsync();
+
+            Close();
         }
 
         // --- Gezinme ---

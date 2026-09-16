@@ -8,8 +8,8 @@ namespace MDM
     public static class ChannelBudget
     {
         public const int MaxPerJob = 16;
-        public const int MaxPerHost = 8;
-        public const int GlobalMax = 32;
+        public const int MaxPerHost = 16;
+        public const int GlobalMax = 48;
 
         public static int ForJob(long bytes, int rttMs, int activeJobs, int hostChannels)
         {
@@ -27,11 +27,11 @@ namespace MDM
             else
                 bySize = MaxPerJob;
 
-            int byRtt = rttMs <= 50
+            // Gecikme yüksekken tek bağlantı bant genişliğini dolduramaz; kanalı azaltmak
+            // yerine artırmak gerekir. Yakın sunucuda ek kanalın faydası yok.
+            int byRtt = rttMs <= 80
                 ? bySize
-                : rttMs <= 150
-                    ? Math.Max(1, (bySize + 1) / 2)
-                    : Math.Max(1, bySize / 4);
+                : Math.Min(MaxPerJob, bySize + 4);
 
             int jobShare = Math.Max(1, GlobalMax / Math.Max(1, activeJobs));
             int hostRoom = Math.Max(1, MaxPerHost - Math.Max(0, hostChannels));

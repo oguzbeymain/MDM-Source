@@ -9,15 +9,24 @@ namespace MDM
         public const long MinChunkBytes = 256L * 1024;
         public const int MaxChunks = 64;
 
+        /// <summary>Parça boyutu bu aralıkta tutulur: küçük parça = her parça arası yeni istek molası.</summary>
+        public const long MinPlannedChunkBytes = 2L * 1024 * 1024;
+        public const long MaxPlannedChunkBytes = 64L * 1024 * 1024;
+
         public static int PlanChunkCount(long totalSize, int threadCount)
         {
             if (totalSize <= MinChunkBytes)
                 return 1;
 
             int threads = Math.Max(1, threadCount);
-            int bySize = (int)Math.Max(1, totalSize / TargetChunkBytes);
+
+            // Kanal başına iki parça hedefle: yük dengesi için yeter, istek sayısı düşük kalır.
+            long pieceSize = Math.Clamp(totalSize / (threads * 2L),
+                MinPlannedChunkBytes, MaxPlannedChunkBytes);
+            int count = (int)Math.Max(1, (totalSize + pieceSize - 1) / pieceSize);
+
             int maxChunks = Math.Min(MaxChunks, Math.Max(threads * 8, threads));
-            int count = Math.Clamp(bySize, 1, maxChunks);
+            count = Math.Clamp(count, 1, maxChunks);
             if (totalSize / count < MinChunkBytes)
                 count = Math.Max(1, (int)(totalSize / MinChunkBytes));
             return Math.Max(1, count);

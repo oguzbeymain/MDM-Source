@@ -10,14 +10,24 @@ public class RemainingMatrixTests
     [Theory]
     [InlineData(1000, 10, 1, 0, 1)]
     [InlineData(8L * 1024 * 1024, 20, 1, 0, 4)]
-    [InlineData(200L * 1024 * 1024, 20, 1, 0, 8)]
-    [InlineData(200L * 1024 * 1024, 300, 1, 0, 4)]
-    [InlineData(200L * 1024 * 1024, 20, 8, 0, 4)]
+    [InlineData(200L * 1024 * 1024, 20, 1, 0, 16)]
+    [InlineData(200L * 1024 * 1024, 300, 1, 0, 16)]
+    [InlineData(200L * 1024 * 1024, 20, 8, 0, 6)]
     public void Channel_budget_scales_with_size_rtt_and_load(long bytes, int rtt, int jobs, int host, int expectedMax)
     {
         int n = ChannelBudget.ForJob(bytes, rtt, jobs, host);
         Assert.InRange(n, 1, expectedMax);
         Assert.True(n <= ChannelBudget.MaxPerJob);
+    }
+
+    /// <summary>Yüksek gecikmede tek bağlantı bant genişliğini dolduramaz; kanal azalmamalı.</summary>
+    [Fact]
+    public void High_latency_never_gets_fewer_channels_than_low_latency()
+    {
+        long bytes = 200L * 1024 * 1024;
+        int near = ChannelBudget.ForJob(bytes, 20, 1, 0);
+        int far = ChannelBudget.ForJob(bytes, 300, 1, 0);
+        Assert.True(far >= near, $"uzak sunucu {far}, yakın sunucu {near} kanal aldı");
     }
 
     [Fact]

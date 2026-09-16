@@ -448,5 +448,9 @@
   "setup.error_payload": "حزمة التثبيت مفقودة. نزّل ملف التثبيت مرة أخرى.",
   "setup.error_install_path": "اختر مجلد تثبيت صالحًا.",
   "setup.error_download_path": "اختر مجلد تنزيل صالحًا.",
-  "setup.pick_folder": "اختر مجلدًا"
+  "setup.pick_folder": "اختر مجلدًا",
+  "settings.about.uninstall_title": "إلغاء تثبيت التطبيق",
+  "settings.about.uninstall_hint": "ستتم إزالة MuckDownloadManager من جهازك. أما الملفات التي نزّلتها فسيتم الاحتفاظ بها.",
+  "settings.about.uninstall_button": "إلغاء التثبيت",
+  "settings.about.uninstall_failed": "تعذّر بدء تشغيل برنامج إلغاء التثبيت."
 }

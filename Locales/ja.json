@@ -448,5 +448,9 @@
   "setup.error_payload": "インストールパッケージが見つかりません。セットアップファイルを再度ダウンロードしてください。",
   "setup.error_install_path": "有効なインストール先フォルダーを選択してください。",
   "setup.error_download_path": "有効なダウンロードフォルダーを選択してください。",
-  "setup.pick_folder": "フォルダーを選択"
+  "setup.pick_folder": "フォルダーを選択",
+  "settings.about.uninstall_title": "アプリのアンインストール",
+  "settings.about.uninstall_hint": "MuckDownloadManager がコンピューターから削除されます。ダウンロードしたファイルは保持されます。",
+  "settings.about.uninstall_button": "アンインストール",
+  "settings.about.uninstall_failed": "アンインストーラーを起動できませんでした。"
 }

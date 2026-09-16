@@ -22,7 +22,15 @@ namespace MDM
                 CookieContainer = cookies ?? new CookieContainer(),
                 EnableMultipleHttp2Connections = true,
                 ConnectTimeout = TimeSpan.FromSeconds(20),
-                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+                // Parça istekleri aynı istemciyi paylaşır; bağlantılar indirme boyunca ayakta kalsın
+                PooledConnectionLifetime = TimeSpan.FromMinutes(30),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                MaxConnectionsPerServer = 64,
+                // 64 KB'lik varsayılan akış penceresi yüksek gecikmede hızı kesiyor
+                InitialHttp2StreamWindowSize = 16 * 1024 * 1024,
+                KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+                KeepAlivePingTimeout = TimeSpan.FromSeconds(15),
+                ResponseDrainTimeout = TimeSpan.FromSeconds(2)
             };
 
             var client = new HttpClient(handler)

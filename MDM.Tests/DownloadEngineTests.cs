@@ -44,6 +44,33 @@ public class DownloadEngineTests
         }
     }
 
+    /// <summary>
+    /// Parçalar tek bir HttpClient'ı paylaşır: her parça için yeni TCP/TLS bağlantısı
+    /// açmak hızın parça başına sıfırdan tırmanmasına (dalgalanma) yol açıyordu.
+    /// </summary>
+    [Fact]
+    public async Task Chunk_requests_reuse_connections()
+    {
+        byte[] payload = RandomBytes(24 * 1024 * 1024);
+        await using var server = new RangeHttpServer(payload) { KeepAlive = true };
+        string dest = Path.Combine(Path.GetTempPath(), "mdm-test-" + Guid.NewGuid().ToString("N") + ".bin");
+
+        try
+        {
+            var engine = new DownloadEngine(server.Url, dest, threadCount: 4);
+            await engine.StartOrResumeDownloadAsync();
+
+            Assert.True(engine.CompletedSuccessfully);
+            Assert.Equal(Sha(payload), Sha(await File.ReadAllBytesAsync(dest)));
+            Assert.True(server.RequestCount > server.ConnectionCount,
+                $"bağlantı yeniden kullanılmadı: {server.RequestCount} istek / {server.ConnectionCount} bağlantı");
+        }
+        finally
+        {
+            TryDelete(dest);
+        }
+    }
+
     [Fact]
     public async Task Pause_then_resume_completes_same_bytes()
     {

@@ -448,5 +448,9 @@
   "setup.error_payload": "缺少安裝套件。請重新下載安裝檔案。",
   "setup.error_install_path": "請選擇有效的安裝資料夾。",
   "setup.error_download_path": "請選擇有效的下載資料夾。",
-  "setup.pick_folder": "選擇資料夾"
+  "setup.pick_folder": "選擇資料夾",
+  "settings.about.uninstall_title": "解除安裝應用程式",
+  "settings.about.uninstall_hint": "MuckDownloadManager 將從您的電腦移除。已下載的檔案會保留。",
+  "settings.about.uninstall_button": "解除安裝",
+  "settings.about.uninstall_failed": "無法啟動解除安裝程式。"
 }

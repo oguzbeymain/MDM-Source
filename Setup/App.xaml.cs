@@ -22,6 +22,12 @@ namespace MDM.Setup
                 else if (a is "silent" or "s" or "quiet") Silent = true;
             }
 
+            // Kurulum klasöründeki Uninstall.exe çift tıklanınca doğrudan kaldırma açılır
+            if (!UninstallMode
+                && Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "")
+                    .StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
+                UninstallMode = true;
+
             DispatcherUnhandledException += OnDispatcherException;
             AppDomain.CurrentDomain.UnhandledException += (_, args) => Log(args.ExceptionObject as Exception);
 

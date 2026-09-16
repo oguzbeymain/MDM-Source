@@ -20,8 +20,13 @@ internal sealed class RangeHttpServer : IAsyncDisposable
     public int ThrottleBytesPerWrite { get; init; }
     public int ThrottleDelayMs { get; init; }
     public bool Drop { get; set; }
+    /// <summary>Açıkken aynı soket üzerinde birden fazla istek yanıtlanır.</summary>
+    public bool KeepAlive { get; init; }
     public int RequestCount => _requestCount;
+    /// <summary>Kabul edilen TCP bağlantısı sayısı — bağlantı yeniden kullanımını ölçmek için.</summary>
+    public int ConnectionCount => _connectionCount;
     private int _requestCount;
+    private int _connectionCount;
 
     public RangeHttpServer(byte[] payload, int throttleBytesPerWrite = 0, int throttleDelayMs = 0)
     {
@@ -61,13 +66,27 @@ internal sealed class RangeHttpServer : IAsyncDisposable
         using (client)
         using (var stream = client.GetStream())
         {
+            Interlocked.Increment(ref _connectionCount);
+            do
+            {
+                if (!await ServeOneAsync(stream, token))
+                    return;
+            }
+            while (KeepAlive && !token.IsCancellationRequested);
+        }
+    }
+
+    /// <summary>Tek isteği yanıtlar; bağlantı canlı kalabiliyorsa true döner.</summary>
+    private async Task<bool> ServeOneAsync(NetworkStream stream, CancellationToken token)
+    {
+        {
             Interlocked.Increment(ref _requestCount);
             if (Drop)
-                return;
+                return false;
 
             string header = await ReadHeadersAsync(stream, token);
             if (string.IsNullOrEmpty(header))
-                return;
+                return false;
 
             long start = 0;
             long end = _payload.Length - 1;
@@ -90,7 +109,7 @@ internal sealed class RangeHttpServer : IAsyncDisposable
             {
                 byte[] err = Encoding.ASCII.GetBytes("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 await stream.WriteAsync(err, token);
-                return;
+                return false;
             }
 
             int length = (int)(end - start + 1);
@@ -112,7 +131,7 @@ internal sealed class RangeHttpServer : IAsyncDisposable
                 sb.Append("Accept-Ranges: bytes\r\n");
             sb.Append($"Content-Length: {length}\r\n");
             sb.Append("Content-Type: application/octet-stream\r\n");
-            sb.Append("Connection: close\r\n\r\n");
+            sb.Append(KeepAlive ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n");
 
             byte[] head = Encoding.ASCII.GetBytes(sb.ToString());
             await stream.WriteAsync(head, token);
@@ -123,7 +142,7 @@ internal sealed class RangeHttpServer : IAsyncDisposable
             while (remaining > 0 && !token.IsCancellationRequested)
             {
                 if (Drop)
-                    return;
+                    return false;
                 int n = Math.Min(chunk, remaining);
                 await stream.WriteAsync(_payload.AsMemory(offset, n), token);
                 offset += n;
@@ -131,6 +150,8 @@ internal sealed class RangeHttpServer : IAsyncDisposable
                 if (ThrottleDelayMs > 0 && remaining > 0)
                     await Task.Delay(ThrottleDelayMs, token);
             }
+
+            return true;
         }
     }
 

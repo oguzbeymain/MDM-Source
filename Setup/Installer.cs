@@ -31,9 +31,12 @@ namespace MDM.Setup
     {
         public const string AppName = "MuckDownloadManager";
         public const string ExeName = "MDM.exe";
-        public const string SetupExeName = "MDM-Setup.exe";
+        /// <summary>Kurulum klasöründe kalan tek yardımcı: çift tıklanınca kaldırma başlar.</summary>
+        public const string UninstallExeName = "Uninstall.exe";
         public const string Publisher = "MuckDownloadManager";
-        public const string Version = "1.0.35";
+        /// <summary>Derleme sürümünden okunur; elle yazılınca her sürümde kayıyordu.</summary>
+        public static readonly string Version =
+            Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
         private const string UninstallKeyPath =
             @"Software\Microsoft\Windows\CurrentVersion\Uninstall\MuckDownloadManager";
@@ -209,9 +212,13 @@ namespace MDM.Setup
             try
             {
                 string self = Environment.ProcessPath ?? "";
-                string target = Path.Combine(installDir, SetupExeName);
+                string target = Path.Combine(installDir, UninstallExeName);
                 if (self.Length > 0 && !string.Equals(self, target, StringComparison.OrdinalIgnoreCase))
                     File.Copy(self, target, overwrite: true);
+
+                // Eski sürümlerden kalan setup kopyası kurulum klasöründe durmasın
+                string legacy = Path.Combine(installDir, "MDM-Setup.exe");
+                if (File.Exists(legacy)) TryDeleteFile(legacy);
             }
             catch { /* kaldırıcı kopyalanamazsa kurulum yine geçerli */ }
         }
@@ -387,15 +394,16 @@ namespace MDM.Setup
             try
             {
                 using RegistryKey key = Registry.CurrentUser.CreateSubKey(UninstallKeyPath, writable: true);
-                string uninstaller = Path.Combine(options.InstallDir, SetupExeName);
+                string uninstaller = Path.Combine(options.InstallDir, UninstallExeName);
 
                 key.SetValue("DisplayName", AppName);
                 key.SetValue("DisplayVersion", Version);
                 key.SetValue("Publisher", Publisher);
                 key.SetValue("DisplayIcon", Path.Combine(options.InstallDir, ExeName));
                 key.SetValue("InstallLocation", options.InstallDir);
-                key.SetValue("UninstallString", $"\"{uninstaller}\" /uninstall");
-                key.SetValue("QuietUninstallString", $"\"{uninstaller}\" /uninstall /silent");
+                // Denetim Masası / Ayarlar > Uygulamalar buradan Uninstall.exe'yi açar
+                key.SetValue("UninstallString", $"\"{uninstaller}\"");
+                key.SetValue("QuietUninstallString", $"\"{uninstaller}\" /silent");
                 key.SetValue("NoModify", 1, RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                 key.SetValue("EstimatedSize", DirectorySizeKb(options.InstallDir), RegistryValueKind.DWord);

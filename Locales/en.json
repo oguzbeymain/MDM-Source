@@ -448,5 +448,9 @@
   "setup.error_payload": "The installation package is missing. Please download the setup file again.",
   "setup.error_install_path": "Choose a valid install folder.",
   "setup.error_download_path": "Choose a valid download folder.",
-  "setup.pick_folder": "Choose a folder"
+  "setup.pick_folder": "Choose a folder",
+  "settings.about.uninstall_title": "Uninstall the app",
+  "settings.about.uninstall_hint": "MuckDownloadManager will be removed from your computer. Your downloaded files are kept.",
+  "settings.about.uninstall_button": "Uninstall",
+  "settings.about.uninstall_failed": "The uninstaller could not be started."
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -19,6 +20,14 @@ namespace MDM
 
     public class DownloadEngine : ITransferBackend
     {
+        /// <summary>Okuma tamponu: 64 KB yerine 1 MB — sistem çağrısı ve disk yazma sayısı düşer.</summary>
+        private const int ChunkBufferBytes = 1024 * 1024;
+        /// <summary>Bir okuma bu süre içinde veri getirmezse parça yeniden istenir.</summary>
+        private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(25);
+        private const int SpeedTickMs = 500;
+        /// <summary>EMA katsayısı: 1'e yakın = daha durağan gösterim.</summary>
+        private const double SpeedSmoothing = 0.75;
+
         private readonly IReadOnlyList<string> _urls;
         private readonly string _url;
         private readonly string _savePath;
@@ -309,7 +318,7 @@ namespace MDM
                 int pieces = _chunks?.Count ?? _threadCount;
                 int channels = Math.Min(_threadCount, Math.Max(1, pieces));
                 StatusChanged?.Invoke($"İndiriliyor... ({channels} kanal · {pieces} parça)");
-                await DownloadChunksAsync(_cts!.Token);
+                await DownloadChunksAsync(client, _cts!.Token);
                 if (CompletedSuccessfully)
                     ClearStateFile();
             }
@@ -375,7 +384,7 @@ namespace MDM
                     return;
 
                 long now = Environment.TickCount64;
-                if (!force && now - _lastStateSaveTick < 800)
+                if (!force && now - _lastStateSaveTick < 1500)
                     return;
                 _lastStateSaveTick = now;
 
@@ -445,7 +454,7 @@ namespace MDM
             _chunks = SegmentPlanner.BuildChunks(totalSize, _threadCount);
         }
 
-        private async Task DownloadChunksAsync(CancellationToken token)
+        private async Task DownloadChunksAsync(HttpClient client, CancellationToken token)
         {
             using var fileStream = new FileStream(_savePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite, 4096, useAsync: true);
             var fileHandle = fileStream.SafeFileHandle;
@@ -460,43 +469,7 @@ namespace MDM
                 }
 
                 using var timerCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                long lastBytes = _totalBytesDownloaded;
-
-                var timerTask = Task.Run(async () =>
-                {
-                    while (!timerCts.Token.IsCancellationRequested && _totalBytesDownloaded < _totalSize)
-                    {
-                        try
-                        {
-                            await Task.Delay(1000, timerCts.Token);
-                            long currentBytes = _totalBytesDownloaded;
-                            long bytesInLastSecond = currentBytes - lastBytes;
-                            lastBytes = currentBytes;
-
-                            double speedMBps = (double)bytesInLastSecond / (1024 * 1024);
-                            long bytesRemaining = _totalSize - currentBytes;
-
-                            string speedStr = $"{speedMBps:F2} MB/s";
-                            string timeStr = "Hesaplanıyor...";
-
-                            if (bytesInLastSecond > 0)
-                            {
-                                double secondsRemaining = (double)bytesRemaining / bytesInLastSecond;
-                                TimeSpan t = TimeSpan.FromSeconds(secondsRemaining);
-                                timeStr = t.ToString(@"hh\:mm\:ss");
-                            }
-
-                            if (!timerCts.Token.IsCancellationRequested && _totalBytesDownloaded < _totalSize)
-                                SpeedAndTimeChanged?.Invoke(speedStr, timeStr);
-
-                            SaveState();
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            break;
-                        }
-                    }
-                });
+                var timerTask = Task.Run(() => RunSpeedMonitorAsync(timerCts.Token, saveState: true));
 
                 int workerCount = Math.Min(_threadCount, Math.Max(1, pending.Count));
                 var workers = new List<Task>(workerCount);
@@ -524,7 +497,7 @@ namespace MDM
 
                             if (chunk == null)
                                 return;
-                            await DownloadOneChunkAsync(chunk, fileHandle, token);
+                            await DownloadOneChunkAsync(client, chunk, fileHandle, token);
                         }
                     }, token));
                 }
@@ -576,19 +549,23 @@ namespace MDM
             StatusChanged?.Invoke("İndirme Tamamlandı!");
         }
 
-        private async Task DownloadOneChunkAsync(ChunkState chunk, Microsoft.Win32.SafeHandles.SafeFileHandle fileHandle, CancellationToken token)
+        private async Task DownloadOneChunkAsync(HttpClient client, ChunkState chunk, Microsoft.Win32.SafeHandles.SafeFileHandle fileHandle, CancellationToken token)
         {
             const int maxRetries = 4;
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
                 try
                 {
-                    using HttpClient chunkClient = CreateClient();
+                    // Paylaşılan istemci: parça başına yeni TCP/TLS el sıkışması yok, bağlantı sıcak kalır
                     var chunkRequest = new HttpRequestMessage(HttpMethod.Get, UrlForAttempt(attempt));
+                    // Range parçaları için 1.1: her parça ayrı TCP bağlantısında akar,
+                    // tek H2/H3 bağlantısının akış penceresine sıkışmaz
+                    chunkRequest.Version = HttpVersion.Version11;
+                    chunkRequest.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
                     AddSourceHeaders(chunkRequest);
                     chunkRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(chunk.CurrentOffset, chunk.End);
 
-                    using HttpResponseMessage chunkResponse = await chunkClient.SendAsync(chunkRequest, HttpCompletionOption.ResponseHeadersRead, token);
+                    using HttpResponseMessage chunkResponse = await client.SendAsync(chunkRequest, HttpCompletionOption.ResponseHeadersRead, token);
                     if (token.IsCancellationRequested) return;
                     chunkResponse.EnsureSuccessStatusCode();
                     if (chunkResponse.StatusCode != HttpStatusCode.PartialContent)
@@ -598,31 +575,38 @@ namespace MDM
                         throw new IOException("Sunucu yanlış dosya aralığı döndürdü; parça kaydedilmedi.");
 
                     using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
-                    byte[] buffer = new byte[65536];
-
-                    while (chunk.CurrentOffset <= chunk.End)
+                    byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
+                    try
                     {
-                        long remaining = chunk.End - chunk.CurrentOffset + 1;
-                        if (remaining <= 0)
-                            break;
-                        int toRead = (int)Math.Min(buffer.Length, remaining);
-                        int bytesRead = await stream.ReadAsync(buffer.AsMemory(0, toRead), token);
-                        if (bytesRead <= 0)
-                            break;
+                        while (chunk.CurrentOffset <= chunk.End)
+                        {
+                            long remaining = chunk.End - chunk.CurrentOffset + 1;
+                            if (remaining <= 0)
+                                break;
+                            int toRead = (int)Math.Min(buffer.Length, remaining);
+                            int bytesRead = await ReadWithTimeoutAsync(stream, buffer.AsMemory(0, toRead), token)
+                                .ConfigureAwait(false);
+                            if (bytesRead <= 0)
+                                break;
 
-                        token.ThrowIfCancellationRequested();
-                        remaining = chunk.End - chunk.CurrentOffset + 1;
-                        if (remaining <= 0)
-                            break;
-                        int toWrite = (int)Math.Min(bytesRead, remaining);
+                            token.ThrowIfCancellationRequested();
+                            remaining = chunk.End - chunk.CurrentOffset + 1;
+                            if (remaining <= 0)
+                                break;
+                            int toWrite = (int)Math.Min(bytesRead, remaining);
 
-                        await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, toWrite), chunk.CurrentOffset, token);
-                        await SpeedLimiter.AwaitAsync(toWrite, token).ConfigureAwait(false);
-                        chunk.CurrentOffset += toWrite;
+                            await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, toWrite), chunk.CurrentOffset, token);
+                            await SpeedLimiter.AwaitAsync(toWrite, token).ConfigureAwait(false);
+                            chunk.CurrentOffset += toWrite;
 
-                        long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, toWrite);
-                        double progress = (double)currentTotal / _totalSize * 100;
-                        ReportProgressThrottled(progress);
+                            long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, toWrite);
+                            double progress = (double)currentTotal / _totalSize * 100;
+                            ReportProgressThrottled(progress);
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer);
                     }
 
                     if (chunk.CurrentOffset <= chunk.End)
@@ -636,8 +620,77 @@ namespace MDM
                 {
                     if (attempt >= maxRetries - 1 || token.IsCancellationRequested)
                         throw;
-                    await Task.Delay(600 * (attempt + 1), token);
+                    // Takılan parça kaldığı bayttan yeniden istenir; bekleme kısa tutulur
+                    await Task.Delay(300 * (attempt + 1), token);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Hız/kalan süre göstergesi. Anlık ölçüm TCP dalgalanmasıyla zıpladığı için
+        /// EMA ile yumuşatılır; hem parçalı hem tek kanallı indirme bunu kullanır.
+        /// </summary>
+        private async Task RunSpeedMonitorAsync(CancellationToken token, bool saveState)
+        {
+            long lastBytes = Interlocked.Read(ref _totalBytesDownloaded);
+            long lastTick = Environment.TickCount64;
+            double smoothed = 0;   // bayt/sn
+
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(SpeedTickMs, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                long total = Volatile.Read(ref _totalSize);
+                long currentBytes = Interlocked.Read(ref _totalBytesDownloaded);
+                if (total > 0 && currentBytes >= total)
+                    return;
+
+                long now = Environment.TickCount64;
+                long elapsedMs = Math.Max(1, now - lastTick);
+                lastTick = now;
+
+                double instant = Math.Max(0, currentBytes - lastBytes) * 1000.0 / elapsedMs;
+                lastBytes = currentBytes;
+                smoothed = smoothed <= 0 ? instant : smoothed * SpeedSmoothing + instant * (1 - SpeedSmoothing);
+
+                string speedStr = $"{smoothed / (1024 * 1024):F2} MB/s";
+                string timeStr = "Hesaplanıyor...";
+                if (smoothed > 1024 && total > 0)
+                {
+                    TimeSpan left = TimeSpan.FromSeconds(Math.Max(0, total - currentBytes) / smoothed);
+                    timeStr = left.TotalHours >= 100 ? "--:--:--" : left.ToString(@"hh\:mm\:ss");
+                }
+
+                if (!token.IsCancellationRequested)
+                    SpeedAndTimeChanged?.Invoke(speedStr, timeStr);
+
+                if (saveState)
+                    SaveState();
+            }
+        }
+
+        /// <summary>
+        /// Sessizce ölen bağlantı hızın dibe vurup toparlanmamasına yol açıyordu; okuma
+        /// zaman aşımına düşerse çağıran parçayı kaldığı yerden yeniden ister.
+        /// </summary>
+        private static async ValueTask<int> ReadWithTimeoutAsync(Stream stream, Memory<byte> buffer, CancellationToken token)
+        {
+            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            readCts.CancelAfter(ReadTimeout);
+            try
+            {
+                return await stream.ReadAsync(buffer, readCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested)
+            {
+                throw new IOException("Parça yanıt vermedi (zaman aşımı).");
             }
         }
 
@@ -724,21 +777,27 @@ namespace MDM
             EnsureBinaryResponse(initialResponse);
 
             using Stream stream = await initialResponse.Content.ReadAsStreamAsync(token);
-            using FileStream fileStream = new FileStream(_savePath, FileMode.Create, FileAccess.Write);
+            using FileStream fileStream = CreateSequentialFile(_savePath, FileMode.Create);
 
-            byte[] buffer = new byte[65536];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
             int bytesRead;
             long totalDownloaded = 0;
             long? totalSize = initialResponse.Content.Headers.ContentLength;
 
+            using var monitorCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            Volatile.Write(ref _totalSize, totalSize ?? 0);
+            Interlocked.Exchange(ref _totalBytesDownloaded, 0);
+            var monitor = Task.Run(() => RunSpeedMonitorAsync(monitorCts.Token, saveState: false));
+
             try
             {
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer, token).ConfigureAwait(false)) > 0)
                 {
                     token.ThrowIfCancellationRequested();
-                    await fileStream.WriteAsync(buffer, 0, bytesRead, token);
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
                     await SpeedLimiter.AwaitAsync(bytesRead, token).ConfigureAwait(false);
                     totalDownloaded += bytesRead;
+                    Interlocked.Exchange(ref _totalBytesDownloaded, totalDownloaded);
 
                     if (totalSize.HasValue && totalSize.Value > 0)
                     {
@@ -765,7 +824,18 @@ namespace MDM
             {
                 throw new OperationCanceledException(token);
             }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                monitorCts.Cancel();
+                try { await monitor.ConfigureAwait(false); } catch { }
+            }
         }
+
+        /// <summary>Sıralı yazma için büyük tamponlu, asenkron dosya akışı.</summary>
+        private static FileStream CreateSequentialFile(string path, FileMode mode)
+            => new FileStream(path, mode, FileAccess.Write, FileShare.Read, ChunkBufferBytes,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
 
         private async Task AppendSingleStreamAsync(HttpResponseMessage response, long existing, CancellationToken token)
         {
@@ -775,20 +845,35 @@ namespace MDM
                 TotalSizeKnown?.Invoke(totalSize.Value);
 
             using Stream stream = await response.Content.ReadAsStreamAsync(token);
-            using FileStream fileStream = new FileStream(_savePath, FileMode.Append, FileAccess.Write);
+            using FileStream fileStream = CreateSequentialFile(_savePath, FileMode.Append);
 
-            byte[] buffer = new byte[65536];
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
             int bytesRead;
             long totalDownloaded = existing;
 
-            while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+            using var monitorCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            Volatile.Write(ref _totalSize, totalSize ?? 0);
+            Interlocked.Exchange(ref _totalBytesDownloaded, existing);
+            var monitor = Task.Run(() => RunSpeedMonitorAsync(monitorCts.Token, saveState: false));
+
+            try
             {
-                token.ThrowIfCancellationRequested();
-                await fileStream.WriteAsync(buffer, 0, bytesRead, token);
-                await SpeedLimiter.AwaitAsync(bytesRead, token).ConfigureAwait(false);
-                totalDownloaded += bytesRead;
-                if (totalSize.HasValue && totalSize.Value > 0)
-                    ReportProgressThrottled((double)totalDownloaded / totalSize.Value * 100);
+                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer, token).ConfigureAwait(false)) > 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+                    await SpeedLimiter.AwaitAsync(bytesRead, token).ConfigureAwait(false);
+                    totalDownloaded += bytesRead;
+                    Interlocked.Exchange(ref _totalBytesDownloaded, totalDownloaded);
+                    if (totalSize.HasValue && totalSize.Value > 0)
+                        ReportProgressThrottled((double)totalDownloaded / totalSize.Value * 100);
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                monitorCts.Cancel();
+                try { await monitor.ConfigureAwait(false); } catch { }
             }
 
             if (totalSize.HasValue && totalDownloaded != totalSize.Value)

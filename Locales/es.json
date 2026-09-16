@@ -448,5 +448,9 @@
   "setup.error_payload": "Falta el paquete de instalación. Descarga de nuevo el archivo de instalación.",
   "setup.error_install_path": "Elige una carpeta de instalación válida.",
   "setup.error_download_path": "Elige una carpeta de descargas válida.",
-  "setup.pick_folder": "Elegir una carpeta"
+  "setup.pick_folder": "Elegir una carpeta",
+  "settings.about.uninstall_title": "Desinstalar la aplicación",
+  "settings.about.uninstall_hint": "MuckDownloadManager se eliminará de tu equipo. Los archivos descargados se conservan.",
+  "settings.about.uninstall_button": "Desinstalar",
+  "settings.about.uninstall_failed": "No se pudo iniciar el desinstalador."
 }

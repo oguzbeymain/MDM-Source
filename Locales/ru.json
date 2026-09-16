@@ -448,5 +448,9 @@
   "setup.error_payload": "Отсутствует установочный пакет. Скачайте файл установки заново.",
   "setup.error_install_path": "Выберите допустимую папку установки.",
   "setup.error_download_path": "Выберите допустимую папку загрузок.",
-  "setup.pick_folder": "Выберите папку"
+  "setup.pick_folder": "Выберите папку",
+  "settings.about.uninstall_title": "Удаление приложения",
+  "settings.about.uninstall_hint": "MuckDownloadManager будет удалён с вашего компьютера. Загруженные файлы сохранятся.",
+  "settings.about.uninstall_button": "Удалить",
+  "settings.about.uninstall_failed": "Не удалось запустить программу удаления."
 }

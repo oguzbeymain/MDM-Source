@@ -3218,17 +3218,13 @@ namespace MDM
             SetMenuHeader("EmptyContextMenu", "MenuSortDate", Loc.T("menu.list.sort_date", "Tarih"));
             SetMenuHeader("EmptyContextMenu", "MenuListSelectAll", Loc.T("menu.list.select_all", "Tümünü seç"));
 
-            // "Tüm indirilenler" label inside template
+            // "Tüm indirilenler" — şablondaki metin Content'e bağlı
             try
             {
                 if (BtnAllDownloads != null)
                 {
+                    BtnAllDownloads.Content = Loc.T("main.all_downloads", "Tüm indirilenler");
                     BtnAllDownloads.ToolTip = Loc.T("main.all_downloads", "Tüm indirilenler");
-                    if (FindVisualChild<TextBlock>(BtnAllDownloads) is TextBlock allLbl
-                        && (allLbl.Name == "lbl" || allLbl.Text.Contains("indirilen", StringComparison.OrdinalIgnoreCase)
-                            || allLbl.Text.Contains("download", StringComparison.OrdinalIgnoreCase)
-                            || allLbl.Text == Loc.T("main.all_downloads", "Tüm indirilenler")))
-                        allLbl.Text = Loc.T("main.all_downloads", "Tüm indirilenler");
                 }
             }
             catch { /* ignore */ }

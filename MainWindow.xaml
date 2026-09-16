@@ -1224,7 +1224,7 @@
                                     AllowDrop="True" Drop="BtnAllDownloads_Drop" DragOver="BtnAllDownloads_DragOver"
                                     Cursor="Hand" Margin="0,0,0,8" Height="32"
                                     HorizontalContentAlignment="Left" BorderThickness="0" Background="Transparent"
-                                    ToolTip="Tüm indirilenleri göster" Tag="idle">
+                                    Content="Tüm indirilenler" ToolTip="Tüm indirilenleri göster" Tag="idle">
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
@@ -1232,7 +1232,9 @@
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="10,0">
-                                                        <TextBlock x:Name="lbl" Text="Tüm indirilenler" FontSize="12"
+                                                        <!-- Metin Content'ten gelir; dil değişiminde şablon çocuğu aramak gerekmez -->
+                                                        <TextBlock x:Name="lbl" FontSize="12"
+                                                                   Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Content}"
                                                                    FontWeight="SemiBold"
                                                                    Foreground="{TemplateBinding Foreground}"
                                                                    VerticalAlignment="Center"/>

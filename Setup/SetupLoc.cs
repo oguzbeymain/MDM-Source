@@ -35,7 +35,8 @@ namespace MDM.Setup
 
         public static bool IsRightToLeft => Code is "ar" or "fa";
 
-        public static FlowDirection Flow => IsRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        /// <summary>Uygulamayla aynı davranış: yerleşim aynalanmaz, yalnızca metin çevrilir.</summary>
+        public static FlowDirection Flow => FlowDirection.LeftToRight;
 
         /// <summary>Windows dilinden en yakın desteklenen kodu seçer.</summary>
         public static string DetectSystemLanguage()

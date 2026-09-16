@@ -448,5 +448,9 @@
   "setup.error_payload": "Kurulum paketi eksik. Setup dosyasını yeniden indirin.",
   "setup.error_install_path": "Geçerli bir kurulum klasörü seçin.",
   "setup.error_download_path": "Geçerli bir indirme klasörü seçin.",
-  "setup.pick_folder": "Klasör seçin"
+  "setup.pick_folder": "Klasör seçin",
+  "settings.about.uninstall_title": "Uygulamayı kaldır",
+  "settings.about.uninstall_hint": "MuckDownloadManager bilgisayarınızdan kaldırılır. İndirdiğiniz dosyalar silinmez.",
+  "settings.about.uninstall_button": "Kaldır",
+  "settings.about.uninstall_failed": "Kaldırıcı başlatılamadı."
 }

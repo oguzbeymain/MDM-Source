@@ -986,10 +986,49 @@ namespace MDM
             // Hakkında
             if (TxtAboutDesc != null) TxtAboutDesc.Text = Loc.T("settings.about.desc",
                 "İndirmeleri kategorilere ayıran, tarayıcı yakalamalı masaüstü yöneticisi.");
+            if (TxtUninstallTitle != null) TxtUninstallTitle.Text = Loc.T("settings.about.uninstall_title", "Uygulamayı kaldır");
+            if (TxtUninstallHint != null) TxtUninstallHint.Text = Loc.T("settings.about.uninstall_hint",
+                "MuckDownloadManager bilgisayarınızdan kaldırılır. İndirdiğiniz dosyalar silinmez.");
+            if (BtnUninstallApp != null) BtnUninstallApp.Content = Loc.T("settings.about.uninstall_button", "Kaldır");
+            if (CardUninstall != null)
+                CardUninstall.Visibility = UninstallerPath() != null ? Visibility.Visible : Visibility.Collapsed;
             ApplyVersionTexts();
 
             FlowDirection = Loc.Flow;
             RefreshBrowserStatus();
+        }
+
+        /// <summary>Setup ile kurulduysa kurulum klasöründeki kaldırıcı; taşınabilir kopyada yok.</summary>
+        private static string? UninstallerPath()
+        {
+            try
+            {
+                string path = Path.Combine(AppContext.BaseDirectory, "Uninstall.exe");
+                return File.Exists(path) ? path : null;
+            }
+            catch { return null; }
+        }
+
+        private void BtnUninstallApp_Click(object sender, RoutedEventArgs e)
+        {
+            string? exe = UninstallerPath();
+            if (exe == null) return;
+
+            try
+            {
+                // Kaldırıcı kendi onay ekranını gösterir ve uygulamayı kapatır
+                Process.Start(new ProcessStartInfo(exe)
+                {
+                    WorkingDirectory = AppContext.BaseDirectory,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.about.uninstall_title", "Uygulamayı kaldır"),
+                    Loc.T("settings.about.uninstall_failed", "Kaldırıcı başlatılamadı."), ex.Message);
+            }
         }
 
         /// <summary>Sürüm metinleri — dil değişince de yenilenir.</summary>

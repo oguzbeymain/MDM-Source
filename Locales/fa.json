@@ -448,5 +448,9 @@
   "setup.error_payload": "بسته نصب موجود نیست. فایل نصب را دوباره دانلود کنید.",
   "setup.error_install_path": "یک پوشه نصب معتبر انتخاب کنید.",
   "setup.error_download_path": "یک پوشه دانلود معتبر انتخاب کنید.",
-  "setup.pick_folder": "یک پوشه انتخاب کنید"
+  "setup.pick_folder": "یک پوشه انتخاب کنید",
+  "settings.about.uninstall_title": "حذف برنامه",
+  "settings.about.uninstall_hint": "MuckDownloadManager از رایانه شما حذف می‌شود. فایل‌های دانلودشده حفظ می‌شوند.",
+  "settings.about.uninstall_button": "حذف",
+  "settings.about.uninstall_failed": "اجرای برنامه حذف ممکن نشد."
 }

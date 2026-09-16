@@ -88,7 +88,12 @@ namespace MDM
             catch { return fmt; }
         }
 
-        public static FlowDirection Flow => IsRtl ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        /// <summary>
+        /// Pencere yerleşimi her dilde soldan sağa kalır. Arapça/Farsça'da tüm arayüzü
+        /// aynalamak araç çubuğu, sütunlar ve pencere düğmelerini bozuyordu; metin yönü
+        /// zaten satır içinde doğru çözülür.
+        /// </summary>
+        public static FlowDirection Flow => FlowDirection.LeftToRight;
 
         public static string NormalizeCode(string? code)
         {
