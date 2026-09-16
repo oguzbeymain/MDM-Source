@@ -8,11 +8,14 @@ namespace MDM
     public partial class ConfirmDialog : Window
     {
         public bool Confirmed { get; private set; }
+        private readonly bool _accentCancel;
 
         public ConfirmDialog(string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false)
+            string? confirmText = null, string? cancelText = null, bool danger = false,
+            bool accentCancel = false)
         {
             InitializeComponent();
+            _accentCancel = accentCancel;
             TxtTitle.Text = title;
             TxtMessage.Text = message;
             if (string.IsNullOrWhiteSpace(detail))
@@ -27,14 +30,21 @@ namespace MDM
 
             if (FindName("BtnConfirm") is Button conf)
             {
-                conf.Content = confirmText;
+                conf.Content = string.IsNullOrWhiteSpace(confirmText)
+                    ? Loc.T("dialog.confirm", "Onayla") : confirmText;
                 if (danger)
                     conf.Background = new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28));
+                else
+                    conf.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
             }
             if (FindName("BtnCancelLabel") is Button cancel)
-                cancel.Content = cancelText;
+                cancel.Content = string.IsNullOrWhiteSpace(cancelText)
+                    ? Loc.T("dialog.cancel", "İptal") : cancelText;
+            FlowDirection = Loc.Flow;
 
             ApplyThemeSurface(ThemeService.IsLight);
+            if (_accentCancel)
+                StyleCancelAsAccent();
 
             FocusVisualStyle = null;
             if (FindName("BtnConfirm") is Button confBtn)
@@ -48,10 +58,29 @@ namespace MDM
 
             Loaded += (_, _) =>
             {
-                // Focus kutusu çıkmasın
                 Keyboard.ClearFocus();
                 Focus();
             };
+        }
+
+        private void StyleCancelAsAccent()
+        {
+            if (BtnCancelLabel == null) return;
+            BtnCancelLabel.Foreground = Brushes.White;
+            var template = new ControlTemplate(typeof(Button));
+            var factory = new FrameworkElementFactory(typeof(Border));
+            factory.Name = "bd";
+            factory.SetValue(Border.BackgroundProperty, Solid(Color.FromRgb(0xFF, 0x6B, 0x00)));
+            factory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            factory.AppendChild(cp);
+            template.VisualTree = factory;
+            var over = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            over.Setters.Add(new Setter(Border.BackgroundProperty, Solid(Color.FromRgb(0xFF, 0x85, 0x33)), "bd"));
+            template.Triggers.Add(over);
+            BtnCancelLabel.Template = template;
         }
 
         public void ApplyThemeSurface(bool light)
@@ -77,7 +106,7 @@ namespace MDM
             TxtMessage.Foreground = Solid(text);
             TxtDetail.Foreground = Solid(muted);
 
-            if (BtnCancelLabel != null)
+            if (BtnCancelLabel != null && !_accentCancel)
             {
                 BtnCancelLabel.Foreground = Solid(softFg);
                 var template = new ControlTemplate(typeof(Button));
@@ -121,23 +150,18 @@ namespace MDM
             Close();
         }
 
-        /// <param name="forceFloating">
-        /// true: her zaman ayrı pencere (mini indirme ekranı gibi).
-        /// false: owner MainWindow ise uygulama içi karartmalı modal.
-        /// </param>
         public static bool Show(Window? owner, string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false,
-            bool forceFloating = false)
+            string? confirmText = null, string? cancelText = null, bool danger = false,
+            bool forceFloating = false, bool accentCancel = false)
         {
             bool useAppModal = !forceFloating && (
                 owner is MainWindow ||
                 (owner == null && Application.Current?.MainWindow is MainWindow));
 
             if (useAppModal)
-                return AppModal.Confirm(title, message, detail, confirmText, cancelText, danger);
+                return AppModal.Confirm(title, message, detail, confirmText, cancelText, danger, accentCancel);
 
-            var dlg = new ConfirmDialog(title, message, detail, confirmText, cancelText, danger);
-            // WindowStyle.None owner (mini indirme) ShowDialog'u yutabiliyor — bağımsız aç
+            var dlg = new ConfirmDialog(title, message, detail, confirmText, cancelText, danger, accentCancel);
             bool attachOwner = owner != null && owner.IsLoaded && owner.WindowStyle != WindowStyle.None;
             if (attachOwner)
             {

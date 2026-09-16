@@ -8,14 +8,15 @@
         <SolidColorBrush x:Key="ChipBorder" Color="#2A2A2A"/>
         <SolidColorBrush x:Key="ChipBoxBg" Color="#0C0C0C"/>
         <SolidColorBrush x:Key="ChipFg" Color="#D0D0D0"/>
-        <SolidColorBrush x:Key="ChipCheckedBg" Color="#2A2118"/>
-        <SolidColorBrush x:Key="ChipCheckedBorder" Color="#666666"/>
-        <SolidColorBrush x:Key="ChipHoverBorder" Color="#777777"/>
-        <SolidColorBrush x:Key="ChipCheckedBoxBg" Color="#1A1A1A"/>
-        <SolidColorBrush x:Key="ChipCheckedFg" Color="#FFB06B"/>
+        <SolidColorBrush x:Key="ChipCheckedBg" Color="#1C1C1C"/>
+        <SolidColorBrush x:Key="ChipCheckedBorder" Color="#5C5C5C"/>
+        <SolidColorBrush x:Key="ChipHoverBorder" Color="#6A6A6A"/>
+        <SolidColorBrush x:Key="ChipCheckedBoxBg" Color="#121212"/>
+        <SolidColorBrush x:Key="ChipCheckedFg" Color="#E8E8E8"/>
         <SolidColorBrush x:Key="ChipCheckMark" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="SoftBtnBg" Color="#252525"/>
         <SolidColorBrush x:Key="SoftBtnFg" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="GroupLabelFg" Color="#888888"/>
 
         <Style x:Key="ExtChipCheckBox" TargetType="CheckBox">
             <Setter Property="Cursor" Value="Hand"/>
@@ -90,8 +91,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#28FF6B00"/>
-                                <Setter Property="Foreground" Value="#FF6B00"/>
+                                <Setter TargetName="bd" Property="Background" Value="#333333"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -101,7 +102,7 @@
     </UserControl.Resources>
 
     <Border x:Name="RulesRoot" Background="#1B1B1B" BorderBrush="#333" BorderThickness="1" CornerRadius="14"
-            Width="440" Height="460" MaxWidth="520" MaxHeight="560">
+            Width="440" Height="500" MaxWidth="520" MaxHeight="600">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="38"/>
@@ -144,17 +145,27 @@
 
                 <Border x:Name="RulesListPanel" Grid.Row="1" Background="#141414" BorderBrush="#2A2A2A"
                         BorderThickness="1" CornerRadius="12">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
-                        <ItemsControl x:Name="LstExt">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
+                        <ItemsControl x:Name="LstGroups">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}"
-                                              Style="{StaticResource ExtChipCheckBox}"/>
+                                    <StackPanel Margin="0,0,0,12">
+                                        <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource GroupLabelFg}" Margin="4,0,0,6"/>
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}"
+                                                              Style="{StaticResource ExtChipCheckBox}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -184,7 +195,7 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button x:Name="BtnCancel" Content="İptal" Width="84" Height="32" Margin="0,0,8,0"
                                 Click="BtnCancel_Click" Style="{StaticResource RulesSoftButton}"/>
-                        <Button Content="Kaydet" Width="84" Height="32" Click="BtnSave_Click"
+                        <Button x:Name="BtnSave" Content="Kaydet" Width="84" Height="32" Click="BtnSave_Click"
                                 Cursor="Hand" Foreground="White" BorderThickness="0" FontSize="12" FontWeight="SemiBold">
                             <Button.Template>
                                 <ControlTemplate TargetType="Button">

@@ -1,0 +1,237 @@
+/* MDM eklenti popup — koyu/acik tema, animasyonsuz */
+:root {
+  --accent: #FF6B00;
+  --accent-soft: rgba(255, 107, 0, 0.16);
+}
+
+.theme-dark {
+  --bg: #121212;
+  --card: #1A1A1A;
+  --card-line: #2A2A2A;
+  --text: #EDEDED;
+  --muted: #8A8A8A;
+  --seg-bg: #202020;
+  --track: #33312F;
+  --knob: #6A6A6A;
+  --input: #171717;
+}
+
+.theme-light {
+  --bg: #F4F4F5;
+  --card: #FFFFFF;
+  --card-line: #E2E2E4;
+  --text: #1B1B1B;
+  --muted: #6B6B70;
+  --seg-bg: #EDEDEF;
+  --track: #D6D6DA;
+  --knob: #FFFFFF;
+  --input: #FFFFFF;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.logo { width: 30px; height: 30px; }
+.brand { display: flex; flex-direction: column; line-height: 1.25; }
+.name { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; }
+.tagline { font-size: 11px; color: var(--muted); }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 8px;
+  background: var(--card);
+  font-size: 12px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+
+.status.online .dot { background: #4CAF50; }
+.status.offline .dot { background: #A33; }
+
+.card {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.offline-hint { margin: 8px 0 0; }
+
+/* Tema secici */
+.segment {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--seg-bg);
+}
+
+.seg {
+  flex: 1;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seg:hover { background: var(--accent-soft); }
+.seg.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* Anahtar satiri */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.switch-row input { position: absolute; opacity: 0; pointer-events: none; }
+
+.track {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--track);
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--knob);
+}
+
+.switch-row input:checked ~ .track { background: var(--accent); }
+.switch-row input:checked ~ .track .knob { left: 18px; background: #fff; }
+
+.host {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+/* Site listesi */
+.add-row { display: flex; gap: 6px; margin-top: 10px; }
+
+.add-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--card-line);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.add-row input:focus { outline: 1px solid var(--accent); }
+
+.add-row button {
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sites { list-style: none; margin: 8px 0 0; padding: 0; }
+
+.sites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--seg-bg);
+  font-size: 12px;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.sites button {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sites button:hover { background: var(--accent-soft); color: var(--accent); }
+
+.toast {
+  margin-top: 10px;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.toast.show { visibility: visible; }

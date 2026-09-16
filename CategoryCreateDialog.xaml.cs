@@ -16,9 +16,13 @@ namespace MDM
         {
             InitializeComponent();
             ApplyThemeSurface(ThemeService.IsLight);
-            TxtName.Text = "Yeni kategori";
+            string defaultName = Loc.T("catcreate.default_name", "Yeni kategori");
+            TxtName.Text = defaultName;
             TxtName.SelectAll();
-            string suggested = Path.Combine(defaultFolder, "Yeni kategori");
+            // Klasör adı ada göre türetilir; çeviri boş kalırsa Türkçe karşılığa düş
+            string defaultFolderName = CategoryStore.SanitizeFolderName(defaultName);
+            if (string.IsNullOrWhiteSpace(defaultFolderName)) defaultFolderName = "Yeni kategori";
+            string suggested = Path.Combine(defaultFolder, defaultFolderName);
             TxtFolder.Text = suggested;
             TxtName.TextChanged += (_, _) =>
             {
@@ -34,6 +38,19 @@ namespace MDM
                 TxtName.Focus();
                 Keyboard.Focus(TxtName);
             };
+            ApplyLocalizedTexts();
+        }
+
+        private void ApplyLocalizedTexts()
+        {
+            FlowDirection = Loc.Flow;
+            Title = Loc.T("catcreate.title", "Yeni kategori");
+            if (TxtTitle != null) TxtTitle.Text = Loc.T("catcreate.title", "Yeni kategori");
+            if (LblName != null) LblName.Text = Loc.T("catcreate.name", "Kategori adı");
+            if (LblFolder != null) LblFolder.Text = Loc.T("session.folder", "Kayıt klasörü");
+            if (BtnBrowse != null) BtnBrowse.Content = Loc.T("session.browse", "Gözat");
+            if (BtnCancel != null) BtnCancel.Content = Loc.T("dialog.cancel", "İptal");
+            if (BtnOk != null) BtnOk.Content = Loc.T("catcreate.create", "Oluştur");
         }
 
         public void ApplyThemeSurface(bool light)
@@ -135,7 +152,7 @@ namespace MDM
         {
             var dialog = new OpenFolderDialog
             {
-                Title = "Kategori klasörünü seçin"
+                Title = Loc.T("catcreate.pick_folder", "Kategori klasörünü seçin")
             };
             if (!string.IsNullOrWhiteSpace(TxtFolder.Text) && Directory.Exists(Path.GetDirectoryName(TxtFolder.Text)))
                 dialog.InitialDirectory = Path.GetDirectoryName(TxtFolder.Text)!;

@@ -52,6 +52,53 @@ namespace MDM
                         "BraveSoftware", "Brave-Browser", "User Data"),
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\brave.exe",
                     extRoot),
+                ProbeFirefox(),
+            };
+        }
+
+        private static BrowserExtensionStatus ProbeFirefox()
+        {
+            const string id = "firefox";
+            const string name = "Mozilla Firefox";
+            const string accent = "#FF7139";
+
+            string? exe = ExtensionInstaller.ResolveFirefoxExe(out _);
+            bool browserOk = !string.IsNullOrWhiteSpace(exe)
+                || Directory.Exists(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Mozilla", "Firefox"));
+
+            if (!browserOk)
+            {
+                return new BrowserExtensionStatus
+                {
+                    Id = id, Name = name, AccentHex = accent,
+                    BrowserInstalled = false, ExtensionActive = false,
+                    Detail = Loc.T("extstatus.browser_missing", "Tarayıcı yüklü değil")
+                };
+            }
+
+            bool live = ExtensionPresence.SeenRecentlyForBrowser(id, TimeSpan.FromMinutes(5));
+            bool onDisk = ExtensionInstaller.FirefoxExtensionPresentOnDisk();
+            bool active = live;
+            string detail;
+            if (active)
+                detail = Loc.T("extstatus.active", "Eklenti aktif");
+            else if (onDisk)
+                detail = Loc.T("extstatus.firefox_off", "Eklenti yüklü ama kapalı / oturum yok");
+            else
+                detail = Loc.T("extstatus.firefox_missing", "Eklenti yok — «Firefox otomatik kur»");
+
+            Debug.WriteLine($"ExtProbe[firefox]: live={live} disk={onDisk} → active={active}");
+
+            return new BrowserExtensionStatus
+            {
+                Id = id,
+                Name = name,
+                AccentHex = accent,
+                BrowserInstalled = true,
+                ExtensionActive = active,
+                Detail = detail
             };
         }
 
@@ -65,7 +112,7 @@ namespace MDM
                 {
                     Id = id, Name = name, AccentHex = accent,
                     BrowserInstalled = false, ExtensionActive = false,
-                    Detail = "Tarayıcı yüklü değil"
+                    Detail = Loc.T("extstatus.browser_missing", "Tarayıcı yüklü değil")
                 };
             }
 
@@ -76,11 +123,11 @@ namespace MDM
             bool active = live || disk.Enabled;
             string detail;
             if (active)
-                detail = "Eklenti aktif";
+                detail = Loc.T("extstatus.active", "Eklenti aktif");
             else if (disk.Present)
-                detail = "Eklenti yüklü ama kapalı";
+                detail = Loc.T("extstatus.installed_off", "Eklenti yüklü ama kapalı");
             else
-                detail = "Eklenti yok / kaldırılmış";
+                detail = Loc.T("extstatus.missing", "Eklenti yok / kaldırılmış");
 
             Debug.WriteLine($"ExtProbe[{id}]: live={live} present={disk.Present} enabled={disk.Enabled} → active={active}");
 

@@ -120,7 +120,7 @@ async function mdmFetchFormats(payload) {
       videoMeta: payload.videoMeta || {},
       title: payload.title || ""
     }, 30000);
-    return remote || { ok: false, error: "MDM'ye ulaşılamadı veya kalite alınamadı" };
+    return remote || { ok: false, error: mdmErrText("ext.error_unreachable_formats", "MDM'ye ulaşılamadı veya kalite alınamadı") };
   }
 
   // Sniff body varsa önce yerelde parse (IDM: body → kalite)
@@ -205,7 +205,7 @@ async function mdmFetchFormats(payload) {
   }
 
   if (localOk) return local;
-  return remote || { ok: false, error: "MDM açık değil", ytDlpSuggested: false };
+  return remote || { ok: false, error: mdmErrText("ext.error_app_closed", "MDM açık değil"), ytDlpSuggested: false };
 }
 
 async function mdmPingDesktop() {
@@ -213,7 +213,8 @@ async function mdmPingDesktop() {
   let browser = "chrome";
   try {
     const ua = navigator.userAgent || "";
-    if (/Edg\//.test(ua)) browser = "edge";
+    if (/Firefox\//.test(ua)) browser = "firefox";
+    else if (/Edg\//.test(ua)) browser = "edge";
     else if (/Brave/i.test(ua)) browser = "brave";
   } catch (_) {}
   for (const ep of mdmBuildEndpoints(preferred)) {
@@ -225,6 +226,13 @@ async function mdmPingDesktop() {
         await mdmSavePreferredPort(ep.port);
         mdmDesktopOnline = true;
         mdmDesktopCheckAt = Date.now();
+        try {
+          const data = await resp.json();
+          if (data && data.language && typeof mdmI18n !== "undefined" && mdmI18n.loadLocale) {
+            await mdmI18n.loadLocale(data.language);
+            if (typeof mdmInstallMenus === "function") mdmInstallMenus();
+          }
+        } catch (_) { /* ping may be plain text on old builds */ }
         return true;
       }
     } catch (_) {}

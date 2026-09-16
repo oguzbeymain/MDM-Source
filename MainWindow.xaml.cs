@@ -74,6 +74,7 @@ namespace MDM
         private bool _titleDragRestoring;
         private TrayIconService? _tray;
         private bool _sidebarUserSized;
+        private bool? _dateColumnShort;
         private bool _sidebarInputActive;
         private bool _exitRequested;
         private bool _trayTipShown;
@@ -133,6 +134,8 @@ namespace MDM
             SettingsPanel.Saved += OnSettingsSaved;
             SettingsPanel.Cancelled += TryCloseSettingsOverlay;
             SettingsPanel.UpdateApplying += OnSettingsUpdateApplying;
+            Loc.Changed += OnLanguageChanged;
+            ApplyLocalizedTexts();
             RulesPanel.Saved += OnRulesSaved;
             RulesPanel.Cancelled += CloseRulesOverlay;
             NewUrlPanel.Accepted += OnNewUrlAccepted;
@@ -166,7 +169,7 @@ namespace MDM
                 return;
             try
             {
-                _tray?.ShowBalloon("İndirme tamamlandı", fileName);
+                _tray?.ShowBalloon(Loc.T("main.download_complete", "İndirme tamamlandı"), fileName);
             }
             catch { /* ignore */ }
         }
@@ -231,15 +234,16 @@ namespace MDM
                 }
 
                 if (result.HadError)
-                    InfoDialog.Show(this, "Güncelleme", "Denetim başarısız.", result.Message);
+                    InfoDialog.Show(this, Loc.T("title.update", "Güncelleme"), Loc.T("msg.update.check_failed", "Denetim başarısız."), result.Message);
                 else if (result.IsUpToDate)
-                    InfoDialog.Show(this, "Güncelleme", "Güncelsiniz.", $"Yüklü sürüm: v{UpdateService.CurrentVersionText}");
+                    InfoDialog.Show(this, Loc.T("title.update", "Güncelleme"), Loc.T("msg.update.up_to_date", "Güncelsiniz."),
+                        string.Format(Loc.T("msg.update.installed_version", "Yüklü sürüm: v{0}"), UpdateService.CurrentVersionText));
                 else if (!string.IsNullOrWhiteSpace(result.Message))
-                    InfoDialog.Show(this, "Güncelleme", result.Message);
+                    InfoDialog.Show(this, Loc.T("title.update", "Güncelleme"), result.Message);
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Güncelleme", "Denetim başarısız.", ex.Message);
+                InfoDialog.Show(this, Loc.T("title.update", "Güncelleme"), Loc.T("msg.update.check_failed", "Denetim başarısız."), ex.Message);
             }
             finally
             {
@@ -378,7 +382,7 @@ namespace MDM
         private bool _modalResult;
 
         public bool ShowModalConfirm(string title, string message, string detail,
-            string confirmText, string cancelText, bool danger)
+            string confirmText, string cancelText, bool danger, bool accentCancel = false)
         {
             _modalResult = false;
             ModalTitle.Text = title;
@@ -401,6 +405,18 @@ namespace MDM
             ModalConfirmBtn.Background = new SolidColorBrush(
                 danger ? Color.FromRgb(0xC6, 0x28, 0x28) : Color.FromRgb(0xFF, 0x6B, 0x00));
 
+            // Devam et (dismiss) — Başlat gibi turuncu
+            if (accentCancel)
+            {
+                ModalCancelBtn.Foreground = Brushes.White;
+                ModalCancelBtn.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            }
+            else
+            {
+                ModalCancelBtn.ClearValue(Control.BackgroundProperty);
+                ModalCancelBtn.ClearValue(Control.ForegroundProperty);
+            }
+
             bool modalLight = ThemeService.IsLight;
             if (SettingsOverlay.Visibility == Visibility.Visible)
                 modalLight = SettingsPanel.ThemeLight?.IsChecked == true;
@@ -413,7 +429,6 @@ namespace MDM
             ModalOverlay.UpdateLayout();
             ModalOverlay.BringIntoView();
             ModalConfirmBtn.FocusVisualStyle = null;
-            // Focus kırmızı noktalı kutu çıkmasın — Enter zaten PreviewKeyDown'da
             Keyboard.Focus(ModalOverlay);
 
             _modalFrame = new DispatcherFrame();
@@ -663,22 +678,17 @@ namespace MDM
                 selected.Add(one);
 
             bool showDelete = selected.Any(c => !c.IsBuiltin && c.Id != "All");
-            SetCategoryMenuItemVisible(menu, "Seçilen kategorileri sil", showDelete);
+            SetCategoryMenuItemVisible(menu, "MenuCatDelete", showDelete);
 
             bool showUnnest = selected.Any(c => !c.IsBuiltin && !string.IsNullOrEmpty(c.ParentId));
-            SetCategoryMenuItemVisible(menu, "Kategoriyi çıkar", showUnnest);
+            SetCategoryMenuItemVisible(menu, "MenuCatUnnest", showUnnest);
         }
 
-        private static void SetCategoryMenuItemVisible(ContextMenu menu, string header, bool visible)
+        /// <summary>Başlık yerelleştirildiği için ada göre eşleştirir.</summary>
+        private static void SetCategoryMenuItemVisible(ContextMenu menu, string itemName, bool visible)
         {
-            foreach (var item in menu.Items.OfType<MenuItem>())
-            {
-                if (item.Header as string == header)
-                {
-                    item.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-                    break;
-                }
-            }
+            if (FindMenuItemByName(menu.Items, itemName) is MenuItem item)
+                item.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private static bool IsSelectableCustomCategory(CategoryItem cat)
@@ -854,7 +864,7 @@ namespace MDM
                         {
                             Debug.WriteLine($"Ext capture error: {ex.Message}");
                         }
-                    }, System.Windows.Threading.DispatcherPriority.Background);
+                    }, System.Windows.Threading.DispatcherPriority.Normal);
                 });
                 _captureServer.Start();
             }
@@ -1063,7 +1073,7 @@ namespace MDM
 
             FileDragCountBadge.Visibility = Visibility.Visible;
             TxtFileDragCount.Text = items.Count.ToString();
-            TxtFileDragGhost.Text = $"{items.Count} dosya seçildi";
+            TxtFileDragGhost.Text = string.Format(Loc.T("msg.drag.files_selected", "{0} dosya seçildi"), items.Count);
             TxtFileDragSub.Text = items[0].FileName;
             TxtFileDragSub.Visibility = Visibility.Visible;
         }
@@ -1282,7 +1292,7 @@ namespace MDM
                 .ToList();
             if (targets.Count == 0)
             {
-                InfoDialog.Show(this, "Kategori", "Çıkarılacak iç içe özel kategori seçin.");
+                InfoDialog.Show(this, Loc.T("title.category", "Kategori"), Loc.T("msg.category.unnest_select", "Çıkarılacak iç içe özel kategori seçin."));
                 return;
             }
             foreach (var cat in targets)
@@ -1293,7 +1303,7 @@ namespace MDM
         {
             if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
             {
-                InfoDialog.Show(this, "Yeniden adlandır", "Yeniden adlandırmak için bir kategori seçin.");
+                InfoDialog.Show(this, Loc.T("title.rename", "Yeniden adlandır"), Loc.T("msg.category.rename_select", "Yeniden adlandırmak için bir kategori seçin."));
                 return;
             }
 
@@ -1379,7 +1389,7 @@ namespace MDM
         {
             if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
             {
-                InfoDialog.Show(this, "Klasör", "Klasörünü açmak için bir kategori seçin.");
+                InfoDialog.Show(this, Loc.T("title.folder", "Klasör"), Loc.T("msg.category.open_folder_select", "Klasörünü açmak için bir kategori seçin."));
                 return;
             }
 
@@ -1391,7 +1401,7 @@ namespace MDM
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Klasör", ex.Message);
+                InfoDialog.Show(this, Loc.T("title.folder", "Klasör"), ex.Message);
             }
         }
 
@@ -1402,7 +1412,7 @@ namespace MDM
             {
                 if (LstCategories.SelectedItem is not CategoryItem p || p.Id == "All")
                 {
-                    InfoDialog.Show(this, "Alt kategori", "Alt kategori eklemek için bir üst kategori seçin.");
+                    InfoDialog.Show(this, Loc.T("title.subcategory", "Alt kategori"), Loc.T("msg.category.child_parent_select", "Alt kategori eklemek için bir üst kategori seçin."));
                     return;
                 }
                 parent = p;
@@ -1451,7 +1461,7 @@ namespace MDM
         {
             if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
             {
-                InfoDialog.Show(this, "Kategori", "Dosya türü ayarlamak için bir kategori seçin.");
+                InfoDialog.Show(this, Loc.T("title.category", "Kategori"), Loc.T("msg.category.rules_select", "Dosya türü ayarlamak için bir kategori seçin."));
                 return;
             }
 
@@ -1650,9 +1660,9 @@ namespace MDM
 
             if (toDelete.Count == 0)
             {
-                InfoDialog.Show(this, "Kategori",
-                    "Silmek için özel (eklediğiniz) kategorileri seçin.",
-                    "Ctrl ile çoklu seçim yapabilirsiniz. Varsayılan kategoriler silinemez.");
+                InfoDialog.Show(this, Loc.T("title.category", "Kategori"),
+                    Loc.T("msg.category.delete_select", "Silmek için özel (eklediğiniz) kategorileri seçin."),
+                    Loc.T("msg.category.delete_select_detail", "Ctrl ile çoklu seçim yapabilirsiniz. Varsayılan kategoriler silinemez."));
                 return;
             }
 
@@ -2601,34 +2611,50 @@ namespace MDM
 
             if (ColFileName != null)
             {
-                ColType.Visibility = gridW < 560 ? Visibility.Collapsed : Visibility.Visible;
-                ColDate.Visibility = gridW < 680 ? Visibility.Collapsed : Visibility.Visible;
-                ColSize.Visibility = gridW < 420 ? Visibility.Collapsed : Visibility.Visible;
-                ColStatus.Visibility = gridW < 280 ? Visibility.Collapsed : Visibility.Visible;
+                // Sutunlar hicbir genislikte kaybolmaz: daralinca minimumlar kuculur, tarih kisa bicime doner
+                ColSize.Visibility = Visibility.Visible;
+                ColType.Visibility = Visibility.Visible;
+                ColDate.Visibility = Visibility.Visible;
+                ColStatus.Visibility = Visibility.Visible;
                 ColActions.Visibility = Visibility.Visible;
                 ColActions.MinWidth = ActionColumnWidth;
                 ColActions.MaxWidth = ActionColumnWidth;
                 ColActions.Width = new DataGridLength(ActionColumnWidth);
 
-                double reserved = 40 + ActionColumnWidth;
-                if (ColStatus.Visibility == Visibility.Visible) reserved += 120;
-                if (ColSize.Visibility == Visibility.Visible) reserved += 56;
-                if (ColType.Visibility == Visibility.Visible) reserved += 40;
-                if (ColDate.Visibility == Visibility.Visible) reserved += 90;
+                bool tight = gridW < 760;
+                bool veryTight = gridW < 640;
+                ApplyDateColumnFormat(veryTight);
 
-                double fileMin = Math.Max(64, Math.Min(160, gridW - reserved - 8));
+                double sizeMin = veryTight ? 58 : (tight ? 64 : 70);
+                double typeMin = veryTight ? 40 : (tight ? 44 : 46);
+                double dateMin = veryTight ? 68 : (tight ? 88 : 96);
+                double statusMin = veryTight ? 86 : (tight ? 104 : Math.Min(180, Math.Max(120, gridW * 0.26)));
+
+                ColSize.MinWidth = sizeMin;
+                ColType.MinWidth = typeMin;
+                ColDate.MinWidth = dateMin;
+                ColDate.MaxWidth = veryTight ? 96 : 150;
+
+                double reserved = 40 + ActionColumnWidth + sizeMin + typeMin + dateMin + statusMin;
+                double fileMin = SafeClamp(gridW - reserved - 8, 56, 160);
                 ColFileName.MinWidth = fileMin;
                 ColFileName.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
 
-                if (ColStatus.Visibility == Visibility.Visible)
-                {
-                    ColStatus.MinWidth = Math.Max(120, Math.Min(180, gridW * 0.26));
-                    ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
-                }
-
-                if (ColSize.Visibility == Visibility.Visible)
-                    ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColStatus.MinWidth = statusMin;
+                ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
             }
+        }
+
+        /// <summary>Dar listede tarih "gg.AA.yy", genisde "gg.AA.yyyy SS:dd" gosterilir.</summary>
+        private void ApplyDateColumnFormat(bool shortForm)
+        {
+            if (ColDate == null || _dateColumnShort == shortForm) return;
+            _dateColumnShort = shortForm;
+            ColDate.Binding = new Binding(nameof(DownloadItem.DateAdded))
+            {
+                StringFormat = shortForm ? "{0:dd.MM.yy}" : "{0:dd.MM.yyyy HH:mm}"
+            };
         }
 
         private static double SafeClamp(double value, double min, double max)
@@ -2802,7 +2828,7 @@ namespace MDM
             bool max = WindowState == WindowState.Maximized;
             _isPseudoMaximized = max;
             BtnMaximize.Content = max ? "\uE923" : "\uE922"; // ChromeRestore / ChromeMaximize
-            BtnMaximize.ToolTip = max ? "Geri yükle" : "Büyüt";
+            BtnMaximize.ToolTip = max ? Loc.T("main.restore", "Geri yükle") : Loc.T("main.maximize", "Büyüt");
             RootChrome.CornerRadius = new CornerRadius(0);
             TitleBarChrome.CornerRadius = new CornerRadius(0);
             ContentChrome.CornerRadius = new CornerRadius(0);
@@ -2880,7 +2906,7 @@ namespace MDM
                 string page = urls.Count > 0 ? urls[0] : dlg.Url;
                 if (string.IsNullOrWhiteSpace(page))
                 {
-                    InfoDialog.Show(this, "LinkGrabber", "Taranacak sayfa adresini yapıştırın.");
+                    InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.paste_page_url", "Taranacak sayfa adresini yapıştırın."));
                     return;
                 }
                 await GrabAndEnqueueAsync(page);
@@ -2889,7 +2915,7 @@ namespace MDM
             if (urls.Count == 0)
             {
                 var kind = UrlClassifier.Classify(dlg.Url);
-                InfoDialog.Show(this, "Yeni indirme", UrlClassifier.UnsupportedMessage(kind));
+                InfoDialog.Show(this, Loc.T("newurl.title", "Yeni indirme"), UrlClassifier.UnsupportedMessage(kind));
                 return;
             }
 
@@ -2958,7 +2984,7 @@ namespace MDM
                     pageUrl, settings.CrawlDepth, 30, CancellationToken.None);
                 if (links.Count == 0)
                 {
-                    InfoDialog.Show(this, "LinkGrabber", "Sayfada indirilebilir dosya bulunamadı.");
+                    InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.no_files", "Sayfada indirilebilir dosya bulunamadı."));
                     return;
                 }
 
@@ -2974,11 +3000,11 @@ namespace MDM
                         added++;
                 }
                 if (added == 0)
-                    InfoDialog.Show(this, "LinkGrabber", "Bulunan bağlantılar kurallara takıldı veya zaten listede.");
+                    InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.all_filtered", "Bulunan bağlantılar kurallara takıldı veya zaten listede."));
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "LinkGrabber", "Sayfa taranamadı.", ex.Message);
+                InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.scan_failed", "Sayfa taranamadı."), ex.Message);
             }
         }
 
@@ -3020,7 +3046,7 @@ namespace MDM
             if (IcoToolbarSettings == null) return;
             bool light = ThemeService.IsLight;
             IcoToolbarSettings.Foreground = new SolidColorBrush(
-                light ? Color.FromRgb(0xFF, 0x6B, 0x00) : Color.FromRgb(0xC8, 0xC8, 0xC8));
+                light ? Color.FromRgb(0x2B, 0x2B, 0x2B) : Color.FromRgb(0xC8, 0xC8, 0xC8));
         }
 
         private void OpenSettingsOverlay(string? tab = null)
@@ -3034,6 +3060,13 @@ namespace MDM
 
         private void CloseSettingsOverlay()
         {
+            // Dil önizlemesi Kaydet olmadan kapanırsa kalıcı ayara dön
+            try
+            {
+                string saved = AppSettingsStore.Load().UiLanguage ?? "tr";
+                Loc.Apply(saved);
+            }
+            catch { /* ignore */ }
             SettingsOverlay.Visibility = Visibility.Collapsed;
             ThemeService.ApplyFromSettings();
         }
@@ -3057,6 +3090,128 @@ namespace MDM
             CloseSettingsOverlay();
         }
 
+        private void OnLanguageChanged()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(OnLanguageChanged);
+                return;
+            }
+            ApplyLocalizedTexts();
+            foreach (var item in DownloadList)
+                item.NotifyLanguageChanged();
+            foreach (var cat in CategoryStore.AllFlat(Categories))
+                cat.NotifyLanguageChanged();
+            try { NewUrlPanel?.ApplyLocalizedTexts(); } catch { /* ignore */ }
+            try { SettingsPanel?.ApplyLocalizedChrome(); } catch { /* ignore */ }
+        }
+
+        private void ApplyLocalizedTexts()
+        {
+            FlowDirection = Loc.Flow;
+            if (LblToolbarNew != null) LblToolbarNew.Text = Loc.T("main.new", "Yeni");
+            if (LblToolbarDelete != null) LblToolbarDelete.Text = Loc.T("main.delete", "Sil");
+            if (LblToolbarOpen != null) LblToolbarOpen.Text = Loc.T("main.open", "Aç");
+            if (LblToolbarFolder != null) LblToolbarFolder.Text = Loc.T("main.open_folder", "Klasörü aç");
+            if (LblCategoriesHeader != null) LblCategoriesHeader.Text = Loc.T("main.categories", "Kategoriler");
+            if (TxtSearchPlaceholder != null) TxtSearchPlaceholder.Text = Loc.T("main.search", "Ara");
+            if (BtnMinimize != null) BtnMinimize.ToolTip = Loc.T("main.minimize", "Küçült");
+            if (BtnMaximize != null) BtnMaximize.ToolTip = Loc.T("main.maximize", "Büyüt");
+            if (BtnClose != null) BtnClose.ToolTip = Loc.T("main.close", "Kapat");
+            if (BtnToolbarSettings != null) BtnToolbarSettings.ToolTip = Loc.T("main.settings", "Ayarlar");
+            if (BtnToolbarNew != null) BtnToolbarNew.ToolTip = Loc.T("main.new_tip", "Yeni indirme");
+            if (BtnToolbarDelete != null) BtnToolbarDelete.ToolTip = Loc.T("main.delete_tip", "Seçilenleri sil");
+            if (BtnToolbarOpen != null) BtnToolbarOpen.ToolTip = Loc.T("main.open_tip", "Dosyayı aç");
+            if (BtnToolbarFolder != null) BtnToolbarFolder.ToolTip = Loc.T("main.folder_tip", "Klasörde aç");
+            if (TxtCopyToast != null) TxtCopyToast.Text = Loc.T("main.link_copied", "Bağlantı kopyalandı");
+            if (ModalCancelBtn != null) ModalCancelBtn.Content = Loc.T("main.cancel", "İptal");
+
+            if (ColFileName != null) ColFileName.Header = Loc.T("col.filename", "Dosya Adı");
+            if (ColSize != null) ColSize.Header = Loc.T("col.size", "Boyut");
+            if (ColType != null) ColType.Header = Loc.T("col.type", "Tür");
+            if (ColDate != null) ColDate.Header = Loc.T("col.date", "Tarih");
+            if (ColStatus != null) ColStatus.Header = Loc.T("col.status", "Durum");
+
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatRename", Loc.T("menu.cat.rename", "Yeniden adlandır"));
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatOpenFolder", Loc.T("menu.cat.open_folder", "Dosya konumunu aç"));
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatAddChild", Loc.T("menu.cat.add_child", "İçine alt kategori ekle"));
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatUnnest", Loc.T("menu.cat.unnest", "Kategoriyi çıkar"));
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatRules", Loc.T("menu.cat.rules", "Dosya türlerini ayarla"));
+            SetMenuHeader("CategoryItemContextMenu", "MenuCatDelete", Loc.T("menu.cat.delete", "Seçilen kategorileri sil"));
+            SetMenuHeader("CategoryPanelEmptyContextMenu", "MenuCatAdd", Loc.T("menu.cat.add", "Yeni kategori ekle"));
+
+            SetMenuHeader("RowContextMenu", "MenuFileOpenFolder", Loc.T("menu.file.open_folder", "Dosya konumunu aç"));
+            SetMenuHeader("RowContextMenu", "MenuFileCopy", Loc.T("menu.file.copy", "Dosyayı kopyala"));
+            SetMenuHeader("RowContextMenu", "MenuFileCopyUrl", Loc.T("menu.file.copy_url", "Bağlantıyı kopyala"));
+            SetMenuHeader("RowContextMenu", "MenuFileRedownload", Loc.T("menu.file.redownload", "Yeniden indir"));
+            SetMenuHeader("RowContextMenu", "MenuFileRename", Loc.T("menu.file.rename", "Yeniden adlandır"));
+            SetMenuHeader("RowContextMenu", "MenuFileMove", Loc.T("menu.file.move", "Kategoriye taşı"));
+            SetMenuHeader("RowContextMenu", "MenuFileDelete", Loc.T("menu.file.delete", "Sil"));
+
+            SetMenuHeader("ColumnHeaderContextMenu", "MenuResetColumns", Loc.T("menu.col.reset", "Varsayılan"));
+
+            SetMenuHeader("ModernEditContextMenu", "MenuEditCut", Loc.T("menu.edit.cut", "Kes"));
+            SetMenuHeader("ModernEditContextMenu", "MenuEditCopy", Loc.T("menu.edit.copy", "Kopyala"));
+            SetMenuHeader("ModernEditContextMenu", "MenuEditPaste", Loc.T("menu.edit.paste", "Yapıştır"));
+            SetMenuHeader("ModernEditContextMenu", "MenuEditSelectAll", Loc.T("menu.edit.select_all", "Tümünü seç"));
+
+            SetMenuHeader("EmptyContextMenu", "MenuViewGroup", Loc.T("menu.list.view", "Görünüm"));
+            SetMenuHeader("EmptyContextMenu", "MenuViewSmall", Loc.T("menu.list.view_small", "Küçük"));
+            SetMenuHeader("EmptyContextMenu", "MenuViewMedium", Loc.T("menu.list.view_medium", "Orta"));
+            SetMenuHeader("EmptyContextMenu", "MenuViewLarge", Loc.T("menu.list.view_large", "Büyük"));
+            SetMenuHeader("EmptyContextMenu", "MenuSortGroup", Loc.T("menu.list.sort", "Sıralama ölçütü"));
+            SetMenuHeader("EmptyContextMenu", "MenuSortName", Loc.T("menu.list.sort_name", "İsim"));
+            SetMenuHeader("EmptyContextMenu", "MenuSortSize", Loc.T("menu.list.sort_size", "Boyut"));
+            SetMenuHeader("EmptyContextMenu", "MenuSortType", Loc.T("menu.list.sort_type", "Tür"));
+            SetMenuHeader("EmptyContextMenu", "MenuSortDate", Loc.T("menu.list.sort_date", "Tarih"));
+            SetMenuHeader("EmptyContextMenu", "MenuListSelectAll", Loc.T("menu.list.select_all", "Tümünü seç"));
+
+            // "Tüm indirilenler" label inside template
+            try
+            {
+                if (BtnAllDownloads != null)
+                {
+                    BtnAllDownloads.ToolTip = Loc.T("main.all_downloads", "Tüm indirilenler");
+                    if (FindVisualChild<TextBlock>(BtnAllDownloads) is TextBlock allLbl
+                        && (allLbl.Name == "lbl" || allLbl.Text.Contains("indirilen", StringComparison.OrdinalIgnoreCase)
+                            || allLbl.Text.Contains("download", StringComparison.OrdinalIgnoreCase)
+                            || allLbl.Text == Loc.T("main.all_downloads", "Tüm indirilenler")))
+                        allLbl.Text = Loc.T("main.all_downloads", "Tüm indirilenler");
+                }
+            }
+            catch { /* ignore */ }
+
+            foreach (var cat in CategoryStore.AllFlat(Categories))
+                cat.NotifyLanguageChanged();
+        }
+
+        private void SetMenuHeader(string menuResourceKey, string itemName, string header)
+        {
+            try
+            {
+                if (TryFindResource(menuResourceKey) is not ContextMenu menu) return;
+                if (menu.FindName(itemName) is MenuItem named)
+                {
+                    named.Header = header;
+                    return;
+                }
+                if (FindMenuItemByName(menu.Items, itemName) is MenuItem mi)
+                    mi.Header = header;
+            }
+            catch { /* ignore */ }
+        }
+
+        /// <summary>Alt menüler dahil ada göre MenuItem arar.</summary>
+        private static MenuItem? FindMenuItemByName(System.Windows.Controls.ItemCollection items, string name)
+        {
+            foreach (var item in items.OfType<MenuItem>())
+            {
+                if (item.Name == name) return item;
+                if (FindMenuItemByName(item.Items, name) is MenuItem child) return child;
+            }
+            return null;
+        }
+
         private void OnSettingsSaved()
         {
             var settings = AppSettingsStore.Load();
@@ -3069,6 +3224,11 @@ namespace MDM
             StartBrowserCaptureServer();
             TorrentEngineHost.ReloadIfIdle();
             ThemeService.ApplyFromSettings();
+            ApplyLocalizedTexts();
+            foreach (var item in DownloadList)
+                item.NotifyLanguageChanged();
+            foreach (var cat in CategoryStore.AllFlat(Categories))
+                cat.NotifyLanguageChanged();
             if (settings.AutoCreateCategoryFolders)
             {
                 _ = Task.Run(() =>
@@ -3175,7 +3335,7 @@ namespace MDM
             var targets = GetToolbarTargets();
             if (targets.Count == 0)
             {
-                InfoDialog.Show(this, "Sil", DialogTexts.SelectFilesHint);
+                InfoDialog.Show(this, Loc.T("title.delete", "Sil"), DialogTexts.SelectFilesHint);
                 return;
             }
             DeleteItems(targets);
@@ -3186,7 +3346,7 @@ namespace MDM
             var targets = GetToolbarTargets();
             if (targets.Count == 0)
             {
-                InfoDialog.Show(this, "Aç", DialogTexts.SelectFilesHint);
+                InfoDialog.Show(this, Loc.T("title.open", "Aç"), DialogTexts.SelectFilesHint);
                 return;
             }
 
@@ -3194,11 +3354,12 @@ namespace MDM
             {
                 if (!File.Exists(item.FilePath))
                 {
-                    InfoDialog.Show(this, "Dosya", $"Dosya bulunamadı: {item.FileName}");
+                    InfoDialog.Show(this, Loc.T("title.file", "Dosya"),
+                        string.Format(Loc.T("msg.file.not_found_named", "Dosya bulunamadı: {0}"), item.FileName));
                     continue;
                 }
                 try { Process.Start(new ProcessStartInfo(item.FilePath) { UseShellExecute = true }); }
-                catch (Exception ex) { InfoDialog.Show(this, "Hata", ex.Message); }
+                catch (Exception ex) { InfoDialog.Show(this, Loc.T("title.error", "Hata"), ex.Message); }
             }
         }
 
@@ -3207,7 +3368,7 @@ namespace MDM
             var targets = GetToolbarTargets();
             if (targets.Count == 0)
             {
-                InfoDialog.Show(this, "Klasör", DialogTexts.SelectFilesHint);
+                InfoDialog.Show(this, Loc.T("title.folder", "Klasör"), DialogTexts.SelectFilesHint);
                 return;
             }
 
@@ -3222,7 +3383,7 @@ namespace MDM
                 }
                 catch (Exception ex)
                 {
-                    InfoDialog.Show(this, "Hata", ex.Message);
+                    InfoDialog.Show(this, Loc.T("title.error", "Hata"), ex.Message);
                 }
             }
         }
@@ -3295,7 +3456,8 @@ namespace MDM
                 DialogTexts.CancelDownloadDetail(item.FileName),
                 confirmText: DialogTexts.CancelDownloadConfirm,
                 cancelText: DialogTexts.CancelDownloadDismiss,
-                danger: true);
+                danger: true,
+                accentCancel: true);
             if (!ok) return;
 
             if (_engines.TryGetValue(item, out var engine))
@@ -3318,12 +3480,13 @@ namespace MDM
                     }
                     else
                     {
-                        InfoDialog.Show(this, "Hata", "Dosya veya dizin bulunamadı.");
+                        InfoDialog.Show(this, Loc.T("title.error", "Hata"), Loc.T("msg.folder.not_found", "Dosya veya dizin bulunamadı."));
                     }
                 }
                 catch (Exception ex)
                 {
-                    InfoDialog.Show(this, "Hata", $"Klasör açılırken hata oluştu: {ex.Message}");
+                    InfoDialog.Show(this, Loc.T("title.error", "Hata"),
+                        string.Format(Loc.T("msg.folder.open_failed", "Klasör açılırken hata oluştu: {0}"), ex.Message));
                 }
             }
         }
@@ -3337,30 +3500,30 @@ namespace MDM
                 _itemUrls.TryGetValue(item, out url!);
             if (string.IsNullOrWhiteSpace(url))
             {
-                InfoDialog.Show(this, "Bağlantı", "Bu indirme için kayıtlı bağlantı yok.");
+                InfoDialog.Show(this, Loc.T("title.link", "Bağlantı"), Loc.T("msg.link.none_saved", "Bu indirme için kayıtlı bağlantı yok."));
                 return;
             }
             try
             {
                 Clipboard.SetText(url);
-                ShowCopyToast("Bağlantı kopyalandı");
+                ShowCopyToast(Loc.T("main.link_copied", "Bağlantı kopyalandı"));
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Hata", ex.Message);
+                InfoDialog.Show(this, Loc.T("title.error", "Hata"), ex.Message);
             }
         }
 
         private void MenuCopyFile_Click(object sender, RoutedEventArgs e)
         {
             if (!TryCopySelectedFilesToClipboard())
-                ShowCopyToast("Kopyalanacak dosya yok");
+                ShowCopyToast(Loc.T("msg.file.no_copy_target", "Kopyalanacak dosya yok"));
         }
 
         private void ShowCopyToast(string? message = null)
         {
             if (CopyToast.Child is StackPanel sp && sp.Children.OfType<TextBlock>().LastOrDefault() is { } label)
-                label.Text = string.IsNullOrWhiteSpace(message) ? "Bağlantı kopyalandı" : message;
+                label.Text = string.IsNullOrWhiteSpace(message) ? Loc.T("main.link_copied", "Bağlantı kopyalandı") : message;
 
             _copyToastTimer?.Stop();
             CopyToast.BeginAnimation(UIElement.OpacityProperty, null);
@@ -3399,7 +3562,7 @@ namespace MDM
                 _itemUrls.TryGetValue(item, out url!);
             if (string.IsNullOrWhiteSpace(url))
             {
-                InfoDialog.Show(this, "Yeniden indir", "Bu öğe için bağlantı bulunamadı.");
+                InfoDialog.Show(this, Loc.T("title.redownload", "Yeniden indir"), Loc.T("msg.redownload.no_url", "Bu öğe için bağlantı bulunamadı."));
                 return;
             }
             await StartDownloadProcess(url, item.FileName, selectItem: true);
@@ -3410,7 +3573,7 @@ namespace MDM
             if (DgDownloads.SelectedItem is not DownloadItem item) return;
 
             string currentName = item.FileName;
-            if (ShowPromptOverlay("Yeniden adlandır", "Yeni dosya adı:", currentName, extensionLockMode: true) != true)
+            if (ShowPromptOverlay(Loc.T("title.rename", "Yeniden adlandır"), Loc.T("msg.rename.new_name_label", "Yeni dosya adı:"), currentName, extensionLockMode: true) != true)
                 return;
 
             string newName = _lastPromptResult?.Text.Trim() ?? "";
@@ -3434,14 +3597,14 @@ namespace MDM
                 string? dir = Path.GetDirectoryName(item.FilePath);
                 if (string.IsNullOrEmpty(dir))
                 {
-                    InfoDialog.Show(this, "Yeniden adlandır", "Dosya yolu geçersiz.");
+                    InfoDialog.Show(this, Loc.T("title.rename", "Yeniden adlandır"), Loc.T("msg.rename.invalid_path", "Dosya yolu geçersiz."));
                     return;
                 }
 
                 string dest = Path.Combine(dir, newName);
                 if (File.Exists(dest))
                 {
-                    InfoDialog.Show(this, "Yeniden adlandır", "Bu isimde bir dosya zaten var.");
+                    InfoDialog.Show(this, Loc.T("title.rename", "Yeniden adlandır"), Loc.T("msg.rename.exists", "Bu isimde bir dosya zaten var."));
                     return;
                 }
 
@@ -3459,7 +3622,7 @@ namespace MDM
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(this, "Hata", ex.Message);
+                InfoDialog.Show(this, Loc.T("title.error", "Hata"), ex.Message);
             }
         }
 
@@ -3489,10 +3652,11 @@ namespace MDM
         private void MenuViewDensity_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem mi) return;
-            string tag = (mi.Header as string) switch
+            // Başlık yerelleştirildiği için ad üzerinden eşleştir
+            string tag = mi.Name switch
             {
-                "Küçük" => "Small",
-                "Büyük" => "Large",
+                "MenuViewSmall" => "Small",
+                "MenuViewLarge" => "Large",
                 _ => "Medium"
             };
             ApplyListDensity(tag);
@@ -3503,11 +3667,12 @@ namespace MDM
         private void MenuSortBy_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem mi) return;
-            string tag = (mi.Header as string) switch
+            // Başlık yerelleştirildiği için ad üzerinden eşleştir
+            string tag = mi.Name switch
             {
-                "İsim" => "Name",
-                "Boyut" => "Size",
-                "Tür" => "Type",
+                "MenuSortName" => "Name",
+                "MenuSortSize" => "Size",
+                "MenuSortType" => "Type",
                 _ => "Date"
             };
             ApplyListSort(tag);
@@ -3597,33 +3762,20 @@ namespace MDM
             if (Resources["EmptyContextMenu"] is not ContextMenu menu) return;
             foreach (var top in menu.Items.OfType<MenuItem>())
             {
-                string? header = top.Header as string;
-                if (header == "Görünüm")
+                foreach (var sub in top.Items.OfType<MenuItem>())
                 {
-                    foreach (var sub in top.Items.OfType<MenuItem>())
+                    // Yerelleştirme sonrası başlık değişebilir; ad sabit
+                    sub.IsChecked = sub.Name switch
                     {
-                        sub.IsChecked = (sub.Header as string) switch
-                        {
-                            "Küçük" => _listDensity == "Small",
-                            "Büyük" => _listDensity == "Large",
-                            "Orta" => _listDensity == "Medium",
-                            _ => false
-                        };
-                    }
-                }
-                else if (header == "Sıralama ölçütü")
-                {
-                    foreach (var sub in top.Items.OfType<MenuItem>())
-                    {
-                        sub.IsChecked = (sub.Header as string) switch
-                        {
-                            "İsim" => _listSort == "Name",
-                            "Boyut" => _listSort == "Size",
-                            "Tür" => _listSort == "Type",
-                            "Tarih" => _listSort == "Date",
-                            _ => false
-                        };
-                    }
+                        "MenuViewSmall" => _listDensity == "Small",
+                        "MenuViewMedium" => _listDensity == "Medium",
+                        "MenuViewLarge" => _listDensity == "Large",
+                        "MenuSortName" => _listSort == "Name",
+                        "MenuSortSize" => _listSort == "Size",
+                        "MenuSortType" => _listSort == "Type",
+                        "MenuSortDate" => _listSort == "Date",
+                        _ => false
+                    };
                 }
             }
         }
@@ -3672,7 +3824,8 @@ namespace MDM
                     }
                     catch (Exception ex)
                     {
-                        InfoDialog.Show(this, "Uyarı", $"'{selectedItem.FileName}' silinemedi: {ex.Message}");
+                        InfoDialog.Show(this, Loc.T("title.warning", "Uyarı"),
+                            string.Format(Loc.T("msg.file.delete_failed", "'{0}' silinemedi: {1}"), selectedItem.FileName, ex.Message));
                     }
                 }
 
@@ -3767,16 +3920,26 @@ namespace MDM
             await Task.CompletedTask;
         }
 
-        private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true)
+        private async Task StartDownloadProcess(string url, string incomingFilename, string? mimeHint = null, bool selectItem = true,
+            ExtCaptureRequest? capture = null)
         {
             if (string.IsNullOrEmpty(url) || !UrlClassifier.CanDownloadNow(UrlClassifier.Classify(url)))
             {
-                InfoDialog.Show(this, "Uyarı", UrlClassifier.UnsupportedMessage(UrlClassifier.Classify(url)));
+                InfoDialog.Show(this, Loc.T("title.warning", "Uyarı"), UrlClassifier.UnsupportedMessage(UrlClassifier.Classify(url)));
                 return;
             }
 
             string urlKey = NormalizeCaptureUrl(url);
             bool fromCapture = !selectItem;
+
+            if (RepeatDownloadGuard.IsNoiseCapture(url, incomingFilename))
+            {
+                Debug.WriteLine($"Noise capture dropped: {url}");
+                return;
+            }
+
+            if (!TryConfirmRepeatDownload(url, incomingFilename))
+                return;
 
             // Aynı URL için kısa sürede tekrar pencere açma (eklenti spam / redirect)
             lock (_captureGate)
@@ -3846,7 +4009,7 @@ namespace MDM
                 if (string.IsNullOrWhiteSpace(defaultFolder))
                     defaultFolder = _defaultFolder;
 
-                var session = new DownloadSessionWindow(this, url, quickName, defaultFolder, "—")
+                var session = new DownloadSessionWindow(this, url, quickName, defaultFolder, "—", capture)
                 {
                     Owner = null,
                     Topmost = false,
@@ -3876,6 +4039,22 @@ namespace MDM
             string decodedSuggested = FileNameHelper.DecodeDisplayName(incomingFilename);
             string? fromUrl = FileNameHelper.TryFileNameFromUrl(url);
             return FileNameHelper.ChooseDisplayName(null, decodedSuggested, fromUrl, mimeHint);
+        }
+
+        private static bool NeedsYtDlpBackend(ExtCaptureRequest capture, string url)
+            => CaptureNeedsYtDlp(capture, url);
+
+        /// <summary>YouTube / HLS / DASH / yt-dlp kind → yt-dlp motoru; düz dosya (Drive rar vb.) değil.</summary>
+        public static bool CaptureNeedsYtDlp(ExtCaptureRequest? capture, string? url)
+        {
+            if (capture == null) return false;
+            string kind = (capture.Kind ?? "").Trim().ToLowerInvariant();
+            if (kind is "yt-dlp" or "hls" or "dash") return true;
+            string page = capture.PageUrl ?? "";
+            string u = !string.IsNullOrWhiteSpace(capture.Url) ? capture.Url : (url ?? "");
+            if (YtDlpHelper.IsYouTubeUrl(page) || YtDlpHelper.IsYouTubeUrl(u)) return true;
+            if (MediaFormatService.LooksLikeHlsUrl(u) || MediaFormatService.LooksLikeDashUrl(u)) return true;
+            return false;
         }
 
         private async Task StartExtCaptureDownloadAsync(ExtCaptureRequest ext)
@@ -3922,7 +4101,8 @@ namespace MDM
             {
                 if (string.IsNullOrWhiteSpace(url) || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
                     return;
-                await StartDownloadProcess(url, name, ext.Mime, selectItem: true);
+                EnsureCaptureReferer(ext);
+                await StartDownloadProcess(url, name, ext.Mime, selectItem: false, capture: ext);
                 return;
             }
 
@@ -3990,8 +4170,47 @@ namespace MDM
                 ext.Referrer = page;
         }
 
+        private bool TryConfirmRepeatDownload(string url, string? filename = null)
+        {
+            var decision = RepeatDownloadGuard.Evaluate(url, filename: filename);
+            if (decision == RepeatDownloadGuard.AdmitResult.Allow)
+                return true;
+            if (decision == RepeatDownloadGuard.AdmitResult.DropSilent)
+                return false;
+
+            try
+            {
+                int n = Math.Max(RepeatDownloadGuard.SpamThreshold, RepeatDownloadGuard.PeekRecentCount(url));
+                bool ok = ConfirmDialog.Show(this,
+                    Loc.T("dialog.security_title", "Güvenlik onayı"),
+                    Loc.T("dialog.security_message", "Şüpheli indirme etkinliği tespit edildi. Bu işlemi sizin başlattığınızı doğrulayın."),
+                    string.Format(Loc.T("msg.security.detail_count", "Kısa sürede art arda {0}+ indirme isteği geldi.\nOnaylamazsanız istekler bir süre sessizce engellenir; ekran pencerelerle doldurulmaz."), n),
+                    confirmText: Loc.T("dialog.security_allow", "İndirmeyi onayla"),
+                    cancelText: Loc.T("dialog.security_block", "Engelle"),
+                    danger: true,
+                    forceFloating: true);
+
+                if (ok)
+                {
+                    RepeatDownloadGuard.OnConfirmAllowed(url);
+                    return true;
+                }
+
+                RepeatDownloadGuard.OnConfirmDenied(url);
+                return false;
+            }
+            catch
+            {
+                RepeatDownloadGuard.ReleaseConfirmLock();
+                throw;
+            }
+        }
+
         private void OpenYtDlpSessionWindow(ExtCaptureRequest ext, string fileName, string sessionUrl)
         {
+            if (!TryConfirmRepeatDownload(sessionUrl))
+                return;
+
             string urlKey = NormalizeCaptureUrl(sessionUrl) + "|" + (ext.FormatId ?? "");
             lock (_captureGate)
             {
@@ -4053,10 +4272,22 @@ namespace MDM
 
             if (!baseName.Contains('.'))
             {
-                if (!string.IsNullOrWhiteSpace(ext.Mime) && ext.Mime.Contains("audio", StringComparison.OrdinalIgnoreCase))
+                string mime = ext.Mime ?? "";
+                if (mime.Contains("audio", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(ext.Kind, "audio", StringComparison.OrdinalIgnoreCase))
                     baseName += ".m4a";
-                else if (string.Equals(ext.Kind, "audio", StringComparison.OrdinalIgnoreCase))
-                    baseName += ".m4a";
+                else if (mime.Contains("zip", StringComparison.OrdinalIgnoreCase)
+                         || mime.Contains("rar", StringComparison.OrdinalIgnoreCase)
+                         || mime.Contains("7z", StringComparison.OrdinalIgnoreCase)
+                         || mime.Contains("octet-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Uzantıyı URL / Content-Disposition'dan tahmin et; yoksa .bin
+                    string? fromUrl = FileNameHelper.TryFileNameFromUrl(ext.Url);
+                    if (!string.IsNullOrWhiteSpace(fromUrl) && fromUrl.Contains('.'))
+                        baseName = FileNameHelper.DecodeDisplayName(fromUrl);
+                    else
+                        baseName += ".bin";
+                }
                 else
                     baseName += ".mp4";
             }
@@ -4383,7 +4614,7 @@ namespace MDM
             if (SmartRules.ShouldSkip(url, fileName, settings, ActiveUrls(), out string why))
             {
                 if (notify)
-                    InfoDialog.Show(this, "Kural", why);
+                    InfoDialog.Show(this, Loc.T("title.rule", "Kural"), why);
                 return null;
             }
 
@@ -4434,7 +4665,8 @@ namespace MDM
             int threadCount = DownloadQueue.HttpChannels(settings);
             var kind = UrlClassifier.Classify(url);
             ITransferBackend engine;
-            if (ytdlpCapture != null)
+            bool useYtDlp = ytdlpCapture != null && NeedsYtDlpBackend(ytdlpCapture, url);
+            if (useYtDlp && ytdlpCapture != null)
             {
                 string pageUrl = !string.IsNullOrWhiteSpace(ytdlpCapture.PageUrl)
                     ? ytdlpCapture.PageUrl
@@ -4474,7 +4706,11 @@ namespace MDM
                 engine = new DownloadEngine(new[] { url }, savePath, threadCount);
             }
             else
+            {
                 engine = TransferFactory.Create(url, savePath, threadCount: threadCount);
+                if (engine is DownloadEngine httpEngine && ytdlpCapture != null)
+                    httpEngine.ApplyBrowserCapture(ytdlpCapture.Cookies, ytdlpCapture.Headers);
+            }
             _engines[item] = engine;
 
             WireEngineEvents(item, engine);
@@ -5110,7 +5346,7 @@ namespace MDM
                 // Native Ctrl+C metin kopyasından ayır: her zaman işle, dosya yoksa bildir
                 e.Handled = true;
                 if (!TryCopySelectedFilesToClipboard())
-                    ShowCopyToast("Kopyalanacak dosya yok");
+                    ShowCopyToast(Loc.T("msg.file.no_copy_target", "Kopyalanacak dosya yok"));
                 return;
             }
 
@@ -5161,7 +5397,7 @@ namespace MDM
                 var list = new System.Collections.Specialized.StringCollection();
                 list.AddRange(files);
                 Clipboard.SetFileDropList(list);
-                ShowCopyToast("Dosya kopyalandı");
+                ShowCopyToast(Loc.T("msg.file.copied", "Dosya kopyalandı"));
                 return true;
             }
             catch (Exception ex)
@@ -5334,7 +5570,7 @@ namespace MDM
             }
             else
             {
-                InfoDialog.Show(this, "Hata", "Dosya belirtilen konumda bulunamadı!");
+                InfoDialog.Show(this, Loc.T("title.error", "Hata"), Loc.T("msg.file.not_found", "Dosya belirtilen konumda bulunamadı!"));
             }
         }
 

@@ -681,7 +681,7 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Yeni kategori ekle" Click="MenuAddCategory_Click"/>
+            <MenuItem x:Name="MenuCatAdd" Header="Yeni kategori ekle" Click="MenuAddCategory_Click"/>
         </ContextMenu>
 
         <ContextMenu x:Key="ColumnHeaderContextMenu"
@@ -721,7 +721,7 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Varsayılan" Click="MenuResetColumns_Click"/>
+            <MenuItem x:Name="MenuResetColumns" Header="Varsayılan" Click="MenuResetColumns_Click"/>
         </ContextMenu>
 
         <ContextMenu x:Key="CategoryItemContextMenu"
@@ -764,12 +764,12 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Yeniden adlandır" Click="MenuRenameCategory_Click"/>
-            <MenuItem Header="Dosya konumunu aç" Click="MenuOpenCategoryFolder_Click"/>
-            <MenuItem Header="İçine alt kategori ekle" Click="MenuAddChildCategory_Click"/>
-            <MenuItem Header="Kategoriyi çıkar" Click="MenuUnnestCategory_Click"/>
-            <MenuItem Header="Dosya türlerini ayarla" Click="MenuCategoryRules_Click"/>
-            <MenuItem Header="Seçilen kategorileri sil" Click="MenuDeleteCategories_Click"/>
+            <MenuItem x:Name="MenuCatRename" Header="Yeniden adlandır" Click="MenuRenameCategory_Click"/>
+            <MenuItem x:Name="MenuCatOpenFolder" Header="Dosya konumunu aç" Click="MenuOpenCategoryFolder_Click"/>
+            <MenuItem x:Name="MenuCatAddChild" Header="İçine alt kategori ekle" Click="MenuAddChildCategory_Click"/>
+            <MenuItem x:Name="MenuCatUnnest" Header="Kategoriyi çıkar" Click="MenuUnnestCategory_Click"/>
+            <MenuItem x:Name="MenuCatRules" Header="Dosya türlerini ayarla" Click="MenuCategoryRules_Click"/>
+            <MenuItem x:Name="MenuCatDelete" Header="Seçilen kategorileri sil" Click="MenuDeleteCategories_Click"/>
         </ContextMenu>
 
         <!-- Koyu checkbox -->
@@ -884,9 +884,9 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Kes" InputGestureText="Ctrl+X" Command="ApplicationCommands.Cut"/>
-            <MenuItem Header="Kopyala" InputGestureText="Ctrl+C" Command="ApplicationCommands.Copy"/>
-            <MenuItem Header="Yapıştır" InputGestureText="Ctrl+V" Command="ApplicationCommands.Paste"/>
+            <MenuItem x:Name="MenuEditCut" Header="Kes" InputGestureText="Ctrl+X" Command="ApplicationCommands.Cut"/>
+            <MenuItem x:Name="MenuEditCopy" Header="Kopyala" InputGestureText="Ctrl+C" Command="ApplicationCommands.Copy"/>
+            <MenuItem x:Name="MenuEditPaste" Header="Yapıştır" InputGestureText="Ctrl+V" Command="ApplicationCommands.Paste"/>
             <Separator>
                 <Separator.Template>
                     <ControlTemplate TargetType="Separator">
@@ -894,7 +894,7 @@
                     </ControlTemplate>
                 </Separator.Template>
             </Separator>
-            <MenuItem Header="Tümünü seç" InputGestureText="Ctrl+A" Command="ApplicationCommands.SelectAll"/>
+            <MenuItem x:Name="MenuEditSelectAll" Header="Tümünü seç" InputGestureText="Ctrl+A" Command="ApplicationCommands.SelectAll"/>
         </ContextMenu>
 
         <!-- Text Box Stili -->
@@ -981,10 +981,10 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Dosya konumunu aç" Tag="📂" Click="MenuOpenFolder_Click"/>
-            <MenuItem Header="Dosyayı kopyala" Tag="📋" Click="MenuCopyFile_Click" InputGestureText="Ctrl+C"/>
-            <MenuItem Header="Bağlantıyı kopyala" Tag="🔗" Click="MenuCopyUrl_Click"/>
-            <MenuItem Header="Yeniden indir" Click="MenuRedownload_Click">
+            <MenuItem x:Name="MenuFileOpenFolder" Header="Dosya konumunu aç" Tag="📂" Click="MenuOpenFolder_Click"/>
+            <MenuItem x:Name="MenuFileCopy" Header="Dosyayı kopyala" Tag="📋" Click="MenuCopyFile_Click" InputGestureText="Ctrl+C"/>
+            <MenuItem x:Name="MenuFileCopyUrl" Header="Bağlantıyı kopyala" Tag="🔗" Click="MenuCopyUrl_Click"/>
+            <MenuItem x:Name="MenuFileRedownload" Header="Yeniden indir" Click="MenuRedownload_Click">
                 <MenuItem.Icon>
                     <Viewbox Width="14" Height="14" Stretch="Uniform">
                         <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"
@@ -992,10 +992,10 @@
                     </Viewbox>
                 </MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="Yeniden adlandır" Tag="✏" Click="MenuRename_Click"/>
-            <MenuItem Header="Kategoriye taşı" Tag="📁" Click="MenuMoveCategory_Click"/>
+            <MenuItem x:Name="MenuFileRename" Header="Yeniden adlandır" Tag="✏" Click="MenuRename_Click"/>
+            <MenuItem x:Name="MenuFileMove" Header="Kategoriye taşı" Tag="📁" Click="MenuMoveCategory_Click"/>
             <Separator Style="{StaticResource ModernSeparator}"/>
-            <MenuItem Header="Sil" Tag="🗑" Click="MenuDeleteFile_Click"/>
+            <MenuItem x:Name="MenuFileDelete" Header="Sil" Tag="🗑" Click="MenuDeleteFile_Click"/>
         </ContextMenu>
 
         <!-- Bos alan sag tik -->
@@ -1128,7 +1128,7 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
-            <MenuItem Header="Görünüm" Tag="▦" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
+            <MenuItem x:Name="MenuViewGroup" Header="Görünüm" Tag="▦" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
                 <MenuItem x:Name="MenuViewSmall" Header="Küçük" IsCheckable="True"
                           Click="MenuViewDensity_Click"/>
                 <MenuItem x:Name="MenuViewMedium" Header="Orta" IsCheckable="True"
@@ -1136,7 +1136,7 @@
                 <MenuItem x:Name="MenuViewLarge" Header="Büyük" IsCheckable="True"
                           Click="MenuViewDensity_Click"/>
             </MenuItem>
-            <MenuItem Header="Sıralama ölçütü" Tag="⇅" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
+            <MenuItem x:Name="MenuSortGroup" Header="Sıralama ölçütü" Tag="⇅" ItemContainerStyle="{StaticResource EmptySubmenuLeafStyle}">
                 <MenuItem x:Name="MenuSortName" Header="İsim" IsCheckable="True"
                           Click="MenuSortBy_Click"/>
                 <MenuItem x:Name="MenuSortSize" Header="Boyut" IsCheckable="True"
@@ -1147,7 +1147,7 @@
                           Click="MenuSortBy_Click"/>
             </MenuItem>
             <Separator Style="{StaticResource ModernSeparator}"/>
-            <MenuItem Header="Tümünü seç" Tag="☑" Click="MenuSelectAll_Click"/>
+            <MenuItem x:Name="MenuListSelectAll" Header="Tümünü seç" Tag="☑" Click="MenuSelectAll_Click"/>
         </ContextMenu>
     </Window.Resources>
 
@@ -1326,7 +1326,7 @@
                                                 </Button>
                                                 <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Opacity="0.45"
                                                            Margin="4,0,0,0" VerticalAlignment="Center"
-                                                           ToolTip="Sürükle: üste/alta sıra · ortaya bırak = içine ekle · Tüm indirilenler = dışarı çıkar"/>
+                                                           ToolTip="{Binding DragTip}"/>
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding CountLabel}"
                                                            FontSize="11" Opacity="0.75" Margin="0,0,6,0"
                                                            VerticalAlignment="Center" MinWidth="14"
@@ -1400,7 +1400,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarNew_Click"
+                                    <Button x:Name="BtnToolbarNew" Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarNew_Click"
                                             ToolTip="Yeni indirme">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE71B;" FontFamily="Segoe MDL2 Assets" FontSize="13"
@@ -1408,7 +1408,7 @@
                                             <TextBlock x:Name="LblToolbarNew" Text="Yeni" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarDelete_Click"
+                                    <Button x:Name="BtnToolbarDelete" Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarDelete_Click"
                                             ToolTip="Seçilenleri sil">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="13"
@@ -1416,7 +1416,7 @@
                                             <TextBlock x:Name="LblToolbarDelete" Text="Sil" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarOpen_Click"
+                                    <Button x:Name="BtnToolbarOpen" Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarOpen_Click"
                                             ToolTip="Dosyayı aç">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
@@ -1755,27 +1755,36 @@
                             </DataGridTemplateColumn>
 
                             <DataGridTextColumn x:Name="ColSize" Header="Boyut" Binding="{Binding FileSize}"
-                                                SortMemberPath="FileSizeBytes" Width="*" MinWidth="52" MaxWidth="110" IsReadOnly="True">
+                                                SortMemberPath="FileSizeBytes" Width="Auto" MinWidth="58" MaxWidth="120" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
                                         <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="TextWrapping" Value="NoWrap"/>
+                                        <Setter Property="Margin" Value="0,0,4,0"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn x:Name="ColType" Header="Tür" Binding="{Binding FileType}" Width="Auto" MinWidth="36" MaxWidth="80" IsReadOnly="True">
+                            <DataGridTextColumn x:Name="ColType" Header="Tür" Binding="{Binding FileType}" Width="Auto" MinWidth="40" MaxWidth="90" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
                                         <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="TextWrapping" Value="NoWrap"/>
+                                        <Setter Property="Margin" Value="0,0,4,0"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn x:Name="ColDate" Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="Auto" MinWidth="80" MaxWidth="150" IsReadOnly="True">
+                            <DataGridTextColumn x:Name="ColDate" Header="Tarih" Binding="{Binding DateAdded, StringFormat=\{0:dd.MM.yyyy HH:mm\}}" Width="Auto" MinWidth="68" MaxWidth="150" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}"/>
                                         <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="TextWrapping" Value="NoWrap"/>
+                                        <Setter Property="Margin" Value="0,0,4,0"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
@@ -1785,7 +1794,7 @@
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center" Margin="0,2">
-                                            <TextBlock Text="{Binding Status}" VerticalAlignment="Center"
+                                            <TextBlock Text="{Binding StatusDisplay}" VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}">
                                                 <TextBlock.Style>
@@ -1815,7 +1824,7 @@
                                                            Margin="10,0,0,0" VerticalAlignment="Center"/>
                                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="İndiriliyor" FontSize="10"
+                                                        <TextBlock Text="{Binding DownloadingLabel}" FontSize="10"
                                                                    Foreground="{DynamicResource DownloadingStatusBrush}"/>
                                                         <TextBlock Text="{Binding ProgressValue, StringFormat= %{0:F1}}"
                                                                    FontSize="10"
@@ -1921,7 +1930,7 @@
                                                 </Grid>
                                             </Button>
                                             <Rectangle Width="1" Height="10" Fill="{DynamicResource RowActionSepBrush}" Margin="0" VerticalAlignment="Center"/>
-                                            <Button ToolTip="İndirme penceresi" Style="{StaticResource RowActionButtonStyle}"
+                                            <Button ToolTip="{Binding SessionTip}" Style="{StaticResource RowActionButtonStyle}"
                                                     Click="RowOpenDownload_Click" Tag="{Binding}">
                                                 <Path Width="9" Height="9" Stretch="Uniform"
                                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -1931,7 +1940,7 @@
                                                       Data="M2.5,4.2 H13.5 V12.8 H2.5 Z M2.5,4.2 H13.5 V6.6 H2.5 Z M7.2,9.2 H11.2"/>
                                             </Button>
                                             <Rectangle Width="1" Height="10" Fill="{DynamicResource RowActionSepBrush}" Margin="0" VerticalAlignment="Center"/>
-                                            <Button ToolTip="İptal et" Style="{StaticResource RowActionDangerButtonStyle}"
+                                            <Button ToolTip="{Binding CancelTip}" Style="{StaticResource RowActionDangerButtonStyle}"
                                                     Click="RowCancel_Click" Tag="{Binding}">
                                                 <Path Width="9" Height="9" Stretch="Uniform"
                                                       Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -2005,7 +2014,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                        Foreground="#FF6B00" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="Bağlantı kopyalandı" Foreground="#E8E8E8"
+                            <TextBlock x:Name="TxtCopyToast" Text="Bağlantı kopyalandı" Foreground="#E8E8E8"
                                        FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>

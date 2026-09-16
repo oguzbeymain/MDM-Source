@@ -80,6 +80,9 @@ namespace MDM
             TxtApiToken.Text = settings.RemoteApiToken ?? "";
             ChkHttp3.IsChecked = settings.PreferHttp3;
             ChkAutoReconnect.IsChecked = settings.AutoReconnect;
+            if (ChkConfirmRepeat != null)
+                ChkConfirmRepeat.IsChecked = settings.ConfirmRepeatDownloads;
+            FillLanguageCombo(settings.UiLanguage);
             TxtSpeedLimit.Text = Math.Max(0, settings.SpeedLimitKBps).ToString();
             TxtMaxConcurrent.Text = Math.Max(0, settings.MaxConcurrentDownloads).ToString();
             TxtHttpChannels.Text = Math.Max(0, settings.HttpMaxChannels).ToString();
@@ -101,9 +104,7 @@ namespace MDM
 
             TxtExtPath.Text = ExtensionInstaller.InstallRoot;
             RefreshBrowserStatus();
-            string ver = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
-            TxtVersion.Text = $"Sürüm {ver}";
-            TxtUpdateCurrent.Text = $"Yüklü sürüm: v{UpdateService.CurrentVersionText}";
+            ApplyVersionTexts();
             if (!_updateBusy)
                 TxtUpdateStatus.Text = "";
 
@@ -140,6 +141,16 @@ namespace MDM
                 case "gelişmiş":
                     NavAdvanced.IsChecked = true;
                     break;
+                case "security":
+                case "guvenlik":
+                case "güvenlik":
+                    NavSecurity.IsChecked = true;
+                    break;
+                case "language":
+                case "dil":
+                case "lang":
+                    NavLanguage.IsChecked = true;
+                    break;
                 case "guncelleme":
                 case "güncelleme":
                     NavUpdate.IsChecked = true;
@@ -167,6 +178,10 @@ namespace MDM
             PanelExtension.Visibility = NavExtension.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PanelKeyboard.Visibility = NavKeyboard.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PanelAdvanced.Visibility = NavAdvanced.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            if (PanelSecurity != null)
+                PanelSecurity.Visibility = NavSecurity.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            if (PanelLanguage != null)
+                PanelLanguage.Visibility = NavLanguage.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PanelUpdate.Visibility = NavUpdate.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PanelAbout.Visibility = NavAbout.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             if (NavExtension.IsChecked == true)
@@ -317,8 +332,8 @@ namespace MDM
         {
             if (ChkCopyHotkey.IsChecked != true) return;
             _capturingHotkey = true;
-            TxtHotkey.Text = "Tuşlara basın…";
-            TxtHotkeyHint.Text = "Esc iptal eder. Örn. Ctrl+C veya Ctrl+Shift+C";
+            TxtHotkey.Text = Loc.T("settings.keyboard.press_keys", "Tuşlara basın…");
+            TxtHotkeyHint.Text = Loc.T("settings.keyboard.capture_hint", "Esc iptal eder. Örn. Ctrl+C veya Ctrl+Shift+C");
             HotkeyBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
             Keyboard.Focus(HotkeyBox);
         }
@@ -328,7 +343,7 @@ namespace MDM
             StopHotkeyCapture();
             _copyHotkey = "Ctrl+C";
             TxtHotkey.Text = _copyHotkey;
-            TxtHotkeyHint.Text = "Varsayılan kısayol geri yüklendi.";
+            TxtHotkeyHint.Text = Loc.T("settings.keyboard.reset_done", "Varsayılan kısayol geri yüklendi.");
         }
 
         private void HotkeyBox_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -358,7 +373,7 @@ namespace MDM
             {
                 StopHotkeyCapture();
                 TxtHotkey.Text = _copyHotkey;
-                TxtHotkeyHint.Text = "İptal edildi.";
+                TxtHotkeyHint.Text = Loc.T("settings.keyboard.capture_cancelled", "İptal edildi.");
                 return;
             }
 
@@ -369,14 +384,14 @@ namespace MDM
 
             if (mods == ModifierKeys.None && !allowNoModifier)
             {
-                TxtHotkeyHint.Text = "En az bir değiştirici (Ctrl / Alt / Shift) kullanın.";
+                TxtHotkeyHint.Text = Loc.T("settings.keyboard.need_modifier", "En az bir değiştirici (Ctrl / Alt / Shift) kullanın.");
                 return;
             }
 
             _copyHotkey = HotkeyParser.Format(key, mods);
             TxtHotkey.Text = _copyHotkey;
             StopHotkeyCapture();
-            TxtHotkeyHint.Text = "Kısayol güncellendi. Kaydet'e basın.";
+            TxtHotkeyHint.Text = Loc.T("settings.keyboard.hotkey_saved", "Kısayol güncellendi. Kaydet'e basın.");
         }
 
         private void StopHotkeyCapture()
@@ -399,7 +414,7 @@ namespace MDM
                 BrowserStatusList.Children.Clear();
                 BrowserStatusList.Children.Add(new TextBlock
                 {
-                    Text = "Kontrol ediliyor…",
+                    Text = Loc.T("settings.ext.checking", "Kontrol ediliyor…"),
                     Foreground = TryFindResource("SettingsMutedBrush") as Brush
                                  ?? new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
                     FontSize = 12,
@@ -492,7 +507,11 @@ namespace MDM
                     : Res("BrowserPillIdleBgBrush", Color.FromRgb(0x2A, 0x2A, 0x2A)),
                 Child = new TextBlock
                 {
-                    Text = !b.BrowserInstalled ? "Yok" : (b.ExtensionActive ? "Aktif" : "Devre dışı"),
+                    Text = !b.BrowserInstalled
+                        ? Loc.T("extstatus.none", "Yok")
+                        : (b.ExtensionActive
+                            ? Loc.T("extstatus.pill_active", "Aktif")
+                            : Loc.T("extstatus.pill_off", "Devre dışı")),
                     Foreground = b.ExtensionActive
                         ? Res("BrowserPillActiveFgBrush", Color.FromRgb(0x8B, 0xC3, 0x4A))
                         : Res("BrowserPillIdleFgBrush", Color.FromRgb(0x99, 0x99, 0x99)),
@@ -523,10 +542,33 @@ namespace MDM
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Grid.SetColumn(icon, 0);
             Grid.SetColumn(texts, 1);
-            Grid.SetColumn(statusPill, 2);
+
+            var right = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (b.Id == "firefox" && b.BrowserInstalled && !b.ExtensionActive)
+            {
+                var installBtn = new Button
+                {
+                    Content = Loc.T("settings.ext.install", "Kur"),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    Padding = new Thickness(12, 4, 12, 4),
+                    FontSize = 11,
+                    Cursor = Cursors.Hand,
+                    Style = TryFindResource("SoftButton") as Style
+                };
+                installBtn.Click += (_, _) => InstallFirefoxExtension();
+                right.Children.Add(installBtn);
+            }
+
+            right.Children.Add(statusPill);
+            Grid.SetColumn(right, 2);
             row.Children.Add(icon);
             row.Children.Add(texts);
-            row.Children.Add(statusPill);
+            row.Children.Add(right);
 
             return new Border
             {
@@ -542,6 +584,76 @@ namespace MDM
             };
         }
 
+        private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallFirefoxExtension();
+
+        private void InstallFirefoxExtension()
+        {
+            try
+            {
+                bool devInstalled = ExtensionInstaller.IsDeveloperEditionInstalled();
+                // Release kullanıcıya seçim ekranı; Dev zaten varsa doğrudan kalıcı akışa da gidebilir
+                string? defaultExe = ExtensionInstaller.ResolveFirefoxExe(out string channel);
+                bool isPermanentChannel = channel is "developer" or "nightly" or "esr";
+
+                ExtensionInstaller.FirefoxInstallMode mode;
+                if (isPermanentChannel && string.Equals(
+                        defaultExe, ExtensionInstaller.ResolveFirefoxDeveloperExe(out _),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    // Varsayılan zaten Dev/Nightly — seçim sormadan kalıcı kur
+                    mode = ExtensionInstaller.FirefoxInstallMode.Permanent;
+                }
+                else
+                {
+                    var choice = FirefoxInstallDialog.Show(OwnerWindow, devInstalled);
+                    if (choice == FirefoxInstallChoice.Cancel)
+                        return;
+
+                    if (choice == FirefoxInstallChoice.OpenDeveloperEdition)
+                    {
+                        if (devInstalled)
+                        {
+                            mode = ExtensionInstaller.FirefoxInstallMode.Permanent;
+                        }
+                        else
+                        {
+                            FirefoxInstallDialog.OpenDeveloperEditionPage();
+                            InfoDialog.Show(OwnerWindow, "Firefox Developer Edition",
+                                Loc.T("settings.ext.firefox_dev_message", "İndirme sayfası açıldı."),
+                                Loc.T("settings.ext.firefox_dev_detail",
+                                    "Developer Edition’ı kurup açtıktan sonra MDM’ye dön ve tekrar «Firefox otomatik kur»a bas — kalıcı kurulum yapılacak.\n\n"
+                                    + "Şimdilik normal Firefox ile devam etmek istersen aynı butondan «Geçici kur» seçebilirsin."));
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        mode = ExtensionInstaller.FirefoxInstallMode.Temporary;
+                    }
+                }
+
+                bool ok = ExtensionInstaller.TryInstallFirefox(
+                    out string title, out string message, out string detail, mode);
+                try
+                {
+                    string manifest = Path.Combine(ExtensionInstaller.FirefoxStagingRoot, "manifest.json");
+                    if (File.Exists(manifest))
+                        Clipboard.SetText(manifest);
+                }
+                catch { /* ignore */ }
+
+                InfoDialog.Show(OwnerWindow, title, message, detail);
+                if (ok)
+                    RefreshBrowserStatus();
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("firefox.title", "Firefox eklentisi"),
+                    Loc.T("settings.ext.firefox_error_message", "Kurulum başlatılamadı."), ex.Message);
+            }
+        }
+
         private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
         {
             ChkAutoStartMin.IsEnabled = ChkAutoStart.IsChecked == true;
@@ -551,7 +663,10 @@ namespace MDM
 
         private void BtnBrowse_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFolderDialog { Title = "Varsayılan indirme klasörü" };
+            var dialog = new OpenFolderDialog
+            {
+                Title = Loc.T("settings.general.folder_label", "Varsayılan indirme klasörü")
+            };
             if (!string.IsNullOrWhiteSpace(TxtFolder.Text) && Directory.Exists(TxtFolder.Text))
                 dialog.InitialDirectory = TxtFolder.Text;
             if (dialog.ShowDialog() == true)
@@ -563,12 +678,17 @@ namespace MDM
             try
             {
                 ExtensionInstaller.EnsureInstalled();
-                InfoDialog.Show(OwnerWindow, "Eklenti", "Hazır.",
-                    "Tarayıcıdaki eklenti bu klasörü kullanıyor:\n" + ExtensionInstaller.InstallRoot);
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.ext.dialog_title", "Eklenti"),
+                    Loc.T("settings.ext.cleanup_done", "Hazır."),
+                    Loc.T("settings.ext.cleanup_detail", "Tarayıcıdaki eklenti bu klasörü kullanıyor:")
+                        + "\n" + ExtensionInstaller.InstallRoot);
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(OwnerWindow, "Eklenti", "İşlem başarısız.", ex.Message);
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.ext.dialog_title", "Eklenti"),
+                    Loc.T("settings.ext.cleanup_failed", "İşlem başarısız."), ex.Message);
             }
         }
 
@@ -585,7 +705,9 @@ namespace MDM
             }
             catch (Exception ex)
             {
-                InfoDialog.Show(OwnerWindow, "Klasör", "Açılamadı.", ex.Message);
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.general.folder_title", "Klasör"),
+                    Loc.T("settings.ext.folder_open_failed", "Açılamadı."), ex.Message);
             }
         }
 
@@ -594,9 +716,10 @@ namespace MDM
             if (_updateBusy) return;
             _updateBusy = true;
             BtnCheckUpdate.IsEnabled = false;
-            SetUpdateStatus("Güncelleniyor…", "#FF6B00");
+            SetUpdateStatus(Loc.T("settings.update.updating", "Güncelleniyor…"), "#FF6B00");
             _updateCts = new CancellationTokenSource();
-            var progress = new Progress<string>(_ => SetUpdateStatus("Güncelleniyor…", "#FF6B00"));
+            var progress = new Progress<string>(_ =>
+                SetUpdateStatus(Loc.T("settings.update.updating", "Güncelleniyor…"), "#FF6B00"));
 
             try
             {
@@ -604,7 +727,7 @@ namespace MDM
 
                 if (result.Applying)
                 {
-                    SetUpdateStatus("Güncelleniyor…", "#FF6B00");
+                    SetUpdateStatus(Loc.T("settings.update.updating", "Güncelleniyor…"), "#FF6B00");
                     UpdateApplying?.Invoke();
                     return;
                 }
@@ -612,11 +735,13 @@ namespace MDM
                 if (result.HadError)
                 {
                     SetUpdateStatus(result.Message, "#E07070");
-                    InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", result.Message);
+                    InfoDialog.Show(OwnerWindow,
+                        Loc.T("settings.update.dialog_title", "Güncelleme"),
+                        Loc.T("settings.update.check_failed", "Denetim başarısız."), result.Message);
                 }
                 else if (result.IsUpToDate)
                 {
-                    SetUpdateStatus("Güncelsiniz", "#8BC34A");
+                    SetUpdateStatus(Loc.T("settings.update.up_to_date", "Güncelsiniz"), "#8BC34A");
                 }
                 else
                 {
@@ -626,7 +751,9 @@ namespace MDM
             catch (Exception ex)
             {
                 SetUpdateStatus(ex.Message, "#E07070");
-                InfoDialog.Show(OwnerWindow, "Güncelleme", "Denetim başarısız.", ex.Message);
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.update.dialog_title", "Güncelleme"),
+                    Loc.T("settings.update.check_failed", "Denetim başarısız."), ex.Message);
             }
             finally
             {
@@ -658,20 +785,26 @@ namespace MDM
             string folder = (TxtFolder.Text ?? "").Trim();
             if (string.IsNullOrWhiteSpace(folder))
             {
-                InfoDialog.Show(OwnerWindow, "Klasör", "Geçerli bir indirme klasörü girin.");
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.general.folder_title", "Klasör"),
+                    Loc.T("settings.general.folder_invalid", "Geçerli bir indirme klasörü girin."));
                 return false;
             }
 
             try { Directory.CreateDirectory(folder); }
             catch (Exception ex)
             {
-                InfoDialog.Show(OwnerWindow, "Klasör", "Klasör oluşturulamadı.", ex.Message);
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.general.folder_title", "Klasör"),
+                    Loc.T("settings.general.folder_create_failed", "Klasör oluşturulamadı."), ex.Message);
                 return false;
             }
 
             _settings = CaptureCurrentSettings();
             AppSettingsStore.Save(_settings);
             _loadedSnapshot = CloneSettings(_settings);
+            Loc.Apply(_settings.UiLanguage);
+            ApplyLocalizedChrome();
 
             if (_settings.AutoStart)
                 AutoStartHelper.Enable(_settings.AutoStartMinimized);
@@ -680,6 +813,209 @@ namespace MDM
 
             Saved?.Invoke();
             return true;
+        }
+
+        private void FillLanguageCombo(string? current)
+        {
+            if (CmbLanguage == null) return;
+            string code = Loc.NormalizeCode(current);
+            CmbLanguage.SelectionChanged -= CmbLanguage_SelectionChanged;
+            CmbLanguage.Items.Clear();
+            int selected = 0;
+            for (int i = 0; i < Loc.Languages.Length; i++)
+            {
+                var (c, name) = Loc.Languages[i];
+                CmbLanguage.Items.Add(new LanguageItem(c, name));
+                if (c.Equals(code, StringComparison.OrdinalIgnoreCase))
+                    selected = i;
+            }
+            CmbLanguage.SelectedIndex = selected;
+            CmbLanguage.SelectionChanged += CmbLanguage_SelectionChanged;
+            ApplyLocalizedChrome();
+        }
+
+        private string SelectedLanguageCode()
+        {
+            if (CmbLanguage?.SelectedItem is LanguageItem li)
+                return li.Code;
+            return Loc.NormalizeCode(_settings.UiLanguage);
+        }
+
+        private void CmbLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!IsLoaded || CmbLanguage?.SelectedItem is not LanguageItem li) return;
+            // Anında önizleme — Kaydet kalıcılar
+            Loc.Apply(li.Code);
+            ApplyLocalizedChrome();
+        }
+
+        public void ApplyLocalizedChrome()
+        {
+            if (SettingsTitle != null) SettingsTitle.Text = Loc.T("settings.title", "Ayarlar");
+            if (NavGeneral != null) NavGeneral.Content = Loc.T("settings.nav.general", "Genel");
+            if (NavNotifications != null) NavNotifications.Content = Loc.T("settings.nav.notifications", "Bildirimler");
+            if (NavTheme != null) NavTheme.Content = Loc.T("settings.nav.theme", "Tema");
+            if (NavExtension != null) NavExtension.Content = Loc.T("settings.nav.extension", "Tarayıcı eklentisi");
+            if (NavKeyboard != null) NavKeyboard.Content = Loc.T("settings.nav.keyboard", "Klavye ayarları");
+            if (NavAdvanced != null) NavAdvanced.Content = Loc.T("settings.nav.advanced", "Gelişmiş");
+            if (NavSecurity != null) NavSecurity.Content = Loc.T("settings.nav.security", "Güvenlik");
+            if (NavLanguage != null) NavLanguage.Content = Loc.T("settings.nav.language", "Dil");
+            if (NavUpdate != null) NavUpdate.Content = Loc.T("settings.nav.update", "Güncelleme");
+            if (NavAbout != null) NavAbout.Content = Loc.T("settings.nav.about", "Hakkında");
+            if (TxtSecurityTitle != null) TxtSecurityTitle.Text = Loc.T("settings.security.title", "Güvenlik");
+            if (ChkConfirmRepeat != null) ChkConfirmRepeat.Content = Loc.T("settings.security.spam_confirm", "İndirme spam’inde güvenlik onayı (önerilir)");
+            if (TxtSecurityHint != null) TxtSecurityHint.Text = Loc.T("settings.security.spam_hint",
+                "Açıkken kısa sürede aynı bağlantıya veya toplu indirme isteklerine karşı tek bir onay penceresi gösterilir. Onaylamazsanız istekler sessizce engellenir; normal indirmeleri etkilemez.");
+            if (TxtLanguageTitle != null) TxtLanguageTitle.Text = Loc.T("settings.language.title", "Uygulama dili");
+            if (TxtLanguageHint != null) TxtLanguageHint.Text = Loc.T("settings.language.hint",
+                "Dil değişikliği uygulama arayüzüne ve tarayıcı eklentisine uygulanır.");
+            if (BtnCancelSettings != null) BtnCancelSettings.Content = Loc.T("settings.cancel", "İptal");
+            if (BtnSaveSettings != null) BtnSaveSettings.Content = Loc.T("settings.save", "Kaydet");
+            if (TxtThemeTitle != null) TxtThemeTitle.Text = Loc.T("settings.theme.title", "Tema");
+            if (TxtThemeAppearance != null) TxtThemeAppearance.Text = Loc.T("settings.theme.appearance", "Görünüm");
+            if (TxtThemeDark != null) TxtThemeDark.Text = Loc.T("settings.theme.dark", "Koyu");
+            if (TxtThemeDarkSub != null) TxtThemeDarkSub.Text = Loc.T("settings.theme.dark_sub", "Siyah mod");
+            if (TxtThemeLight != null) TxtThemeLight.Text = Loc.T("settings.theme.light", "Açık");
+            if (TxtThemeLightSub != null) TxtThemeLightSub.Text = Loc.T("settings.theme.light_sub", "Beyaz mod");
+            if (TxtBrightnessLabel != null) TxtBrightnessLabel.Text = Loc.T("settings.theme.brightness", "Beyaz ton parlaklığı");
+            if (TxtBrightnessHint != null) TxtBrightnessHint.Text = Loc.T("settings.theme.brightness_hint",
+                "Yalnızca yüzeyleri etkiler (ana pencere ve popup'lar). Yazılar tam kontrastta kalır.");
+            if (TxtThemeHint != null) TxtThemeHint.Text = Loc.T("settings.theme.hint",
+                "Seçince anında önizlenir. Kalıcı olması için Kaydet’e basın; İptal eski temaya döner.");
+            if (TxtExtPanelTitle != null) TxtExtPanelTitle.Text = Loc.T("settings.ext.title", "Eklenti denetimi");
+            if (BtnRefreshBrowsers != null) BtnRefreshBrowsers.Content = Loc.T("settings.ext.refresh", "Yenile");
+            if (BtnInstallFirefox != null) BtnInstallFirefox.Content = Loc.T("settings.ext.firefox_install", "Firefox otomatik kur");
+
+            // Genel
+            if (TxtGenFolderLabel != null) TxtGenFolderLabel.Text = Loc.T("settings.general.folder_label", "Varsayılan indirme klasörü");
+            if (BtnGenBrowse != null) BtnGenBrowse.Content = Loc.T("settings.general.browse", "Gözat");
+            if (ChkAutoStart != null) ChkAutoStart.Content = Loc.T("settings.general.autostart", "Windows ile birlikte başlat");
+            if (ChkAutoStartMin != null) ChkAutoStartMin.Content = Loc.T("settings.general.autostart_min", "Başlangıçta arka planda aç");
+            if (ChkDeleteFromDisk != null) ChkDeleteFromDisk.Content = Loc.T("settings.general.delete_from_disk", "Silince dosyayı bilgisayardan da kaldır");
+            if (TxtGenDeleteHint != null) TxtGenDeleteHint.Text = Loc.T("settings.general.delete_from_disk_hint",
+                "Kapalıysa öğe yalnızca listeden çıkar; indirme klasöründeki dosya durur.");
+            if (ChkAutoExtract != null) ChkAutoExtract.Content = Loc.T("settings.general.auto_extract", "Arşivi indirdikten sonra aç");
+            if (ChkDeleteArchive != null) ChkDeleteArchive.Content = Loc.T("settings.general.delete_archive", "Kapattıktan sonra arşiv dosyasını sil");
+            if (TxtGenArchiveHint != null) TxtGenArchiveHint.Text = Loc.T("settings.general.delete_archive_hint",
+                "Arşiv görüntüleyicide açıldıktan sonra kapatınca .rar/.zip dosyası silinir.");
+            if (ChkAutoFolders != null) ChkAutoFolders.Content = Loc.T("settings.general.auto_folders", "Kategori klasörlerini otomatik oluştur");
+            if (TxtGenFoldersHint != null) TxtGenFoldersHint.Text = Loc.T("settings.general.auto_folders_hint",
+                "Kapalıysa indirmeler doğrudan varsayılan klasöre yazılır; Videolar/Arşivler alt klasörü açılmaz.");
+
+            // Bildirimler
+            if (TxtNotifyTitle != null) TxtNotifyTitle.Text = Loc.T("settings.notify.title", "Bildirimler");
+            if (ChkNotifyTray != null) ChkNotifyTray.Content = Loc.T("settings.notify.tray", "Alta alınca tepsi bildirimi göster");
+            if (TxtNotifyTrayHint != null) TxtNotifyTrayHint.Text = Loc.T("settings.notify.tray_hint",
+                "Uygulama gizli simgelere indiğinde «arka planda çalışıyor» balonu.");
+            if (ChkNotifyDone != null) ChkNotifyDone.Content = Loc.T("settings.notify.done", "Dosya indince bildirim göster");
+            if (TxtNotifyDoneHint != null) TxtNotifyDoneHint.Text = Loc.T("settings.notify.done_hint",
+                "İndirme bitince Windows tepsi bildirimi (Windows sesi). Kapalıysa bildirim ve ses gelmez.");
+
+            // Eklenti klasörü
+            if (TxtExtFolderLabel != null) TxtExtFolderLabel.Text = Loc.T("settings.ext.folder_label", "Eklenti klasörü");
+            if (BtnExtCleanup != null) BtnExtCleanup.Content = Loc.T("settings.ext.cleanup", "Kalıntı temizle");
+            if (BtnExtOpenFolder != null) BtnExtOpenFolder.Content = Loc.T("settings.ext.open_folder", "Klasörü aç");
+
+            // Klavye
+            if (TxtKeyboardTitle != null) TxtKeyboardTitle.Text = Loc.T("settings.keyboard.title", "Uygulama içi kısayollar");
+            if (ChkCopyHotkey != null) ChkCopyHotkey.Content = Loc.T("settings.keyboard.copy_files", "Seçili dosyaları panoya kopyala");
+            if (TxtKeyCopyHint != null) TxtKeyCopyHint.Text = Loc.T("settings.keyboard.copy_files_hint",
+                "Etkinse seçili tamamlanmış indirmeleri panoya dosya olarak koyar; Explorer veya başka uygulamaya Ctrl+V ile yapıştırabilirsiniz.");
+            if (TxtKeyShortcutLabel != null) TxtKeyShortcutLabel.Text = Loc.T("settings.keyboard.shortcut_label", "Kısayol");
+            if (BtnCaptureHotkey != null) BtnCaptureHotkey.Content = Loc.T("settings.keyboard.change", "Değiştir");
+            if (BtnResetHotkey != null) BtnResetHotkey.Content = Loc.T("settings.keyboard.reset", "Sıfırla");
+            // Yakalama sürerken ipucu metni ezilmez
+            if (TxtHotkeyHint != null && !_capturingHotkey) TxtHotkeyHint.Text = Loc.T("settings.keyboard.hotkey_hint",
+                "Kısayolu değiştirmek için «Değiştir»e basın, sonra tuşlara basın.");
+            if (ChkDeleteKey != null) ChkDeleteKey.Content = Loc.T("settings.keyboard.delete_key", "Delete tuşu uygulama içi kısayol silmeye izin ver");
+            if (TxtKeyDeleteHint != null) TxtKeyDeleteHint.Text = Loc.T("settings.keyboard.delete_key_hint",
+                "Etkinse Delete tuşu seçili dosyaları, arşivleri ve kategorileri siler.");
+
+            // Gelişmiş
+            if (TxtAdvTitle != null) TxtAdvTitle.Text = Loc.T("settings.advanced.title", "Zamanlayıcı ve uzak denetim");
+            if (ChkSchedule != null) ChkSchedule.Content = Loc.T("settings.advanced.schedule", "Yalnızca bu saatler arasında indir");
+            if (TxtAdvSchedStartLabel != null) TxtAdvSchedStartLabel.Text = Loc.T("settings.advanced.sched_start", "Başlangıç saati");
+            if (TxtAdvSchedEndLabel != null) TxtAdvSchedEndLabel.Text = Loc.T("settings.advanced.sched_end", "Bitiş");
+            if (TxtAdvSchedHint != null) TxtAdvSchedHint.Text = Loc.T("settings.advanced.sched_hint",
+                "Aynı saat = her zaman açık. 22 ve 6 gece penceresidir.");
+            if (TxtAdvCrawlLabel != null) TxtAdvCrawlLabel.Text = Loc.T("settings.advanced.crawl_depth", "Tarama derinliği (0–3)");
+            if (ChkRemoteLan != null) ChkRemoteLan.Content = Loc.T("settings.advanced.remote_lan", "REST API’yi LAN’dan dinle (token gerekir)");
+            if (TxtAdvApiTokenLabel != null) TxtAdvApiTokenLabel.Text = Loc.T("settings.advanced.api_token", "API token");
+            if (ChkHttp3 != null) ChkHttp3.Content = Loc.T("settings.advanced.http3", "HTTPS’te HTTP/3 dene (olmazsa 2 / 1.1)");
+            if (ChkAutoReconnect != null) ChkAutoReconnect.Content = Loc.T("settings.advanced.auto_reconnect", "Ağ düşünce otomatik devam et");
+            if (TxtAdvSpeedLabel != null) TxtAdvSpeedLabel.Text = Loc.T("settings.advanced.speed_limit", "Hız limiti KB/s");
+            if (TxtAdvSpeedHint != null) TxtAdvSpeedHint.Text = Loc.T("settings.advanced.speed_limit_hint", "(0 = sınırsız)");
+            if (TxtAdvConcurrentLabel != null) TxtAdvConcurrentLabel.Text = Loc.T("settings.advanced.concurrent", "Eşzamanlı indirme");
+            if (TxtAdvConcurrentHint != null) TxtAdvConcurrentHint.Text = Loc.T("settings.advanced.concurrent_hint", "(0 = sınırsız, fazlası kuyruk)");
+            if (TxtAdvHttpChannelsLabel != null) TxtAdvHttpChannelsLabel.Text = Loc.T("settings.advanced.http_channels", "HTTP kanal (0=otomatik)");
+            if (TxtAdvTorrentTitle != null) TxtAdvTorrentTitle.Text = Loc.T("settings.advanced.torrent_title", "Torrent");
+            if (TxtAdvTorrentPortLabel != null) TxtAdvTorrentPortLabel.Text = Loc.T("settings.advanced.torrent_port", "Dinleme portu");
+            if (ChkTorrentDht != null) ChkTorrentDht.Content = Loc.T("settings.advanced.torrent_dht", "DHT (trackersız magnet)");
+            if (ChkTorrentLpd != null) ChkTorrentLpd.Content = Loc.T("settings.advanced.torrent_lpd", "Yerel eş keşfi");
+            if (ChkTorrentUpnp != null) ChkTorrentUpnp.Content = Loc.T("settings.advanced.torrent_upnp", "UPnP / NAT-PMP port yönlendirme");
+            if (ChkTorrentSeq != null) ChkTorrentSeq.Content = Loc.T("settings.advanced.torrent_seq", "Sıralı indir (önce ilk dosya)");
+            if (TxtAdvSeedLabel != null) TxtAdvSeedLabel.Text = Loc.T("settings.advanced.torrent_seed", "Paylaşım oranı");
+            if (TxtAdvSeedHint != null) TxtAdvSeedHint.Text = Loc.T("settings.advanced.torrent_seed_hint", "(0 = indince dur)");
+            if (ChkSkipDup != null) ChkSkipDup.Content = Loc.T("settings.advanced.skip_dup", "Aynı URL’yi ikinci kez ekleme");
+            if (TxtAdvSkipExtLabel != null) TxtAdvSkipExtLabel.Text = Loc.T("settings.advanced.skip_ext", "Atlanan uzantılar (virgülle)");
+            if (TxtSkipExt != null) TxtSkipExt.ToolTip = Loc.T("settings.advanced.skip_ext_tip", "Örn: exe, scr, bat");
+            if (TxtAdvSkipUrlLabel != null) TxtAdvSkipUrlLabel.Text = Loc.T("settings.advanced.skip_url", "URL’de geçenleri atla");
+            if (TxtAdvSkipDomainsLabel != null) TxtAdvSkipDomainsLabel.Text = Loc.T("settings.advanced.skip_domains", "Atlanan alan adları (virgülle)");
+            if (TxtSkipDomains != null) TxtSkipDomains.ToolTip = Loc.T("settings.advanced.skip_domains_tip", "Örn: ads.example.com, tracker.net");
+            if (TxtAdvSkipRegexLabel != null) TxtAdvSkipRegexLabel.Text = Loc.T("settings.advanced.skip_regex", "URL regex (boş = kapalı)");
+            if (TxtAdvSkipMimeLabel != null) TxtAdvSkipMimeLabel.Text = Loc.T("settings.advanced.skip_mime", "Atlanan MIME (virgülle, örn: video/, audio/)");
+            if (TxtAdvMinMbLabel != null) TxtAdvMinMbLabel.Text = Loc.T("settings.advanced.min_mb", "Min MB");
+            if (TxtAdvMaxMbLabel != null) TxtAdvMaxMbLabel.Text = Loc.T("settings.advanced.max_mb", "Max MB");
+            if (TxtAdvSizeHint != null) TxtAdvSizeHint.Text = Loc.T("settings.advanced.size_hint", "(0 = kapalı)");
+            if (TxtAdvRenameLabel != null) TxtAdvRenameLabel.Text = Loc.T("settings.advanced.rename_label", "Yeniden adlandır {name} {ext} {date} {host}");
+            if (TxtAdvCliHint != null) TxtAdvCliHint.Text = Loc.T("settings.advanced.cli_hint",
+                "CLI: download URL  |  --add URL  |  --grab SAYFA  |  --list  |  --pause|--resume|--cancel ID");
+            if (TxtAdvNoteVideo != null) TxtAdvNoteVideo.Text = Loc.T("settings.advanced.note_video",
+                "! Video siteleri (YouTube vb.) — harici çıkarıcı yok, şimdilik kapalı");
+            if (TxtAdvNoteStream != null) TxtAdvNoteStream.Text = Loc.T("settings.advanced.note_stream",
+                "! Tarayıcıdaki gömülü stream yakalama — test edilmesi zor, şimdilik kapalı");
+            if (TxtAdvNoteRemote != null) TxtAdvNoteRemote.Text = Loc.T("settings.advanced.note_remote",
+                "! Mobil / web uzaktan kumanda uygulaması — şimdilik yalnızca LAN REST");
+
+            // Güncelleme
+            if (TxtUpdateTitle != null) TxtUpdateTitle.Text = Loc.T("settings.update.title", "Uygulama güncellemesi");
+            if (TxtUpdateHint != null) TxtUpdateHint.Text = Loc.T("settings.update.hint",
+                "Güncelleme yalnızca buradan denetlenir; uygulama her açılışta otomatik aramaz.");
+            if (BtnCheckUpdate != null) BtnCheckUpdate.Content = Loc.T("settings.update.check", "Güncellemeyi denetle");
+
+            // Hakkında
+            if (TxtAboutDesc != null) TxtAboutDesc.Text = Loc.T("settings.about.desc",
+                "İndirmeleri kategorilere ayıran, tarayıcı yakalamalı masaüstü yöneticisi.");
+            ApplyVersionTexts();
+
+            FlowDirection = Loc.Flow;
+            RefreshBrowserStatus();
+        }
+
+        /// <summary>Sürüm metinleri — dil değişince de yenilenir.</summary>
+        private void ApplyVersionTexts()
+        {
+            string ver = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "?";
+            if (TxtVersion != null)
+                TxtVersion.Text = Fmt("settings.about.version", "Sürüm {0}", ver);
+            if (TxtUpdateCurrent != null)
+                TxtUpdateCurrent.Text = Fmt("settings.update.installed", "Yüklü sürüm: v{0}", UpdateService.CurrentVersionText);
+        }
+
+        /// <summary>Loc.T + string.Format — çeviride bozuk yer tutucu varsa çökmez.</summary>
+        private static string Fmt(string key, string fallback, params object[] args)
+        {
+            string fmt = Loc.T(key, fallback);
+            try { return string.Format(fmt, args); }
+            catch { return fmt; }
+        }
+
+        private sealed class LanguageItem
+        {
+            public string Code { get; }
+            public string Name { get; }
+            public LanguageItem(string code, string name) { Code = code; Name = name; }
+            public override string ToString() => Name;
         }
 
         private AppSettings CaptureCurrentSettings()
@@ -711,6 +1047,9 @@ namespace MDM
             s.RemoteApiToken = TxtApiToken.Text?.Trim() ?? "";
             s.PreferHttp3 = ChkHttp3.IsChecked == true;
             s.AutoReconnect = ChkAutoReconnect.IsChecked == true;
+            if (ChkConfirmRepeat != null)
+                s.ConfirmRepeatDownloads = ChkConfirmRepeat.IsChecked == true;
+            s.UiLanguage = SelectedLanguageCode();
             _ = int.TryParse(TxtSpeedLimit.Text, out int speedKb);
             s.SpeedLimitKBps = Math.Clamp(speedKb, 0, 1_000_000);
             _ = int.TryParse(TxtMaxConcurrent.Text, out int maxJobs);

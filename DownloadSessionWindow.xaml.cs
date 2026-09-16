@@ -198,15 +198,55 @@ namespace MDM
 
         private IEnumerable<TextBlock> FindNamedLabels()
         {
-            // "Adres", "Kayıt klasörü", "Boyut", "Hız" etiketleri
-            if (SessionChrome == null) yield break;
-            foreach (var tb in EnumerateTextBlocks(SessionChrome))
-            {
-                string t = tb.Text ?? "";
-                if (t is "Adres" or "Kayıt klasörü" or "Boyut" or "Hız")
-                    yield return tb;
-            }
+            if (LblAddress != null) yield return LblAddress;
+            if (LblFolder != null) yield return LblFolder;
+            if (LblSize != null) yield return LblSize;
+            if (LblSpeed != null) yield return LblSpeed;
         }
+
+        private void ApplyLocalizedTexts()
+        {
+            FlowDirection = Loc.Flow;
+            Title = Loc.T("session.window_title", "İndirme");
+            if (LblAddress != null) LblAddress.Text = Loc.T("session.address", "Adres");
+            if (LblFolder != null) LblFolder.Text = Loc.T("session.folder", "Kayıt klasörü");
+            if (LblSize != null) LblSize.Text = Loc.T("session.size", "Boyut");
+            if (LblSpeed != null) LblSpeed.Text = Loc.T("session.speed", "Hız");
+            if (BtnBrowse != null) BtnBrowse.Content = Loc.T("session.browse", "Gözat");
+            if (BtnPause != null && BtnPause.IsEnabled)
+                BtnPause.Content = Loc.T("session.pause", "Duraklat");
+            if (BtnCancelDl != null) BtnCancelDl.Content = Loc.T("session.cancel", "İptal");
+            if (BtnOpenFile != null) BtnOpenFile.Content = Loc.T("session.open_file", "Dosyayı aç");
+            if (BtnOpenFolder != null) BtnOpenFolder.Content = Loc.T("session.folder_btn", "Klasör");
+            if (BtnMoveFile != null) BtnMoveFile.ToolTip = Loc.T("session.move_hint", "Basılı tutup sürükleyerek taşı");
+            if (BtnStart != null)
+            {
+                string cur = BtnStart.Content?.ToString() ?? "";
+                bool resume = cur.Contains("Devam", StringComparison.OrdinalIgnoreCase)
+                    || cur.Contains("Resume", StringComparison.OrdinalIgnoreCase)
+                    || cur.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                    || cur.Equals(Loc.T("session.resume", "Devam et"), StringComparison.OrdinalIgnoreCase);
+                BtnStart.Content = resume
+                    ? Loc.T("session.resume", "Devam et")
+                    : Loc.T("session.start", "Başlat");
+            }
+            if (TxtTorrentPickTitle != null) TxtTorrentPickTitle.Text = Loc.T("session.torrent_title", "İndirme türü");
+            if (TxtTorrentPickHint != null) TxtTorrentPickHint.Text = Loc.T("session.torrent_hint", "Bu torrent için ne indirmek istiyorsunuz?");
+            if (TxtRbTorrentFile != null) TxtRbTorrentFile.Text = Loc.T("session.torrent_file", "Torrent dosyası (.torrent)");
+            if (TxtRbFullContent != null) TxtRbFullContent.Text = Loc.T("session.torrent_full", "Tam içerik");
+            if (BtnTorrentPickOk != null) BtnTorrentPickOk.Content = Loc.T("session.continue", "Devam");
+            if (BtnDeleteDone != null) BtnDeleteDone.Content = Loc.T("session.delete", "Sil");
+            if (BtnCloseDone != null) BtnCloseDone.Content = Loc.T("session.close", "Kapat");
+        }
+
+        private void OnLocChanged() => Dispatcher.BeginInvoke(ApplyLocalizedTexts);
+
+        private string LocStart() => Loc.T("session.start", "Başlat");
+        private string LocResume() => Loc.T("session.resume", "Devam et");
+        private string LocPause() => Loc.T("session.pause", "Duraklat");
+        private string LocStatusPaused() => Loc.T("session.status_paused", "Duraklatıldı");
+        private string LocStatusReady() => Loc.T("session.status_ready", "Hazır — Başlat'a basın");
+        private string LocStatusFetching() => Loc.T("session.status_fetching", "Dosya bilgisi alınıyor...");
 
         private static IEnumerable<TextBlock> EnumerateTextBlocks(DependencyObject root)
         {
@@ -301,6 +341,9 @@ namespace MDM
             ApplyMeta(fileName, url, defaultFolder, sizeLabel);
             ThemeService.ApplyToWindow(this);
             Background = Brushes.Transparent;
+            ApplyLocalizedTexts();
+            Loc.Changed += OnLocChanged;
+            Closed += (_, _) => Loc.Changed -= OnLocChanged;
             Loaded += SessionWindow_Loaded;
         }
 
@@ -308,7 +351,7 @@ namespace MDM
         {
             if (_started || _item != null) return;
 
-            if (_ytdlpCapture != null)
+            if (_ytdlpCapture != null && MainWindow.CaptureNeedsYtDlp(_ytdlpCapture, _url))
             {
                 await LoadYtDlpSizeAsync();
                 return;
@@ -498,6 +541,9 @@ namespace MDM
             ApplyMeta(item.FileName, url, folder, item.FileSize);
             ThemeService.ApplyToWindow(this);
             Background = Brushes.Transparent;
+            ApplyLocalizedTexts();
+            Loc.Changed += OnLocChanged;
+            Closed += (_, _) => Loc.Changed -= OnLocChanged;
 
             TxtFolder.IsEnabled = false;
             BtnBrowse.IsEnabled = false;
@@ -514,7 +560,7 @@ namespace MDM
             else if (engine != null && engine.IsPaused)
             {
                 BtnStart.IsEnabled = true;
-                BtnStart.Content = "Devam Et";
+                BtnStart.Content = LocResume();
                 BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = true;
@@ -763,10 +809,10 @@ namespace MDM
                 BtnPause.Visibility = Visibility.Visible;
                 BtnPause.IsEnabled = true;
                 BtnStart.IsEnabled = false;
-                BtnStart.Content = "Başlat";
+                BtnStart.Content = LocStart();
                 BtnStart.Opacity = 0.55;
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = "Devam ediyor...";
+                TxtStatus.Text = Loc.T("session.status_resuming", "Devam ediyor...");
                 await _host.ResumeFromSessionAsync(_item, _engine);
                 return;
             }
@@ -786,7 +832,7 @@ namespace MDM
             BtnStart.IsEnabled = false;
             BtnStart.Opacity = 0.55;
             TxtStatus.Visibility = Visibility.Visible;
-            TxtStatus.Text = _ytdlpCapture != null ? "Hazır — Başlat'a basın" : "Dosya bilgisi alınıyor...";
+            TxtStatus.Text = _ytdlpCapture != null ? LocStatusReady() : LocStatusFetching();
 
             try
             {
@@ -811,8 +857,8 @@ namespace MDM
             BtnPause.Visibility = Visibility.Visible;
             BtnPause.IsEnabled = true;
             BtnCancelDl.IsEnabled = true;
-            BtnPause.Content = "Duraklat";
-            TxtStatus.Text = "İndiriliyor...";
+            BtnPause.Content = LocPause();
+            TxtStatus.Text = Loc.T("session.status_downloading", "İndiriliyor...");
 
             var run = _host.BeginDownloadFromSession(_url, _fileName, folder,
                 torrentMode: _torrentMode, sizeHint: TxtSize.Text, ytdlpCapture: _ytdlpCapture);
@@ -824,7 +870,7 @@ namespace MDM
                 BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 SetFolderPassive(false);
-                TxtStatus.Text = "Kural nedeniyle eklenmedi";
+                TxtStatus.Text = Loc.T("session.status_rule", "Kural nedeniyle eklenmedi");
                 return;
             }
             _item = run.Item;
@@ -870,7 +916,7 @@ namespace MDM
             if (_item.Status.Contains("Tamamland", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = "İndirme tamamlandı";
+                TxtStatus.Text = Loc.T("session.status_completed", "İndirme tamamlandı");
                 PanelActive.Visibility = Visibility.Collapsed;
                 PanelDone.Visibility = Visibility.Visible;
                 BtnMoveFile.Visibility = Visibility.Visible;
@@ -879,7 +925,7 @@ namespace MDM
             else if (_item.Status.Contains("İptal", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = "İptal edildi";
+                TxtStatus.Text = Loc.T("status.cancelled", "İptal edildi");
                 BtnPause.IsEnabled = false;
                 BtnCancelDl.IsEnabled = true;
                 BtnStart.IsEnabled = false;
@@ -890,12 +936,12 @@ namespace MDM
             else if (_item.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = "Duraklatıldı";
+                TxtStatus.Text = LocStatusPaused();
                 BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;
-                BtnStart.Content = "Devam Et";
+                BtnStart.Content = LocResume();
                 BtnCancelDl.IsEnabled = true;
                 BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
@@ -905,11 +951,11 @@ namespace MDM
             else if (_item.Status.Contains("Kuyrukta", StringComparison.OrdinalIgnoreCase))
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = "Kuyrukta bekleniyor...";
+                TxtStatus.Text = Loc.T("session.status_queued", "Kuyrukta bekleniyor...");
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = false;
                 BtnStart.Opacity = 0.55;
-                BtnStart.Content = "Başlat";
+                BtnStart.Content = LocStart();
                 BtnCancelDl.IsEnabled = true;
                 BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
@@ -919,12 +965,14 @@ namespace MDM
             else if (_item.IsErrorState)
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = string.IsNullOrWhiteSpace(_item.Status) ? "Torrent hatası" : _item.Status;
+                TxtStatus.Text = string.IsNullOrWhiteSpace(_item.Status)
+                    ? Loc.T("status.error", "Hata")
+                    : StatusLocalizer.ToUi(_item.Status);
                 BtnPause.Visibility = Visibility.Collapsed;
                 BtnPause.IsEnabled = false;
                 BtnStart.IsEnabled = true;
                 BtnStart.Opacity = 1;
-                BtnStart.Content = "Devam Et";
+                BtnStart.Content = LocResume();
                 BtnCancelDl.IsEnabled = true;
                 BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
@@ -934,13 +982,15 @@ namespace MDM
             else if (_item.IsDownloading)
             {
                 TxtStatus.Visibility = Visibility.Visible;
-                TxtStatus.Text = string.IsNullOrWhiteSpace(_item.StatusText) ? "İndiriliyor..." : _item.StatusText;
+                TxtStatus.Text = string.IsNullOrWhiteSpace(_item.StatusText)
+                    ? Loc.T("session.status_downloading", "İndiriliyor...")
+                    : _item.StatusText;
                 BtnPause.Visibility = Visibility.Visible;
                 BtnPause.IsEnabled = true;
-                BtnPause.Content = "Duraklat";
+                BtnPause.Content = LocPause();
                 BtnStart.IsEnabled = false;
                 BtnStart.Opacity = 0.55;
-                BtnStart.Content = "Başlat";
+                BtnStart.Content = LocStart();
                 BtnCancelDl.IsEnabled = true;
                 BtnMoveFile.Visibility = Visibility.Collapsed;
                 SetFolderPassive(true);
@@ -981,8 +1031,8 @@ namespace MDM
             _host.PauseFromSession(_item, _engine);
             BtnPause.IsEnabled = false;
             BtnStart.IsEnabled = true;
-            BtnStart.Content = "Devam Et";
-            TxtStatus.Text = "Duraklatıldı";
+            BtnStart.Content = LocResume();
+            TxtStatus.Text = LocStatusPaused();
         }
 
         private void BtnCancelDl_Click(object sender, RoutedEventArgs e)
@@ -996,7 +1046,8 @@ namespace MDM
                 confirmText: DialogTexts.CancelDownloadConfirm,
                 cancelText: DialogTexts.CancelDownloadDismiss,
                 danger: true,
-                forceFloating: true);
+                forceFloating: true,
+                accentCancel: true);
 
             if (!ok) return;
 
@@ -1007,7 +1058,7 @@ namespace MDM
             }
 
             _host.CancelFromSession(_item, _engine);
-            TxtStatus.Text = "İptal edildi";
+            TxtStatus.Text = Loc.T("status.cancelled", "İptal edildi");
             BtnPause.IsEnabled = false;
             BtnStart.IsEnabled = false;
             Close();

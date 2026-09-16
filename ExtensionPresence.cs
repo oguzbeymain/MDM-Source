@@ -64,6 +64,7 @@ namespace MDM
             if (id is "edge" or "msedge" or "microsoft edge") return "edge";
             if (id is "chrome" or "google chrome") return "chrome";
             if (id is "brave") return "brave";
+            if (id is "firefox" or "mozilla firefox" or "fx") return "firefox";
             return id;
         }
     }

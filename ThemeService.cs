@@ -222,7 +222,7 @@ namespace MDM
                 mw.TxtSearch.Foreground = BrushOf(text);
 
             if (mw.IcoToolbarSettings != null)
-                mw.IcoToolbarSettings.Foreground = BrushOf(light ? C(0xFF, 0x6B, 0x00) : C(0xC8, 0xC8, 0xC8));
+                mw.IcoToolbarSettings.Foreground = BrushOf(light ? C(0x2B, 0x2B, 0x2B) : C(0xC8, 0xC8, 0xC8));
 
             var titleBarChromeStyle = (Style)mw.FindResource(light ? "TitleBarChromeButtonStyleLight" : "TitleBarChromeButtonStyle");
             if (mw.BtnMinimize != null)

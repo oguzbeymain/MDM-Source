@@ -91,7 +91,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" VerticalAlignment="Top">
-                            <TextBlock Text="Adres" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="LblAddress" Text="Adres" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
                             <TextBox x:Name="TxtUrl" IsReadOnly="True" TextWrapping="NoWrap"
                                      FontSize="10" Height="26" VerticalContentAlignment="Center"
                                      Background="#252525" Foreground="#999999" BorderBrush="#333" BorderThickness="1">
@@ -107,7 +107,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Kayıt klasörü" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
+                    <TextBlock x:Name="LblFolder" Text="Kayıt klasörü" FontSize="9" Foreground="#666" Margin="0,0,0,2"/>
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -191,11 +191,11 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="Boyut" FontSize="9" Foreground="#666"/>
+                            <TextBlock x:Name="LblSize" Text="Boyut" FontSize="9" Foreground="#666"/>
                             <TextBlock x:Name="TxtSize" Text="—" FontSize="12" FontWeight="SemiBold" Foreground="#DDD" Margin="0,1,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="Hız" FontSize="9" Foreground="#666"/>
+                            <TextBlock x:Name="LblSpeed" Text="Hız" FontSize="9" Foreground="#666"/>
                             <TextBlock x:Name="TxtSpeed" Text="—" FontSize="12" FontWeight="SemiBold" Foreground="#DDD" Margin="0,1,0,0"/>
                         </StackPanel>
                     </Grid>
@@ -317,7 +317,7 @@
                     </StackPanel>
 
                     <StackPanel x:Name="PanelDone" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Collapsed">
-                        <Button Content="Dosyayı aç" Width="88" Height="30" Margin="0,0,6,0"
+                        <Button x:Name="BtnOpenFile" Content="Dosyayı aç" Width="88" Height="30" Margin="0,0,6,0"
                                 Cursor="Hand" Click="BtnOpenFile_Click" FontWeight="SemiBold" FontSize="12"
                                 Background="#FF6B00" Foreground="White" BorderThickness="0">
                             <Button.Template>
@@ -333,7 +333,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <Button Content="Klasör" Width="70" Height="30" Margin="0,0,6,0"
+                        <Button x:Name="BtnOpenFolder" Content="Klasör" Width="70" Height="30" Margin="0,0,6,0"
                                 Cursor="Hand" Click="BtnOpenFolder_Click" FontWeight="SemiBold" FontSize="12"
                                 Foreground="#EEE" BorderThickness="0">
                             <Button.Template>
@@ -349,7 +349,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <Button Content="Sil" Width="60" Height="30" Margin="0,0,6,0"
+                        <Button x:Name="BtnDeleteDone" Content="Sil" Width="60" Height="30" Margin="0,0,6,0"
                                 Cursor="Hand" Click="BtnDelete_Click" FontWeight="SemiBold" FontSize="12"
                                 Foreground="#FF6B6B" BorderThickness="0">
                             <Button.Template>
@@ -365,7 +365,7 @@
                                 </ControlTemplate>
                             </Button.Template>
                         </Button>
-                        <Button Content="Kapat" Width="60" Height="30"
+                        <Button x:Name="BtnCloseDone" Content="Kapat" Width="60" Height="30"
                                 Cursor="Hand" Click="BtnClose_Click" FontWeight="SemiBold" FontSize="12"
                                 Foreground="#EEE" BorderThickness="0">
                             <Button.Template>

@@ -518,7 +518,7 @@ async function mdmResolveFormats(payload) {
   if (playing) all.unshift(playing);
 
   if (protectedHit && all.filter(f => f.id !== "playing").length === 0) {
-    return { ok: false, protected: true, error: "Korumalı içerik", formats: [] };
+    return { ok: false, protected: true, error: mdmErrText("ext.error_protected_content", "Korumalı içerik"), formats: [] };
   }
 
   let formats = mdmMergeFormats(all);

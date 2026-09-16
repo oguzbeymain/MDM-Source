@@ -1,10 +1,17 @@
 // MDM — context menus
+function mdmT(key, ...args) {
+  try {
+    if (typeof mdmI18n !== "undefined" && mdmI18n.t) return mdmI18n.t(key, ...args);
+  } catch (_) {}
+  return key;
+}
+
 function mdmInstallMenus() {
   try {
     chrome.contextMenus.removeAll(() => {
-      chrome.contextMenus.create({ id: "mdm-dl-link", title: "MDM ile indir", contexts: ["link", "image", "video", "audio"] });
-      chrome.contextMenus.create({ id: "mdm-dl-selection", title: "Seçili bağlantıları MDM ile indir", contexts: ["selection"] });
-      chrome.contextMenus.create({ id: "mdm-scan-page", title: "Sayfadaki videoları tara", contexts: ["page"] });
+      chrome.contextMenus.create({ id: "mdm-dl-link", title: mdmT("ext.menu_download"), contexts: ["link", "image", "video", "audio"] });
+      chrome.contextMenus.create({ id: "mdm-dl-selection", title: mdmT("ext.menu_links"), contexts: ["selection"] });
+      chrome.contextMenus.create({ id: "mdm-scan-page", title: mdmT("ext.menu_scan"), contexts: ["page"] });
     });
   } catch (_) {}
 }

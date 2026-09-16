@@ -74,7 +74,7 @@ namespace MDM
             if (method == "GET" && (p == "/" || p == "/health"))
                 return RemoteApiResult.Text(200, "MDM capture ready");
 
-            // Eklenti canlılık — /ext/ping?browser=edge|chrome|brave
+            // Eklenti canlılık — /ext/ping?browser=edge|chrome|brave|firefox
             if ((method == "GET" || method == "POST") && (p == "/ext/ping" || p == "/ping"))
             {
                 string? browser = QueryValue(query, "browser");
@@ -90,7 +90,10 @@ namespace MDM
                 catch { /* ignore */ }
 
                 ExtensionPresence.NotifyPing(browser);
-                return RemoteApiResult.Json(200, """{"ok":true}""");
+                string lang = Loc.Code;
+                bool rtl = Loc.IsRtl;
+                return RemoteApiResult.Json(200,
+                    JsonSerializer.Serialize(new { ok = true, language = lang, rtl }, JsonOpts));
             }
 
             if (method == "GET" && p == "/jobs")

@@ -20,6 +20,7 @@ namespace MDM
         public NewUrlDialog()
         {
             InitializeComponent();
+            ApplyLocalizedTexts();
             ApplyThemeSurface(ThemeService.IsLight);
         }
 
@@ -28,8 +29,21 @@ namespace MDM
             GrabLinks = false;
             TxtUrl.Text = "";
             ClearValidation();
+            ApplyLocalizedTexts();
             TxtUrl.Focus();
             Keyboard.Focus(TxtUrl);
+        }
+
+        public void ApplyLocalizedTexts()
+        {
+            FlowDirection = Loc.Flow;
+            if (TxtTitle != null) TxtTitle.Text = Loc.T("newurl.title", "Yeni indirme");
+            if (TxtHint != null) TxtHint.Text = Loc.T("newurl.hint",
+                "HTTP, FTP, SFTP, metalink, torrent veya magnet yapıştırın. Birden fazla adres için Ctrl+Enter. Sayfa taramak için ‘Sayfayı tara’.");
+            if (BtnTorrent != null) BtnTorrent.Content = Loc.T("newurl.torrent", "Torrent dosyası");
+            if (BtnCancel != null) BtnCancel.Content = Loc.T("newurl.cancel", "İptal");
+            if (BtnGrab != null) BtnGrab.Content = Loc.T("newurl.scan", "Sayfayı tara");
+            if (BtnDownload != null) BtnDownload.Content = Loc.T("newurl.download", "İndir");
         }
 
         public void ApplyThemeSurface(bool light)
@@ -129,8 +143,9 @@ namespace MDM
         {
             var dlg = new OpenFileDialog
             {
-                Title = "Torrent dosyası seçin",
-                Filter = "Torrent (*.torrent)|*.torrent|Tüm dosyalar|*.*",
+                Title = Loc.T("newurl.pick_torrent", "Torrent dosyası seçin"),
+                Filter = Loc.T("newurl.torrent", "Torrent dosyası") + " (*.torrent)|*.torrent|"
+                         + Loc.T("newurl.filter_all", "Tüm dosyalar") + "|*.*",
                 CheckFileExists = true
             };
             if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(dlg.FileName))
@@ -179,7 +194,7 @@ namespace MDM
             string raw = Url;
             if (string.IsNullOrWhiteSpace(raw))
             {
-                ShowValidation("İndirmek için en az bir geçerli bağlantı girin.");
+                ShowValidation(Loc.T("newurl.validation_empty", "İndirmek için en az bir geçerli bağlantı girin."));
                 TxtUrl.Focus();
                 return;
             }

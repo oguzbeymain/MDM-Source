@@ -65,6 +65,7 @@ namespace MDM
             set
             {
                 if (!SetField(ref _status, value)) return;
+                OnPropertyChanged(nameof(StatusDisplay));
                 if (value.Contains("İptal", StringComparison.OrdinalIgnoreCase)
                     || value.Contains("Tamamlandı", StringComparison.OrdinalIgnoreCase)
                     || value.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
@@ -161,8 +162,25 @@ namespace MDM
 
         public string PauseResumeGlyph => (IsPausedState || IsErrorState) ? "▶" : "⏸";
 
-        public string PauseResumeTip => (IsPausedState || IsErrorState) ? "Devam et" : "Durdur";
+        public string PauseResumeTip => (IsPausedState || IsErrorState)
+            ? Loc.T("main.resume", "Devam et")
+            : Loc.T("main.stop", "Durdur");
 
+        public string CancelTip => Loc.T("main.cancel", "İptal");
+        public string DownloadingLabel => Loc.T("main.downloading", "İndiriliyor");
+        public string SessionTip => Loc.T("main.session_window", "İndirme penceresi");
+
+        /// <summary>Liste satırında gösterilen yerelleştirilmiş durum.</summary>
+        public string StatusDisplay => StatusLocalizer.ToUi(Status);
+
+        public void NotifyLanguageChanged()
+        {
+            OnPropertyChanged(nameof(StatusDisplay));
+            OnPropertyChanged(nameof(PauseResumeTip));
+            OnPropertyChanged(nameof(CancelTip));
+            OnPropertyChanged(nameof(DownloadingLabel));
+            OnPropertyChanged(nameof(SessionTip));
+        }
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 

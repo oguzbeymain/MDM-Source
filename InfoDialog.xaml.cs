@@ -8,8 +8,10 @@ namespace MDM
         public InfoDialog(string title, string message, string detail = "")
         {
             InitializeComponent();
+            FlowDirection = Loc.Flow;
             TxtTitle.Text = title;
             TxtMessage.Text = message;
+            BtnOk.Content = Loc.T("dialog.ok", "Tamam");
             if (string.IsNullOrWhiteSpace(detail))
                 TxtDetail.Visibility = Visibility.Collapsed;
             else

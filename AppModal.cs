@@ -12,13 +12,17 @@ namespace MDM
     internal static class AppModal
     {
         public static bool Confirm(string title, string message, string detail = "",
-            string confirmText = "Onayla", string cancelText = "İptal", bool danger = false)
+            string? confirmText = null, string? cancelText = null, bool danger = false,
+            bool accentCancel = false)
         {
-            if (Application.Current?.MainWindow is MainWindow mw)
-                return mw.ShowModalConfirm(title, message, detail, confirmText, cancelText, danger);
+            // Varsayılan buton yazıları çalışma anında dile göre çözülür
+            string ok = string.IsNullOrWhiteSpace(confirmText) ? Loc.T("dialog.confirm", "Onayla") : confirmText!;
+            string cancel = string.IsNullOrWhiteSpace(cancelText) ? Loc.T("dialog.cancel", "İptal") : cancelText!;
 
-            // Fallback (MainWindow yoksa)
-            var dlg = new ConfirmDialog(title, message, detail, confirmText, cancelText, danger);
+            if (Application.Current?.MainWindow is MainWindow mw)
+                return mw.ShowModalConfirm(title, message, detail, ok, cancel, danger, accentCancel);
+
+            var dlg = new ConfirmDialog(title, message, detail, ok, cancel, danger, accentCancel);
             dlg.ShowDialog();
             return dlg.Confirmed;
         }

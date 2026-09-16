@@ -96,6 +96,22 @@ namespace MDM
             _ => null
         };
 
+        /// <summary>UI için yerelleştirilmiş ad; disk klasör adı Name alanında kalır.</summary>
+        public static string GetLocalizedName(string categoryId, string fallbackName)
+        {
+            return categoryId switch
+            {
+                "All" => Loc.T("cat.all", "Tüm İndirilenler"),
+                "Documents" => Loc.T("cat.documents", "Dökümanlar"),
+                "Videos" => Loc.T("cat.videos", "Videolar"),
+                "Audio" => Loc.T("cat.audio", "Sesler"),
+                "Archives" => Loc.T("cat.archives", "Arşivler"),
+                "Images" => Loc.T("cat.images", "Resimler"),
+                "Apps" => Loc.T("cat.apps", "Uygulamalar"),
+                _ => fallbackName
+            };
+        }
+
         public static ObservableCollection<CategoryItem> Load()
         {
             try

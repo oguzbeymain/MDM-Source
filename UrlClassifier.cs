@@ -112,8 +112,9 @@ namespace MDM
         public static string UnsupportedMessage(TransferKind kind) => kind switch
         {
             TransferKind.Magnet or TransferKind.Torrent =>
-                "Geçerli bir torrent dosyası veya magnet bağlantısı girin.",
-            _ => "Geçerli bir HTTP(S), FTP, SFTP, metalink, torrent veya magnet bağlantısı girin."
+                Loc.T("msg.url.unsupported_torrent", "Geçerli bir torrent dosyası veya magnet bağlantısı girin."),
+            _ => Loc.T("msg.url.unsupported",
+                "Geçerli bir HTTP(S), FTP, SFTP, metalink, torrent veya magnet bağlantısı girin.")
         };
 
         public static IReadOnlyList<string> ExtractHttpUrls(string? text, string? baseUrl = null)

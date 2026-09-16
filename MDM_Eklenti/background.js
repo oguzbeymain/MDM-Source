@@ -1,5 +1,17 @@
-// MDM — service worker orchestrator
-importScripts("classifier.js", "capture-store.js", "formats.js", "desktop.js", "menus.js");
+// MDM — service worker / Firefox background orchestrator
+// Firefox staging manifest scripts[] ile yükler; SW'de importScripts gerekir.
+if (typeof importScripts === "function" && typeof mdmExtCapture !== "function") {
+  try {
+    importScripts("i18n.js", "classifier.js", "capture-store.js", "formats.js", "desktop.js", "menus.js");
+  } catch (e) {
+    console.warn("MDM: importScripts failed", e);
+  }
+}
+
+// i18n yüklenmezse hata metinleri Türkçe kalsın, ReferenceError atmasın
+if (typeof mdmErrText !== "function") {
+  self.mdmErrText = (key, fallback) => fallback || key;
+}
 
 const MDM_STARTUP_GUARD_MS = 45000;
 const MDM_MAX_FRESH_AGE_MS = 12000;
@@ -7,15 +19,116 @@ let mdmStartupGuardUntil = 0;
 let mdmCaptureEnabled = true;
 const mdmDisabledTabs = new Set();
 
+// ——— popup ayarlari (mdmPrefs): tema / dugme / devre disi siteler ———
+const MDM_PREFS_DEFAULTS = { theme: "dark", overlay: true, blocked: [] };
+let mdmPrefs = Object.assign({}, MDM_PREFS_DEFAULTS);
+
+function mdmBareHost(value) {
+  return String(value || "").trim().toLowerCase().replace(/^www\./, "");
+}
+
+function mdmHostOf(url) {
+  try { return mdmBareHost(new URL(url).hostname); } catch (_) { return ""; }
+}
+
+function mdmIsBlockedHost(host) {
+  if (!host || !Array.isArray(mdmPrefs.blocked)) return false;
+  return mdmPrefs.blocked.some((b) => {
+    const entry = mdmBareHost(b);
+    return entry && (host === entry || host.endsWith("." + entry));
+  });
+}
+
+function mdmApplyTabBlock(tabId, blocked) {
+  if (blocked) mdmDisabledTabs.add(tabId);
+  else mdmDisabledTabs.delete(tabId);
+  try {
+    chrome.action.setBadgeText({ tabId, text: blocked ? "X" : "" });
+    if (blocked) chrome.action.setBadgeBackgroundColor({ tabId, color: "#666" });
+  } catch (_) {}
+  chrome.tabs.sendMessage(tabId, { type: "mdm-set-enabled", enabled: !blocked }).catch(() => {});
+}
+
+async function mdmSyncBlockedTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id == null) continue;
+      mdmApplyTabBlock(tab.id, mdmIsBlockedHost(mdmHostOf(tab.url || "")));
+    }
+  } catch (_) {}
+}
+
+function mdmSetPrefs(raw) {
+  mdmPrefs = Object.assign({}, MDM_PREFS_DEFAULTS, raw || {});
+  mdmSyncBlockedTabs();
+}
+
+try {
+  Promise.resolve(chrome.storage.local.get("mdmPrefs"))
+    .then((d) => mdmSetPrefs(d && d.mdmPrefs))
+    .catch(() => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes || !changes.mdmPrefs) return;
+    mdmSetPrefs(changes.mdmPrefs.newValue);
+  });
+} catch (_) {}
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (!info || (!info.url && info.status !== "complete")) return;
+  mdmApplyTabBlock(tabId, mdmIsBlockedHost(mdmHostOf(info.url || (tab && tab.url) || "")));
+});
+
 async function mdmDisableBrowserDownloadUi() {
   try { if (chrome.downloads.setShelfEnabled) chrome.downloads.setShelfEnabled(false); } catch (_) {}
   try { if (chrome.downloads.setUiOptions) await chrome.downloads.setUiOptions({ enabled: false }); } catch (_) {}
+}
+
+function mdmIsFirefox() {
+  try { return /Firefox\//.test(navigator.userAgent || ""); } catch (_) { return false; }
+}
+
+const mdmAcceptedCaptureUrls = new Map(); // url -> timestamp
+
+function mdmRememberAccepted(url) {
+  if (!url) return;
+  mdmAcceptedCaptureUrls.set(url, Date.now());
+  if (typeof mdmMarkHandoff === "function") mdmMarkHandoff(url);
+}
+
+function mdmAcceptedAgeMs(url) {
+  const t = mdmAcceptedCaptureUrls.get(url);
+  if (!t) return -1;
+  const age = Date.now() - t;
+  if (age > 120000) {
+    mdmAcceptedCaptureUrls.delete(url);
+    return -1;
+  }
+  return age;
+}
+
+function mdmWasAccepted(url) {
+  return mdmAcceptedAgeMs(url) >= 0;
+}
+
+/** Kısa süre içindeki redirect/spam kopyası mı, yoksa kullanıcının tekrar indirme isteği mi? */
+function mdmIsFreshAcceptedDuplicate(url) {
+  const age = mdmAcceptedAgeMs(url);
+  return age >= 0 && age < 2500;
 }
 
 function mdmIsSessionRestoreReplay(downloadItem) {
   const now = Date.now();
   const started = downloadItem.startTime ? Date.parse(downloadItem.startTime) : NaN;
   const ageMs = Number.isNaN(started) ? 0 : now - started;
+  // Firefox: «Farklı kaydet» / always-ask çoğu indirmeyi paused=true başlatır.
+  // Eski kod paused'ı "restore" sanıp takeover'ı tamamen atlıyordu → dosya tarayıcıda kalıyordu.
+  if (mdmIsFirefox()) {
+    if (downloadItem.state === "complete") return true;
+    // Sadece gerçekten ilerlemiş eski indirmeleri atla (oturum geri yükleme)
+    if ((downloadItem.bytesReceived || 0) > 512 * 1024 && ageMs > 8000) return true;
+    return false;
+  }
   if (downloadItem.state === "interrupted" || downloadItem.paused === true) return true;
   if ((downloadItem.bytesReceived || 0) > 0 && ageMs > 3000) return true;
   if (ageMs > MDM_MAX_FRESH_AGE_MS) return true;
@@ -26,7 +139,11 @@ function mdmIsSessionRestoreReplay(downloadItem) {
 async function mdmSendCaptureToDesktop(payload) {
   if (!mdmCaptureEnabled) return false;
   const ok = await mdmExtCapture(payload);
-  if (ok) mdmMarkHandoff(payload.url || payload.pageUrl || "");
+  if (ok) {
+    const u = payload.url || payload.pageUrl || "";
+    if (u) mdmRememberAccepted(u);
+    else mdmMarkHandoff(u);
+  }
   return ok;
 }
 
@@ -51,10 +168,29 @@ async function mdmCaptureUrl(url, filename, tab, pageUrl, extra = {}) {
 }
 
 async function mdmGetCookies(url) {
+  const urls = [];
+  if (url) urls.push(url);
   try {
-    const list = await chrome.cookies.getAll({ url });
-    return list.map(c => `${c.name}=${c.value}`).join("; ");
-  } catch (_) { return ""; }
+    const u = new URL(url);
+    const host = (u.hostname || "").toLowerCase();
+    // Google Drive: auth çerezleri drive.google.com / .google.com üzerinde
+    if (host.includes("google.com") || host.includes("googleusercontent.com")) {
+      urls.push("https://drive.google.com/");
+      urls.push("https://docs.google.com/");
+      urls.push("https://accounts.google.com/");
+      urls.push("https://drive.usercontent.google.com/");
+    }
+  } catch (_) {}
+  const map = new Map();
+  for (const u of urls) {
+    try {
+      const list = await chrome.cookies.getAll({ url: u });
+      for (const c of list || []) {
+        if (c && c.name) map.set(c.name, c.value);
+      }
+    } catch (_) {}
+  }
+  return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 function mdmBroadcastDesktopStatus() {
@@ -120,6 +256,34 @@ function mdmOnHeadersReceived(details) {
     if (n === "content-disposition") contentDisposition = h.value || "";
   }
 
+  const isAttachment = /attachment/i.test(contentDisposition || "");
+
+  // Firefox: Content-Disposition: attachment → yalnızca gerçek dosya (stream/YouTube değil)
+  if (isAttachment && mdmIsFirefox() && /^https?:\/\//i.test(details.url)
+      && !mdmIsFreshAcceptedDuplicate(details.url) && !mdmShouldSkipHandoff(details.url)
+      && mdmLooksLikeBinaryDownload(details.url, mime, contentDisposition)) {
+    const fname = mdmFilenameFromHeaders(details.url, contentDisposition) || "download";
+    mdmGetCookies(details.url).then((cookies) => {
+      const referrer = details.originUrl || details.documentUrl || "";
+      const headers = {};
+      if (referrer) headers.Referer = referrer;
+      if (/google\.com|googleusercontent\.com/i.test(details.url))
+        headers.Referer = headers.Referer || "https://drive.google.com/";
+      mdmSendCaptureToDesktop({
+        url: details.url,
+        filename: fname,
+        mime,
+        pageUrl: referrer || details.url,
+        referrer: headers.Referer || referrer,
+        kind: "progressive",
+        cookies,
+        headers
+      }).then((ok) => {
+        if (ok) mdmRememberAccepted(details.url);
+      }).catch(() => {});
+    });
+  }
+
   const cls = mdmClassifyCapture(details.url, mime, contentLength);
   if (cls.action !== "capture" && cls.action !== "store") return;
 
@@ -153,33 +317,341 @@ try {
   );
   chrome.webRequest.onHeadersReceived.addListener(
     mdmOnHeadersReceived,
-    { urls: ["http://*/*", "https://*/*"], types: ["xmlhttprequest", "media", "object", "other", "sub_frame"] },
+    { urls: ["http://*/*", "https://*/*"], types: ["xmlhttprequest", "media", "object", "other", "sub_frame", "main_frame"] },
     ["responseHeaders"]
   );
 } catch (e) {
   console.warn("MDM: webRequest unavailable", e);
 }
 
+// Firefox: indirmeyi Save As'tan ÖNCE kes (blocking) — Chromium MV3'te yok
+function mdmHeaderValue(headers, name) {
+  const n = name.toLowerCase();
+  for (const h of headers || []) {
+    if ((h.name || "").toLowerCase() === n) return h.value || "";
+  }
+  return "";
+}
+
+function mdmIsStreamingMediaUrl(url) {
+  if (!url) return false;
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    if (h.includes("googlevideo.com") || h.includes("youtube.com") || h.includes("youtu.be")
+        || h.includes("youtube-nocookie.com") || h.includes("ytimg.com")
+        || h.includes("vimeocdn.com") || h.includes("akamaized.net")
+        || h.includes("ttvnw.net") || h.includes("twitch.tv")
+        || h.includes("fbcdn.net") || h.includes("cdninstagram.com")
+        || h.includes("tiktokcdn") || h.includes("byteoversea.com"))
+      return true;
+  } catch (_) {}
+  // HLS/DASH segment / videoplayback parçaları — otomatik indirme değil
+  if (/\/videoplayback\b/i.test(url) || /[?&]range=/i.test(url)) return true;
+  if (/\.m3u8(\?|$)/i.test(url) || /\.mpd(\?|$)/i.test(url)) return true;
+  if (/\/hls\/|\/dash\/|fragment|seg-\d/i.test(url)) return true;
+  return false;
+}
+
+/** ChatGPT / Gemini vb. — stream/XHR'yi tarayıcı bazen «indirme» sanır */
+function mdmIsChatAiSiteUrl(url) {
+  if (!url) return false;
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    if (h === "gemini.google.com" || h.endsWith(".gemini.google.com")) return true;
+    if (h === "bard.google.com") return true;
+    if (h.includes("chatgpt.com") || h.includes("chat.openai.com")) return true;
+    if (h.includes("claude.ai") || h.includes("anthropic.com")) return true;
+    if (h.includes("copilot.microsoft.com")) return true;
+    if (h.includes("perplexity.ai") || h.includes("poe.com") || h.includes("character.ai")) return true;
+    if (h.includes("deepseek.com") || h === "x.ai" || h.includes("grok.x.ai")) return true;
+    if (h.includes("generativelanguage.googleapis.com")) return true;
+  } catch (_) {}
+  if (/\/\$rpc\/|\/StreamGenerate|\/BardChatUi\//i.test(url)) return true;
+  return false;
+}
+
+/** Arama önerisi / XHR API — tarayıcı «indirme» diye gösterse bile MDM'ye alma */
+function mdmIsNoiseApiUrl(url) {
+  if (!url) return false;
+  if (mdmIsChatAiSiteUrl(url)) return true;
+  const u = url.toLowerCase();
+  if (/google\.[^/]+\/complete\//i.test(u)) return true;
+  if (/\/complete\/search\b/i.test(u) || /\/complete\/s\b/i.test(u)) return true;
+  if (/suggestqueries\.google/i.test(u)) return true;
+  if (/\/client\/(suggest|complete)\b/i.test(u)) return true;
+  if (/\/gen_204\b/i.test(u) || /\/csi\b/i.test(u)) return true;
+  if (/\/(beacon|pixel)\b/i.test(u) || /\/pagead\//i.test(u)) return true;
+  if (/doubleclick\.|googlesyndication\.|googleadservices\./i.test(u)) return true;
+  if (/bing\.[^/]+\/(AS\/|api\/v7\/suggestions)/i.test(u)) return true;
+  if (/duckduckgo\.[^/]+\/ac\/\?/i.test(u)) return true;
+  return false;
+}
+
+/** Tarayıcının octet-stream için uydurduğu isimler — gerçek arşiv/uygulama değil */
+function mdmIsJunkDownloadName(name) {
+  const n = ((name || "").split(/[/\\]/).pop() || "").trim().toLowerCase();
+  if (!n) return true;
+  if (/^(f\.txt|download|untitled|unknown|document|file|blob|response|data|stream|payload)(\.|$)/i.test(n))
+    return true;
+  if (/^(response|download|file|data|blob|stream|octet|binary|temp|tmp)(\.(bin|dat|tmp|part))?$/i.test(n))
+    return true;
+  // Tek başına .bin / .dat — Gemini/ChatGPT stream varsayılanı
+  if (/\.(bin|dat|part|tmp)$/i.test(n) && /^(response|download|file|data|blob|stream|octet|binary)/i.test(n))
+    return true;
+  if (n === "response.bin" || n === "download.bin" || n === "file.bin") return true;
+  return false;
+}
+
+// .bin bilerek yok — tarayıcı AI stream'lerini response.bin diye adlandırıyor
+const MDM_REAL_FILE_NAME = /\.(zip|rar|7z|tar|gz|bz2|pdf|exe|msi|iso|dmg|apk|torrent|doc|docx|xls|xlsx|ppt|pptx|rtf|odt|appx|msix|mp4|mkv|avi|mov|webm|mp3|wav|flac)(\s|$)/i;
+
+function mdmLooksLikeBinaryDownload(url, mime, disposition) {
+  if (mdmIsStreamingMediaUrl(url) || mdmIsNoiseApiUrl(url)) return false;
+
+  const fname = (typeof mdmFilenameFromHeaders === "function"
+    ? (mdmFilenameFromHeaders(url, disposition) || "") : "");
+  if (mdmIsJunkDownloadName(fname)) return false;
+  if (/^f\.txt$/i.test((fname || "").trim())) return false;
+
+  const fileNameHint = MDM_REAL_FILE_NAME.test(fname || "");
+  if (fileNameHint) return true;
+  if (typeof MDM_FILE_EXT !== "undefined" && MDM_FILE_EXT.test(url)) return true;
+
+  const ct = (mime || "").split(";")[0].trim().toLowerCase();
+  const isAttachment = /attachment/i.test(disposition || "");
+
+  if (/^video\//i.test(ct) || /^audio\//i.test(ct))
+    return isAttachment && fileNameHint;
+  if (/^text\//i.test(ct) || /javascript/i.test(ct) || /^image\//i.test(ct) || /^application\/json/i.test(ct))
+    return false;
+  // protobuf / event-stream — chat AI
+  if (/^application\/(x-)?protobuf/i.test(ct) || /^text\/event-stream/i.test(ct))
+    return false;
+
+  // Drive / export=download — MIME belirsiz olsa da gerçek dosya
+  if (/drive\.usercontent\.google\.com\/download/i.test(url)) return true;
+  if (/[?&]export=download\b/i.test(url) && /google\.com/i.test(url)) return true;
+
+  if (/^application\/(zip|x-zip|x-rar|rar|vnd\.rar|x-7z|pdf|msword|vnd\.ms-|vnd\.openxmlformats)/i.test(ct))
+    return true;
+  if (/^application\/(octet-stream|force-download|binary)/i.test(ct))
+    return isAttachment && fileNameHint;
+
+  if (isAttachment && fileNameHint) return true;
+  return false;
+}
+
+function mdmShouldAutoTakeoverDownload(url, mime, filename) {
+  if (!url) return false;
+  if (/^magnet:/i.test(url)) return true;
+  if (mdmIsStreamingMediaUrl(url) || mdmIsNoiseApiUrl(url)) return false;
+  const name = (filename || "").split(/[/\\]/).pop() || "";
+  if (mdmIsJunkDownloadName(name)) return false;
+  if (/^videoplayback(\.|$)/i.test(name)) return false;
+  if (/\.(m3u8|mpd|ts|m4s)(\?|$)/i.test(url) || /\.(m3u8|mpd|ts|m4s)$/i.test(name)) return false;
+  // Yalnızca .bin isimli «dosya» — asla otomatik alma
+  if (/\.bin$/i.test(name) && !MDM_REAL_FILE_NAME.test(name.replace(/\.bin$/i, ".zip"))) return false;
+
+  const hasRealExt = MDM_REAL_FILE_NAME.test(name)
+    || (typeof MDM_FILE_EXT !== "undefined" && MDM_FILE_EXT.test(url))
+    || MDM_REAL_FILE_NAME.test(url.split(/[?#]/)[0].split("/").pop() || "");
+  if (/drive\.usercontent\.google\.com\/download/i.test(url)) return true;
+  if (/[?&]export=download\b/i.test(url) && /google\.com/i.test(url)) return true;
+  if (!hasRealExt) return false;
+
+  const ct = (mime || "").split(";")[0].trim().toLowerCase();
+  if (/^text\/(html|css|javascript|plain)/i.test(ct) || /^application\/json/i.test(ct)) return false;
+  if (/^application\/(x-)?protobuf/i.test(ct) || /^text\/event-stream/i.test(ct)) return false;
+  if (/^video\//i.test(ct) || /^audio\//i.test(ct)) {
+    return /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)(\?|$)/i.test(url)
+      || /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)$/i.test(name);
+  }
+  return mdmLooksLikeBinaryDownload(url, mime, "");
+}
+
+function mdmHandoffFromHeaders(details, mime, disposition) {
+  const url = details.url || "";
+  if (!/^https?:\/\//i.test(url)) return;
+  // Redirect spam (<2.5 sn): tekrar gönderme; kullanıcı tekrar tıkladıysa (daha eski) gönder
+  if (mdmIsFreshAcceptedDuplicate(url)) return;
+  if (mdmWasAccepted(url)) mdmAcceptedCaptureUrls.delete(url);
+  const fname = (typeof mdmFilenameFromHeaders === "function"
+    ? mdmFilenameFromHeaders(url, disposition) : "") || "download";
+  const referrer = details.originUrl || details.documentUrl || "";
+  const headers = {};
+  if (referrer) headers.Referer = referrer;
+  if (/google\.com|googleusercontent\.com/i.test(url))
+    headers.Referer = headers.Referer || "https://drive.google.com/";
+  mdmGetCookies(url).then((cookies) => {
+    mdmSendCaptureToDesktop({
+      url,
+      filename: fname,
+      mime: mime || "",
+      pageUrl: referrer || url,
+      referrer: headers.Referer || referrer,
+      kind: "progressive",
+      cookies,
+      headers
+    }).then((ok) => {
+      if (ok) mdmRememberAccepted(url);
+      else {
+        mdmHandoffLegacy(url, fname, mime || "").then((ok2) => {
+          if (ok2) mdmRememberAccepted(url);
+        });
+      }
+    }).catch(() => {});
+  });
+}
+
+if (mdmIsFirefox()) {
+  try {
+    // Drive / doğrudan dosya linkleri çoğu zaman main_frame değil "other" / xhr olur.
+    // Sadece main_frame dinlemek = rar/zip tarayıcıda kalır.
+    chrome.webRequest.onHeadersReceived.addListener(
+      function mdmFirefoxBlockDownload(details) {
+        if (!mdmCaptureEnabled) return;
+        const status = details.statusCode || 0;
+        if (status !== 200 && status !== 206) return;
+        const mime = mdmHeaderValue(details.responseHeaders, "content-type");
+        const disposition = mdmHeaderValue(details.responseHeaders, "content-disposition");
+        if (!mdmLooksLikeBinaryDownload(details.url, mime, disposition)) return;
+        // HTML uyarı sayfasını (Drive virüs taraması) kesme
+        if (/^text\/html/i.test((mime || "").split(";")[0])) return;
+        mdmHandoffFromHeaders(details, mime, disposition);
+        return { cancel: true };
+      },
+      {
+        urls: ["http://*/*", "https://*/*"],
+        // "media" bilinçli dışarıda — Shorts/oynatma parçalarını kesmesin
+        types: ["main_frame", "sub_frame", "xmlhttprequest", "other", "object"]
+      },
+      ["blocking", "responseHeaders"]
+    );
+  } catch (e) {
+    console.warn("MDM: Firefox blocking webRequest unavailable", e);
+  }
+}
+
 // ——— downloads handoff (legacy file) ———
-chrome.downloads.onCreated.addListener(async (downloadItem) => {
-  if (downloadItem.byExtensionId === chrome.runtime.id) return;
+const mdmHandledDownloadIds = new Set();
+
+function mdmReferrerString(v) {
+  if (!v) return "";
+  if (typeof v === "string") return v;
+  try { return String(v.url || v.href || ""); } catch (_) { return ""; }
+}
+
+async function mdmCancelBrowserDownload(id) {
+  try { await chrome.downloads.cancel(id); } catch (_) {}
+  try { await chrome.downloads.erase({ id }); } catch (_) {}
+}
+
+async function mdmTakeoverDownload(downloadItem) {
+  if (!downloadItem || mdmHandledDownloadIds.has(downloadItem.id)) return false;
+  if (downloadItem.byExtensionId && downloadItem.byExtensionId === chrome.runtime.id) return false;
+
   await mdmDisableBrowserDownloadUi();
   const url = downloadItem.finalUrl || downloadItem.url || "";
-  if (!/^https?:\/\//i.test(url) && !/^magnet:/i.test(url)) return;
-  if (url.startsWith("blob:") || url.startsWith("data:")) return;
-  if (mdmIsSessionRestoreReplay(downloadItem)) return;
-  if (mdmShouldSkipHandoff(url)) {
-    try { await chrome.downloads.cancel(downloadItem.id); } catch (_) {}
-    try { await chrome.downloads.erase({ id: downloadItem.id }); } catch (_) {}
-    return;
+  // Popup'ta devre disi birakilan sitede indirme tarayicida kalir
+  if (mdmIsBlockedHost(mdmHostOf(downloadItem.referrer || "") || mdmHostOf(url))) return false;
+  if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("file:")) return false;
+  if (!/^https?:\/\//i.test(url) && !/^magnet:/i.test(url)) return false;
+  if (mdmIsSessionRestoreReplay(downloadItem)) return false;
+
+  const mimeEarly = downloadItem.mime || "";
+  const nameEarly = (downloadItem.filename || "").split(/[/\\]/).pop() || "";
+  // YouTube Shorts / site içi video: otomatik takeover yok (MDM butonu ile indirilir)
+  if (!mdmShouldAutoTakeoverDownload(url, mimeEarly, nameEarly)) return false;
+
+  // Daha önce MDM kabul ettiyse: kısa süreli kopyayı iptal et; tekrar tıklamada yeniden handoff
+  if (mdmWasAccepted(url)) {
+    if (mdmIsFreshAcceptedDuplicate(url)) {
+      mdmHandledDownloadIds.add(downloadItem.id);
+      await mdmCancelBrowserDownload(downloadItem.id);
+      return true;
+    }
+    mdmAcceptedCaptureUrls.delete(url);
   }
-  const rawFileName = (downloadItem.filename || "").split(/[/\\]/).pop() || "download";
-  const accepted = await mdmHandoffLegacy(url, rawFileName, downloadItem.mime || "");
+
+  mdmHandledDownloadIds.add(downloadItem.id);
+  const mime = downloadItem.mime || "";
+  let rawFileName = (downloadItem.filename || "").split(/[/\\]/).pop() || "";
+  if (!rawFileName || rawFileName === "download") rawFileName = "";
+  // Drive vb.: URL'de uzantı yok — mime'dan ipucu
+  if (!rawFileName && /rar/i.test(mime)) rawFileName = "download.rar";
+  if (!rawFileName && /zip/i.test(mime)) rawFileName = "download.zip";
+  if (!rawFileName && /7z/i.test(mime)) rawFileName = "download.7z";
+  if (!rawFileName && /pdf/i.test(mime)) rawFileName = "download.pdf";
+  const referrer = mdmReferrerString(downloadItem.referrer);
+  const headers = {};
+  if (referrer) headers.Referer = referrer;
+  if (/google\.com|googleusercontent\.com/i.test(url))
+    headers.Referer = headers.Referer || "https://drive.google.com/";
+
+  // Firefox: async handoff bitene kadar tarayıcı dosyayı yazar.
+  // Önce iptal et, sonra MDM'ye ver — aksi halde Drive rar vb. webde kalır.
+  const firefoxFirst = mdmIsFirefox();
+  if (firefoxFirst) {
+    await mdmCancelBrowserDownload(downloadItem.id);
+  }
+
+  let accepted = false;
+  try {
+    const cookies = await mdmGetCookies(url);
+    accepted = await mdmSendCaptureToDesktop({
+      url,
+      filename: rawFileName || "download",
+      mime,
+      pageUrl: referrer || url,
+      referrer: headers.Referer || referrer,
+      kind: "progressive",
+      cookies,
+      headers
+    });
+    if (!accepted) accepted = await mdmHandoffLegacy(url, rawFileName || "download", mime);
+  } catch (_) {
+    accepted = await mdmHandoffLegacy(url, rawFileName || "download", mime);
+  }
+
   if (accepted) {
-    mdmMarkHandoff(url);
-    try { await chrome.downloads.cancel(downloadItem.id); } catch (_) {}
-    try { await chrome.downloads.erase({ id: downloadItem.id }); } catch (_) {}
+    mdmRememberAccepted(url);
+    if (!firefoxFirst) await mdmCancelBrowserDownload(downloadItem.id);
+    return true;
   }
+
+  // Firefox'ta iptal ettik ama MDM yoksa: eklenti kaynaklı yeniden başlat (döngü yok — byExtensionId)
+  if (firefoxFirst) {
+    try {
+      await chrome.downloads.download({
+        url,
+        filename: rawFileName || undefined,
+        saveAs: false,
+        conflictAction: "uniquify"
+      });
+    } catch (_) {}
+  }
+
+  mdmHandledDownloadIds.delete(downloadItem.id);
+  return false;
+}
+
+chrome.downloads.onCreated.addListener((downloadItem) => {
+  mdmTakeoverDownload(downloadItem).catch(() => {});
+});
+
+// Firefox: URL/filename bazen onCreated'da boş; Save As sonrası onChanged gelir
+chrome.downloads.onChanged.addListener((delta) => {
+  if (!delta || delta.id == null) return;
+  if (mdmHandledDownloadIds.has(delta.id)) return;
+  const interesting = delta.url || delta.filename || delta.state || delta.mime;
+  if (!interesting) return;
+  try {
+    const p = chrome.downloads.search({ id: delta.id });
+    Promise.resolve(p).then((items) => {
+      const item = Array.isArray(items) ? items[0] : null;
+      if (item) mdmTakeoverDownload(item).catch(() => {});
+    }).catch(() => {});
+  } catch (_) {}
 });
 
 // ——— messages ———
@@ -217,7 +689,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           videoMeta: msg.videoMeta || {},
           title: msg.title || ""
         });
-        return result || { ok: false, error: "MDM'ye ulaşılamadı veya kalite alınamadı" };
+        return result || { ok: false, error: mdmErrText("ext.error_unreachable_formats", "MDM'ye ulaşılamadı veya kalite alınamadı") };
       }
 
       const best = tabId != null ? mdmPickBestMediaCapture(tabId) : null;
@@ -286,9 +758,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
 
       if (result?.protected || result?.formats?.some(f => /sample-aes|widevine|playready|drm/i.test((f.label || "") + (f.url || "")))) {
-        return { ok: false, protected: true, error: "Bu video korunuyor" };
+        return { ok: false, protected: true, error: mdmErrText("ext.error_protected", "Bu video korunuyor") };
       }
-      return result || { ok: false, error: "MDM'ye ulaşılamadı veya kalite alınamadı" };
+      return result || { ok: false, error: mdmErrText("ext.error_unreachable_formats", "MDM'ye ulaşılamadı veya kalite alınamadı") };
     })();
   }
 
@@ -323,7 +795,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (typeof mdmIsJunkMediaUrl === "function" && mdmIsJunkMediaUrl(url) && !isYt) {
         const alt = (msg.mediaUrl && !mdmIsJunkMediaUrl(msg.mediaUrl)) ? msg.mediaUrl : "";
         if (alt) url = alt;
-        else return { ok: false, error: "Geçerli medya URL'si yakalanmadı — videoyu oynatıp tekrar deneyin" };
+        else return { ok: false, error: mdmErrText("ext.error_no_media", "Geçerli medya URL'si yakalanmadı — videoyu oynatıp tekrar deneyin") };
       }
 
       const cookies = await mdmGetCookies(pageUrl || url);
@@ -400,6 +872,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (msg.type === "mdm-ping-desktop") {
+    mdmPingDesktop().then((ok) => {
+      sendResponse({ online: !!ok || mdmIsDesktopOnline() });
+    });
+    return true;
+  }
 });
 
 // ——— tab lifecycle ———
@@ -408,29 +887,18 @@ chrome.webNavigation?.onHistoryStateUpdated?.addListener?.((details) => {
   if (details.frameId === 0) mdmClearTab(details.tabId);
 });
 
-// ——— action toggle ———
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id) return;
-  if (mdmDisabledTabs.has(tab.id)) {
-    mdmDisabledTabs.delete(tab.id);
-    chrome.action.setBadgeText({ tabId: tab.id, text: "" });
-  } else {
-    mdmDisabledTabs.add(tab.id);
-    chrome.action.setBadgeText({ tabId: tab.id, text: "X" });
-    chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#666" });
-  }
-  const enabled = !mdmDisabledTabs.has(tab.id);
-  chrome.tabs.sendMessage(tab.id, { type: "mdm-set-enabled", enabled }).catch(() => {});
-});
+// ——— action ———
+// Arac cubugu simgesi popup.html acar; site devre disi birakma popup'tan yonetilir.
 
 // ——— init ———
 mdmDisableBrowserDownloadUi();
 mdmInitMenus(mdmCaptureUrl);
+try { chrome.alarms.create("mdm-presence", { periodInMinutes: 1 }); } catch (_) {}
 
 chrome.runtime.onInstalled.addListener(() => {
   mdmDisableBrowserDownloadUi();
   mdmPingDesktop().then(() => mdmBroadcastDesktopStatus());
-  chrome.alarms.create("mdm-presence", { periodInMinutes: 1 });
+  try { chrome.alarms.create("mdm-presence", { periodInMinutes: 1 }); } catch (_) {}
 });
 
 chrome.runtime.onStartup.addListener(() => {

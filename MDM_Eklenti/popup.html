@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body class="theme-dark">
+  <header class="head">
+    <img class="logo" src="icons/icon-48.png" alt="MDM">
+    <div class="brand">
+      <span class="name">MDM</span>
+      <span class="tagline" data-i18n="popup.tagline"></span>
+    </div>
+  </header>
+
+  <div class="status" id="status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText" data-i18n="popup.status_checking"></span>
+  </div>
+  <p class="hint offline-hint" id="offlineHint" data-i18n="popup.offline_hint" hidden></p>
+
+  <section class="card">
+    <h2 data-i18n="popup.appearance"></h2>
+    <div class="segment" id="themeSegment">
+      <button class="seg" id="themeDark" data-theme="dark" data-i18n="popup.theme_dark"></button>
+      <button class="seg" id="themeLight" data-theme="light" data-i18n="popup.theme_light"></button>
+    </div>
+    <p class="hint" data-i18n="popup.appearance_hint"></p>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="popup.button_title"></h2>
+    <label class="switch-row">
+      <span data-i18n="popup.button_label"></span>
+      <input type="checkbox" id="overlayToggle">
+      <span class="track"><span class="knob"></span></span>
+    </label>
+    <p class="hint" data-i18n="popup.button_hint"></p>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="popup.sites_title"></h2>
+    <label class="switch-row" id="currentSiteRow" hidden>
+      <span><span data-i18n="popup.site_current"></span><em class="host" id="currentHost"></em></span>
+      <input type="checkbox" id="siteToggle">
+      <span class="track"><span class="knob"></span></span>
+    </label>
+    <div class="add-row">
+      <input type="text" id="siteInput" spellcheck="false" autocomplete="off">
+      <button id="siteAdd" data-i18n="popup.site_add"></button>
+    </div>
+    <ul class="sites" id="siteList"></ul>
+    <p class="hint empty" id="sitesEmpty" data-i18n="popup.sites_empty"></p>
+    <p class="hint" data-i18n="popup.sites_hint"></p>
+  </section>
+
+  <div class="toast" id="toast" data-i18n="popup.saved"></div>
+
+  <script src="i18n.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -28,6 +28,8 @@ namespace MDM
 
         private string _defaultName = "";
 
+        private bool _isAllCategory;
+
         private readonly List<Border> _iconCells = new();
 
 
@@ -76,6 +78,40 @@ namespace MDM
 
             ApplyThemeSurface(ThemeService.IsLight);
 
+            ApplyLocalizedTexts();
+
+            Loc.Changed += OnLocChanged;
+
+        }
+
+        private void OnLocChanged() => Dispatcher.BeginInvoke(ApplyLocalizedTexts);
+
+        private void ApplyLocalizedTexts()
+
+        {
+
+            FlowDirection = Loc.Flow;
+
+            if (TxtTitle != null)
+
+                TxtTitle.Text = _isAllCategory
+
+                    ? Loc.T("catedit.title_all", "Kategori")
+
+                    : Loc.T("catedit.title", "Kategori düzenle");
+
+            if (LblName != null) LblName.Text = Loc.T("catcreate.name", "Kategori adı");
+
+            if (LblIcon != null) LblIcon.Text = Loc.T("catedit.icon", "Simge");
+
+            if (BtnResetName != null) BtnResetName.Content = Loc.T("rules.reset", "Varsayılana dön");
+
+            if (BtnResetIcon != null) BtnResetIcon.Content = Loc.T("rules.reset", "Varsayılana dön");
+
+            if (BtnCancel != null) BtnCancel.Content = Loc.T("dialog.cancel", "İptal");
+
+            if (BtnSave != null) BtnSave.Content = Loc.T("dialog.save", "Kaydet");
+
         }
 
 
@@ -92,7 +128,11 @@ namespace MDM
 
             TxtName.Text = cat.Name;
 
-            TxtTitle.Text = cat.Id == "All" ? "Kategori" : "Kategori düzenle";
+            _isAllCategory = cat.Id == "All";
+
+            TxtTitle.Text = _isAllCategory
+                ? Loc.T("catedit.title_all", "Kategori")
+                : Loc.T("catedit.title", "Kategori düzenle");
 
             UpdateNamePlaceholder();
 

@@ -10,17 +10,25 @@
   cursor: pointer;
   background: rgba(20, 20, 20, 0.82);
   color: #fff;
-  border: 1px solid rgba(255, 107, 0, 0.7);
+  border: 1px solid rgba(255, 107, 0, 0.55);
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.3px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-  transition: transform 0.12s ease, background 0.12s;
 }
-.mdm-btn:hover { transform: scale(1.06); background: rgba(255, 107, 0, 0.92); }
+.mdm-btn:hover {
+  background: rgba(12, 12, 12, 0.94);
+  border-color: rgba(255, 107, 0, 0.85);
+  color: #FFB074;
+}
 .mdm-btn.offline { opacity: 0.55; border-color: #666; }
+.mdm-btn.offline:hover {
+  background: rgba(20, 20, 20, 0.9);
+  color: #ccc;
+  border-color: #777;
+}
 .mdm-panel {
   pointer-events: auto;
   margin-top: 6px;

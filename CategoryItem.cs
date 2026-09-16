@@ -91,8 +91,23 @@ namespace MDM
 
         public string CountLabel => FileCount > 0 ? FileCount.ToString() : "";
 
-        public string DisplayLabel => $"{Icon}  {Name}";
+        public string DisplayName =>
+            IsBuiltin || Id is "All" or "Documents" or "Videos" or "Audio" or "Archives" or "Images" or "Apps"
+                ? CategoryStore.GetLocalizedName(Id, Name)
+                : Name;
 
+        public string DisplayLabel => $"{Icon}  {DisplayName}";
+
+        /// <summary>Sürükle-bırak ipucu — dil değişince yenilenir.</summary>
+        public string DragTip => Loc.T("main.drag_hint",
+            "Sürükle: üste/alta sıra · ortaya bırak = içine ekle · Tüm indirilenler = dışarı çıkar");
+
+        public void NotifyLanguageChanged()
+        {
+            OnPropertyChanged(nameof(DisplayName));
+            OnPropertyChanged(nameof(DisplayLabel));
+            OnPropertyChanged(nameof(DragTip));
+        }
         public bool HasChildren => Children.Count > 0;
 
         public Thickness IndentMargin => new(8 + Depth * 14, 0, 0, 0);
@@ -142,7 +157,10 @@ namespace MDM
             field = value;
             OnPropertyChanged(name);
             if (name is nameof(Icon) or nameof(Name))
+            {
+                OnPropertyChanged(nameof(DisplayName));
                 OnPropertyChanged(nameof(DisplayLabel));
+            }
             return true;
         }
     }

@@ -71,6 +71,18 @@ namespace MDM
             _statePath = savePath + ".mdmstate";
         }
 
+        /// <summary>Eklentiden gelen Cookie / Referer (Google Drive vb.).</summary>
+        public void ApplyBrowserCapture(string? cookies, IReadOnlyDictionary<string, string>? headers)
+        {
+            _captureCookies = cookies ?? "";
+            _captureHeaders = headers != null
+                ? new Dictionary<string, string>(headers, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private string _captureCookies = "";
+        private Dictionary<string, string> _captureHeaders = new(StringComparer.OrdinalIgnoreCase);
+
         private string UrlForAttempt(int attempt) => _resolvedUrl ?? _urls[attempt % _urls.Count];
 
         private HttpClient CreateClient()
@@ -797,6 +809,29 @@ namespace MDM
                 GoFileResolver.AddWebsiteHeaders(
                     request, _goFileMetadata.AccountToken, _goFileMetadata.WebsiteToken,
                     _goFileMetadata.ContentId);
+                return;
+            }
+
+            foreach (var kv in _captureHeaders)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)) continue;
+                if (kv.Key.Equals("Cookie", StringComparison.OrdinalIgnoreCase)) continue;
+                try { request.Headers.TryAddWithoutValidation(kv.Key, kv.Value); } catch { /* ignore */ }
+            }
+
+            if (!string.IsNullOrWhiteSpace(_captureCookies))
+            {
+                try { request.Headers.Remove("Cookie"); } catch { /* ignore */ }
+                request.Headers.TryAddWithoutValidation("Cookie", _captureCookies);
+            }
+
+            // Google Drive: Referer yoksa ekle
+            if (Uri.TryCreate(_url, UriKind.Absolute, out var uri)
+                && (uri.Host.Contains("googleusercontent.com", StringComparison.OrdinalIgnoreCase)
+                    || uri.Host.Contains("drive.google.com", StringComparison.OrdinalIgnoreCase))
+                && !request.Headers.Contains("Referer"))
+            {
+                request.Headers.TryAddWithoutValidation("Referer", "https://drive.google.com/");
             }
         }
 

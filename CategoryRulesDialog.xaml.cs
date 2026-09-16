@@ -12,6 +12,7 @@ namespace MDM
             private bool _isChecked;
             public string Ext { get; set; } = "";
             public string Label => Ext;
+            public string Group { get; set; } = "";
             public bool IsChecked
             {
                 get => _isChecked;
@@ -25,52 +26,115 @@ namespace MDM
             public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         }
 
+        public sealed class ExtGroup
+        {
+            public string Title { get; set; } = "";
+            public ObservableCollection<ExtOption> Items { get; set; } = new();
+        }
+
         private CategoryItem? _category;
-        private readonly ObservableCollection<ExtOption> _options = new();
+        private readonly List<ExtOption> _allOptions = new();
+        private readonly ObservableCollection<ExtGroup> _groups = new();
 
         public event Action? Cancelled;
         public event Action? Saved;
 
-        private static readonly string[] Presets =
+        private static readonly (string GroupKey, string[] Exts)[] PresetGroups =
         {
-            "pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "csv", "md",
-            "mp4", "mkv", "avi", "mov", "webm", "mp3", "wav", "flac", "m4a",
-            "zip", "rar", "7z", "tar", "gz", "iso",
-            "exe", "msi", "apk", "dmg", "jpg", "jpeg", "png", "gif", "webp", "svg",
-            "json", "xml", "html", "css", "js", "ts", "dll", "bin"
+            ("rules.group.documents", new[] { "pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "csv", "md", "rtf", "odt" }),
+            ("rules.group.video", new[] { "mp4", "mkv", "avi", "mov", "webm", "m4v", "flv", "wmv" }),
+            ("rules.group.audio", new[] { "mp3", "wav", "flac", "m4a", "aac", "ogg", "wma", "opus" }),
+            ("rules.group.archive", new[] { "zip", "rar", "7z", "tar", "gz", "iso", "bz2" }),
+            ("rules.group.image", new[] { "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico" }),
+            ("rules.group.app", new[] { "exe", "msi", "apk", "dmg", "appx", "msix" }),
+            ("rules.group.dev", new[] { "json", "xml", "html", "css", "js", "ts", "dll", "bin" }),
+        };
+
+        private static string GroupTitle(string key) => key switch
+        {
+            "rules.group.documents" => Loc.T(key, "Belgeler"),
+            "rules.group.video" => Loc.T(key, "Video"),
+            "rules.group.audio" => Loc.T(key, "Ses"),
+            "rules.group.archive" => Loc.T(key, "Arşiv"),
+            "rules.group.image" => Loc.T(key, "Görsel"),
+            "rules.group.app" => Loc.T(key, "Uygulama"),
+            "rules.group.dev" => Loc.T(key, "Geliştirici"),
+            "rules.group.other" => Loc.T(key, "Özel"),
+            _ => Loc.T(key, key)
         };
 
         public CategoryRulesDialog()
         {
             InitializeComponent();
-            LstExt.ItemsSource = _options;
+            LstGroups.ItemsSource = _groups;
         }
 
         public void Load(CategoryItem category)
         {
             _category = category;
-            TxtTitle.Text = $"{category.DisplayLabel} — dosya türleri";
-            TxtCustom.Clear();
+            TxtTitle.Text = string.Format(
+                System.Globalization.CultureInfo.CurrentUICulture,
+                Loc.T("rules.title", "{0} — dosya türleri"),
+                category.DisplayLabel);
+            TxtHint.Text = Loc.T("rules.hint", "Bu kategoriye düşecek uzantıları seçin");
+            if (BtnResetDefaults != null) BtnResetDefaults.Content = Loc.T("rules.reset", "Varsayılana dön");
+            if (BtnAddCustom != null) BtnAddCustom.Content = Loc.T("rules.add", "Ekle");
+            if (BtnCancel != null) BtnCancel.Content = Loc.T("rules.cancel", "İptal");
+            if (BtnSave != null) BtnSave.Content = Loc.T("rules.save", "Kaydet");
+            if (TxtCustom != null) TxtCustom.ToolTip = Loc.T("catrules.ext_hint", "Örn: pdf veya .pdf");
+            TxtCustom?.Clear();
 
-            _options.Clear();
             var existing = category.Extensions ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var ext in Presets)
-            {
-                _options.Add(new ExtOption
-                {
-                    Ext = ext,
-                    IsChecked = existing.Contains(ext)
-                });
-            }
-
-            foreach (var extra in existing.Where(e => !Presets.Contains(e, StringComparer.OrdinalIgnoreCase)))
-                _options.Add(new ExtOption { Ext = extra, IsChecked = true });
+            RebuildOptions(existing);
 
             BtnResetDefaults.Visibility = category.IsBuiltin && CategoryStore.GetDefaultExtensions(category.Id) != null
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
             ApplyThemeSurface(ThemeService.IsLight);
+        }
+
+        private void RebuildOptions(HashSet<string> existing)
+        {
+            _allOptions.Clear();
+            _groups.Clear();
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (groupKey, exts) in PresetGroups)
+            {
+                string title = GroupTitle(groupKey);
+                var g = new ExtGroup { Title = title };
+                foreach (string ext in exts)
+                {
+                    seen.Add(ext);
+                    var opt = new ExtOption
+                    {
+                        Ext = ext,
+                        Group = title,
+                        IsChecked = existing.Contains(ext)
+                    };
+                    _allOptions.Add(opt);
+                    g.Items.Add(opt);
+                }
+                _groups.Add(g);
+            }
+
+            var extras = existing
+                .Where(e => !seen.Contains(e))
+                .OrderBy(e => e, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (extras.Count > 0)
+            {
+                string customTitle = GroupTitle("rules.group.other");
+                var custom = new ExtGroup { Title = customTitle };
+                foreach (string ext in extras)
+                {
+                    var opt = new ExtOption { Ext = ext, Group = customTitle, IsChecked = true };
+                    _allOptions.Add(opt);
+                    custom.Items.Add(opt);
+                }
+                _groups.Add(custom);
+            }
         }
 
         public void ApplyThemeSurface(bool light)
@@ -121,14 +185,15 @@ namespace MDM
             SetBrush("ChipBorder", chipBorder);
             SetBrush("ChipBoxBg", boxBg);
             SetBrush("ChipFg", light ? Color.FromRgb(0x33, 0x33, 0x33) : Color.FromRgb(0xD0, 0xD0, 0xD0));
-            SetBrush("ChipCheckedBg", light ? Color.FromRgb(0xF0, 0xF0, 0xF2) : Color.FromRgb(0x22, 0x22, 0x22));
-            SetBrush("ChipCheckedBorder", light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x66, 0x66, 0x66));
-            SetBrush("ChipHoverBorder", light ? Color.FromRgb(0x99, 0x99, 0xA0) : Color.FromRgb(0x77, 0x77, 0x77));
-            SetBrush("ChipCheckedBoxBg", Color.FromRgb(0x1A, 0x1A, 0x1A));
-            SetBrush("ChipCheckedFg", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0xE0, 0xE0, 0xE0));
+            SetBrush("ChipCheckedBg", light ? Color.FromRgb(0xF2, 0xF2, 0xF4) : Color.FromRgb(0x1C, 0x1C, 0x1C));
+            SetBrush("ChipCheckedBorder", light ? Color.FromRgb(0x88, 0x88, 0x90) : Color.FromRgb(0x5C, 0x5C, 0x5C));
+            SetBrush("ChipHoverBorder", light ? Color.FromRgb(0x99, 0x99, 0xA0) : Color.FromRgb(0x6A, 0x6A, 0x6A));
+            SetBrush("ChipCheckedBoxBg", light ? Color.FromRgb(0x1A, 0x1A, 0x1A) : Color.FromRgb(0x12, 0x12, 0x12));
+            SetBrush("ChipCheckedFg", light ? Color.FromRgb(0x22, 0x22, 0x22) : Color.FromRgb(0xE8, 0xE8, 0xE8));
             SetBrush("ChipCheckMark", Colors.White);
             SetBrush("SoftBtnBg", softBtn);
             SetBrush("SoftBtnFg", softFg);
+            SetBrush("GroupLabelFg", muted);
         }
 
         private void SetBrush(string key, Color c)
@@ -150,30 +215,40 @@ namespace MDM
             if (_category == null) return;
             var defaults = CategoryStore.GetDefaultExtensions(_category.Id);
             if (defaults == null) return;
-
-            _options.Clear();
-            foreach (var ext in Presets)
-                _options.Add(new ExtOption { Ext = ext, IsChecked = defaults.Contains(ext) });
+            RebuildOptions(defaults.ToHashSet(StringComparer.OrdinalIgnoreCase));
         }
 
         private void BtnAddCustom_Click(object sender, RoutedEventArgs e)
         {
             string raw = (TxtCustom.Text ?? "").Trim().TrimStart('.').ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(raw)) return;
-            if (_options.Any(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase)))
+
+            var existing = _allOptions.FirstOrDefault(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
             {
-                var existing = _options.First(o => o.Ext.Equals(raw, StringComparison.OrdinalIgnoreCase));
                 existing.IsChecked = true;
+                TxtCustom.Clear();
+                return;
             }
-            else
-                _options.Add(new ExtOption { Ext = raw, IsChecked = true });
+
+            string customTitle = GroupTitle("rules.group.other");
+            var opt = new ExtOption { Ext = raw, Group = customTitle, IsChecked = true };
+            _allOptions.Add(opt);
+
+            var customGroup = _groups.FirstOrDefault(g => g.Title == customTitle);
+            if (customGroup == null)
+            {
+                customGroup = new ExtGroup { Title = customTitle };
+                _groups.Add(customGroup);
+            }
+            customGroup.Items.Add(opt);
             TxtCustom.Clear();
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             if (_category == null) return;
-            _category.Extensions = _options.Where(o => o.IsChecked)
+            _category.Extensions = _allOptions.Where(o => o.IsChecked)
                 .Select(o => o.Ext)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             Saved?.Invoke();

@@ -99,7 +99,8 @@ function mdmClassifyCapture(url, mime, contentLength, durationHint) {
   }
 
   if (kind === "fragment") return { action: "store", kind };
-  if (kind === "file") return { action: "file", kind };
+  // Dosya indirmeleri (zip/rar/exe/octet-stream) — MDM'ye yakalat
+  if (kind === "file") return { action: "capture", kind };
   if (kind === "json") return { action: "store", kind };
   if (["progressive", "hls", "dash", "audio"].includes(kind))
     return { action: "capture", kind };

@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "MDM Integration",
-  "version": "3.1.8",
+  "version": "3.2.2",
   "description": "MDM (Muck Download Manager) masaüstü entegrasyonu — evrensel video yakalama",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "mdm@muckdownloadmanager.local",
+      "strict_min_version": "115.0"
+    }
+  },
   "permissions": [
     "downloads",
     "downloads.shelf",
@@ -34,9 +40,28 @@
     "http://localhost:38472/*",
     "http://localhost:6800/*"
   ],
-  "action": {
-    "default_title": "MDM — bu sekmede yakalamayı aç/kapat"
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
+  "action": {
+    "default_title": "MDM",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["locales/*.json"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
@@ -46,7 +71,7 @@
     },
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["overlay.js", "content.js"],
+      "js": ["i18n.js", "overlay.js", "content.js"],
       "run_at": "document_start",
       "all_frames": true
     },

@@ -36,6 +36,7 @@ namespace MDM
             };
 
             base.OnStartup(e);
+            Loc.Initialize();
 
             bool startBackground = e.Args.Any(a =>
                 string.Equals(a, "--background", StringComparison.OrdinalIgnoreCase)

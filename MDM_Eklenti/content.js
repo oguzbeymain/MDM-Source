@@ -1,9 +1,9 @@
 // MDM — content script: video tracker + overlay + kalite paneli
+// ÖNEMLİ: Sayfa context'inden asla 127.0.0.1'e fetch yapma —
+// Chrome/Edge her sitede «cihazdaki uygulamalara erişim» izni sorar (Local Network Access).
 (function () {
   if (window.__mdmContent) return;
   window.__mdmContent = true;
-
-  const MDM_PORTS = [18680, 18681, 18682, 18700, 27182, 38472, 6800];
 
   let elementCounter = 0;
   const videoMap = new WeakMap();
@@ -14,6 +14,17 @@
   let desktopOnline = false;
   let ytDlpNoteShown = false;
   let contextDead = false;
+  // popup ayarlari (mdmPrefs): dugme kapatilabilir veya site devre disi olabilir
+  let overlayAllowed = true;
+  let overlayCleared = false;
+  const isTopFrame = (() => { try { return window === window.top; } catch (_) { return true; } })();
+
+  function t(key, ...args) {
+    try {
+      if (typeof mdmI18n !== "undefined" && mdmI18n.t) return mdmI18n.t(key, ...args);
+    } catch (_) {}
+    return key;
+  }
 
   function nextId() {
     return `v${++elementCounter}`;
@@ -88,11 +99,62 @@
     return id;
   }
 
+  function pickPrimaryVideoId() {
+    let bestId = null;
+    let bestArea = 0;
+    for (const [id, { el }] of tracked) {
+      if (!el || !el.isConnected || !isVisible(el)) continue;
+      const r = el.getBoundingClientRect();
+      const area = r.width * r.height;
+      // Küçük preview / ads video'larını ele
+      if (area < 120 * 80) continue;
+      if (area > bestArea) {
+        bestArea = area;
+        bestId = id;
+      }
+    }
+    return bestId;
+  }
+
+  function pruneTracked() {
+    for (const [id, entry] of [...tracked.entries()]) {
+      if (!entry || !entry.el || !entry.el.isConnected) {
+        tracked.delete(id);
+        if (window.mdmOverlayApi) window.mdmOverlayApi.remove(id);
+      }
+    }
+  }
+
   function refreshAll() {
     if (contextDead && !runtimeOk()) return;
-    for (const { el, update } of tracked.values()) {
-      if (el.isConnected) update();
+    if (!overlayAllowed) {
+      // Devre disi sitede tek seferlik temizlik — periyodik DOM taramasi yapma
+      if (!overlayCleared) {
+        overlayCleared = true;
+        if (window.mdmOverlayApi) window.mdmOverlayApi.removeAll();
+      }
+      return;
     }
+    overlayCleared = false;
+    pruneTracked();
+    if (!isTopFrame) {
+      // iframe: overlay yok (çift buton önleme); sniff devam eder
+      if (window.mdmOverlayApi) window.mdmOverlayApi.removeAll();
+      return;
+    }
+    const primary = pickPrimaryVideoId();
+    for (const [id, { el, update }] of tracked) {
+      if (id === primary && el.isConnected) update();
+      else if (window.mdmOverlayApi) window.mdmOverlayApi.remove(id);
+    }
+  }
+
+  function onSpaNavigate() {
+    try { pageMasters.delete(pageKey()); } catch (_) {}
+    pruneTracked();
+    if (window.mdmOverlayApi) window.mdmOverlayApi.removeAll();
+    scanMedia();
+    refreshAll();
   }
 
   function isVisible(el) {
@@ -110,12 +172,65 @@
   }
 
   function scanMedia() {
+    if (!overlayAllowed) return;
     document.querySelectorAll("video, audio").forEach((el) => registerMedia(el));
+  }
+
+  /** "www.a.com" -> "a.com" */
+  function bareHost(value) {
+    return String(value || "").trim().toLowerCase().replace(/^www\./, "");
+  }
+
+  function applyPrefs(raw) {
+    const p = raw || {};
+    const host = (() => { try { return bareHost(location.hostname); } catch (_) { return ""; } })();
+    const blocked = host && Array.isArray(p.blocked)
+      ? p.blocked.some((b) => {
+        const entry = bareHost(b);
+        return entry && (host === entry || host.endsWith("." + entry));
+      })
+      : false;
+
+    overlayAllowed = p.overlay !== false && !blocked;
+    if (window.mdmOverlayApi) {
+      window.mdmOverlayApi.setTheme(p.theme === "light" ? "light" : "dark");
+      if (!overlayAllowed) {
+        overlayCleared = true;
+        window.mdmOverlayApi.removeAll();
+      }
+    }
+    if (overlayAllowed) {
+      overlayCleared = false;
+      scanMedia();
+    }
+    refreshAll();
+  }
+
+  function loadPrefs() {
+    try {
+      Promise.resolve(chrome.storage.local.get("mdmPrefs"))
+        .then((d) => applyPrefs(d && d.mdmPrefs))
+        .catch(() => { /* ignore */ });
+    } catch (_) { /* ignore */ }
   }
 
   function observeMedia(el, id) {
     const update = () => {
       if (!captureEnabled) return;
+      if (!overlayAllowed) {
+        if (window.mdmOverlayApi) window.mdmOverlayApi.remove(id);
+        return;
+      }
+      // iframe içinde overlay gösterme (üst frame tek buton)
+      if (!isTopFrame) {
+        if (window.mdmOverlayApi) window.mdmOverlayApi.remove(id);
+        return;
+      }
+      const primary = pickPrimaryVideoId();
+      if (primary && primary !== id) {
+        if (window.mdmOverlayApi) window.mdmOverlayApi.remove(id);
+        return;
+      }
       const vis = isVisible(el);
       const bb = bboxOf(el);
       if (vis && window.mdmOverlayApi) {
@@ -126,6 +241,7 @@
         window.mdmOverlayApi.remove(id);
       }
     };
+    tracked.set(id, { el, update });
     update();
     try {
       const io = new IntersectionObserver(() => update(), { threshold: [0, 0.15, 0.5] });
@@ -137,7 +253,6 @@
     el.addEventListener("play", update);
     document.addEventListener("scroll", update, true);
     document.addEventListener("fullscreenchange", update);
-    tracked.set(id, { el, update });
   }
 
   function sanitizeTitle(t) {
@@ -151,59 +266,13 @@
     } catch (_) { return false; }
   }
 
-  async function orderedPorts() {
-    const ports = MDM_PORTS.slice();
-    try {
-      if (runtimeOk()) {
-        const data = await chrome.storage.local.get("mdmPort");
-        if (data.mdmPort) {
-          const p = Number(data.mdmPort);
-          return [p, ...ports.filter(x => x !== p)];
-        }
-      }
-    } catch (_) {}
-    return ports;
-  }
-
-  async function findDesktopBase() {
-    for (const port of await orderedPorts()) {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 700);
-      try {
-        const r = await fetch(`http://127.0.0.1:${port}/ext/ping`, { signal: ctrl.signal });
-        if (r.ok) {
-          try {
-            if (runtimeOk()) await chrome.storage.local.set({ mdmPort: port });
-          } catch (_) {}
-          return `http://127.0.0.1:${port}`;
-        }
-      } catch (_) {}
-      finally { clearTimeout(t); }
+  async function pingDesktopViaBg() {
+    const r = await safeSend({ type: "mdm-ping-desktop" });
+    if (r && typeof r.online === "boolean") {
+      desktopOnline = r.online;
+      return r.online;
     }
-    return null;
-  }
-
-  async function postDesktop(path, payload, timeoutMs) {
-    const base = await findDesktopBase();
-    if (!base) return null;
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const r = await fetch(`${base}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal
-      });
-      if (!r.ok) return null;
-      const ct = r.headers.get("content-type") || "";
-      if (ct.includes("json")) return await r.json();
-      return { ok: true };
-    } catch (_) {
-      return null;
-    } finally {
-      clearTimeout(t);
-    }
+    return desktopOnline;
   }
 
   async function fetchYouTubeFormats(pageUrl, el) {
@@ -221,32 +290,8 @@
       title: document.title || ""
     };
 
-    // Önce service worker (host_permissions) — sayfa origin'inden localhost PNA engeline takılmaz
-    let resp = await safeSend(payload);
-    if (resp && (resp.ok || resp.error)) return resp;
-
-    // Yedek: doğrudan masaüstü (PNA header'lı sunucu)
-    let cookies = "";
-    try { cookies = document.cookie || ""; } catch (_) {}
-    const fromBg = await safeSend({ type: "mdm-get-cookies", url: pageUrl });
-    if (fromBg && fromBg.cookies) cookies = fromBg.cookies;
-
-    resp = await postDesktop("/ext/formats", {
-      pageUrl,
-      mediaUrl: "",
-      candidates: [],
-      playlistBody: "",
-      cookies,
-      referrer: document.referrer || pageUrl,
-      headers: {
-        "User-Agent": navigator.userAgent || "",
-        Referer: pageUrl,
-        Origin: location.origin
-      },
-      videoMeta: payload.videoMeta,
-      title: payload.title
-    }, 30000);
-    return resp;
+    // Yalnızca background (host_permissions) — sayfadan localhost = her sitede izin diyaloğu
+    return await safeSend(payload);
   }
 
   async function openPanel(id, el) {
@@ -256,28 +301,27 @@
       // Bağlam ölü olsa bile YouTube'da doğrudan masaüstünü dene
       if (!isYouTubePage()) {
         window.mdmOverlayApi.showPanel(id, {
-          title: "Video indir",
-          error: "Eklenti güncellendi — bu sekmeyi yenileyin (F5)"
+          title: t("ext.panel_title"),
+          error: t("ext.error_reload")
         });
         return;
       }
     }
 
     if (!desktopOnline) {
-      const base = await findDesktopBase();
-      desktopOnline = !!base;
+      desktopOnline = await pingDesktopViaBg();
     }
 
     if (!desktopOnline && !isYouTubePage()) {
       window.mdmOverlayApi.showPanel(id, {
-        title: "Video indir",
-        error: "MDM uygulamasını başlatın"
+        title: t("ext.panel_title"),
+        error: t("ext.error_start_app")
       });
       return;
     }
 
     window.mdmOverlayApi.showPanel(id, {
-      title: document.title || "Video indir",
+      title: document.title || t("ext.panel_title"),
       loading: true,
       formats: []
     });
@@ -312,16 +356,16 @@
 
     if (!resp || !resp.ok) {
       if (yt) {
-        let err = resp?.error || "Kalite listesi alınamadı";
-        if (!runtimeOk()) err = "Eklenti güncellendi — sekmeyi yenileyin (F5)";
-        else if (!resp) err = "MDM'ye ulaşılamadı — uygulama açık mı?";
-        window.mdmOverlayApi.showPanel(id, { title: "Video indir", error: err });
+        let err = resp?.error || t("ext.error_formats");
+        if (!runtimeOk()) err = t("ext.error_reload");
+        else if (!resp) err = t("ext.error_unreachable");
+        window.mdmOverlayApi.showPanel(id, { title: t("ext.panel_title"), error: err });
         return;
       }
       if (!runtimeOk()) {
         window.mdmOverlayApi.showPanel(id, {
-          title: "Video indir",
-          error: "Eklenti güncellendi — sekmeyi yenileyin (F5)"
+          title: t("ext.panel_title"),
+          error: t("ext.error_reload")
         });
         return;
       }
@@ -329,14 +373,14 @@
       const hasMasters = mastersForPage().length > 0;
       if (!hasMasters && (mediaUrl.startsWith("blob:") || !mediaUrl)) {
         window.mdmOverlayApi.showPanel(id, {
-          title: "Video indir",
-          error: "Kalite henüz yakalanmadı — videoyu oynatıp tekrar deneyin"
+          title: t("ext.panel_title"),
+          error: t("ext.error_wait_play")
         });
         return;
       }
       const fallback = [{
         id: "playing",
-        label: h ? `Oynayan · ${h}p` : "Video",
+        label: h ? t("ext.playing", h) : t("ext.video"),
         height: h || null,
         url: /^https?:\/\//i.test(mediaUrl) ? mediaUrl : pageUrl,
         kind: "progressive",
@@ -344,16 +388,16 @@
         formatId: ""
       }];
       if (resp?.protected) {
-        window.mdmOverlayApi.showPanel(id, { title: "Video indir", error: "Bu video korunuyor" });
+        window.mdmOverlayApi.showPanel(id, { title: t("ext.panel_title"), error: t("ext.error_protected") });
         return;
       }
       let note;
       if (resp?.ytDlpSuggested && !ytDlpNoteShown) {
         ytDlpNoteShown = true;
-        note = "Tam kalite listesi için yt-dlp önerilir";
+        note = t("ext.note_ytdlp");
       }
       window.mdmOverlayApi.showPanel(id, {
-        title: document.title || "Video indir",
+        title: document.title || t("ext.panel_title"),
         formats: fallback,
         note,
         onPick: (f) => pickFormat(f, pageUrl, mediaUrl, document.title)
@@ -362,7 +406,7 @@
     }
 
     if (resp.protected) {
-      window.mdmOverlayApi.showPanel(id, { title: "Video indir", error: "Bu video korunuyor" });
+      window.mdmOverlayApi.showPanel(id, { title: t("ext.panel_title"), error: t("ext.error_protected") });
       return;
     }
 
@@ -370,11 +414,11 @@
     let note;
     if (resp.ytDlpSuggested && !ytDlpNoteShown) {
       ytDlpNoteShown = true;
-      note = "Tam kalite listesi için yt-dlp önerilir";
+      note = t("ext.note_ytdlp");
     }
 
     window.mdmOverlayApi.showPanel(id, {
-      title: resp.title || document.title || "Video indir",
+      title: resp.title || document.title || t("ext.panel_title"),
       formats,
       note,
       onPick: (f) => pickFormat(f, pageUrl, mediaUrl, resp.title || document.title)
@@ -435,7 +479,7 @@
       if (alt) url = alt;
       else {
         if (window.mdmOverlayApi)
-          window.mdmOverlayApi.showToast?.("Geçerli medya URL'si yok — videoyu oynatıp tekrar deneyin");
+          window.mdmOverlayApi.showToast?.(t("ext.error_no_media"));
         return;
       }
     }
@@ -466,10 +510,6 @@
     try { payload.cookies = document.cookie || ""; } catch (_) {}
     const fromBg = await safeSend({ type: "mdm-get-cookies", url: pageUrl });
     if (fromBg?.cookies) payload.cookies = fromBg.cookies;
-
-    // Doğrudan masaüstü capture
-    const ok = await postDesktop("/ext/capture", payload, 5000);
-    if (ok) return;
 
     await safeSend({
       type: "mdm-capture-format",
@@ -524,14 +564,38 @@
     contextDead = true;
   }
 
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes || !changes.mdmPrefs) return;
+      applyPrefs(changes.mdmPrefs.newValue);
+    });
+  } catch (_) { /* ignore */ }
+
+  loadPrefs();
   setInterval(refreshAll, 400);
   window.addEventListener("resize", refreshAll);
   window.addEventListener("load", scanMedia);
-  window.addEventListener("popstate", () => {
-    pageMasters.delete(pageKey());
+  window.addEventListener("popstate", onSpaNavigate);
+  window.addEventListener("yt-navigate-start", () => {
     if (window.mdmOverlayApi) window.mdmOverlayApi.removeAll();
-    scanMedia();
   });
+  window.addEventListener("yt-navigate-finish", onSpaNavigate);
+  document.addEventListener("yt-navigate-finish", onSpaNavigate);
+  // YouTube soft nav bazen sadece history API kullanır
+  try {
+    const _push = history.pushState;
+    history.pushState = function () {
+      const r = _push.apply(this, arguments);
+      setTimeout(onSpaNavigate, 50);
+      return r;
+    };
+    const _replace = history.replaceState;
+    history.replaceState = function () {
+      const r = _replace.apply(this, arguments);
+      setTimeout(onSpaNavigate, 50);
+      return r;
+    };
+  } catch (_) {}
 
   const mo = new MutationObserver(() => scanMedia());
   mo.observe(document.documentElement, { childList: true, subtree: true });
@@ -542,13 +606,8 @@
   }
 
   safeSend({ type: "mdm-content-ready" }).then((r) => {
-    if (r && typeof r.online === "boolean") desktopOnline = r.online;
-  });
-
-  // Masaüstü online mı — SW'ye bağlı olmadan
-  findDesktopBase().then((b) => {
-    if (b) {
-      desktopOnline = true;
+    if (r && typeof r.online === "boolean") {
+      desktopOnline = r.online;
       refreshAll();
     }
   });

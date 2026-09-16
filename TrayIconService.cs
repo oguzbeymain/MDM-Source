@@ -47,6 +47,7 @@ namespace MDM
         private Window? _menuWindow;
         private int _menuGeneration;
         private bool _openingMenu;
+        private readonly Action _locChanged;
 
         public event Action? OpenRequested;
         public event Action? ExitRequested;
@@ -75,12 +76,46 @@ namespace MDM
                 uFlags = NifMessage | NifIcon | NifTip,
                 uCallbackMessage = WmTrayCallback,
                 hIcon = _iconHandle,
-                szTip = "MDM — Muck Download Manager",
+                szTip = Truncate(TooltipText, 127),
                 szInfo = "",
                 szInfoTitle = ""
             };
 
             _added = Shell_NotifyIcon(NimAdd, ref _data);
+
+            _locChanged = OnLocChanged;
+            Loc.Changed += _locChanged;
+        }
+
+        private static string TooltipText => Loc.T("tray.tooltip", "MDM — Muck Download Manager");
+
+        /// <summary>Dil değişti: menü her sağ tıkta yeniden kurulduğu için açık menüyü kapat, ipucunu güncelle.</summary>
+        private void OnLocChanged()
+        {
+            if (_disposed) return;
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
+                try { dispatcher.BeginInvoke(new Action(OnLocChanged)); }
+                catch { /* ignore */ }
+                return;
+            }
+
+            try { CloseMenu(immediate: true); } catch { /* ignore */ }
+            RefreshTooltip();
+        }
+
+        private void RefreshTooltip()
+        {
+            if (!_added || _disposed) return;
+            try
+            {
+                _data.uFlags = NifMessage | NifIcon | NifTip;
+                _data.szTip = Truncate(TooltipText, 127);
+                Shell_NotifyIcon(NimModify, ref _data);
+            }
+            catch { /* ignore */ }
         }
 
         public void ShowHiddenTipOnce()
@@ -89,8 +124,9 @@ namespace MDM
             if (!AppSettingsStore.Load().NotifyOnTrayMinimize)
                 return;
             _balloonShown = true;
-            ShowBalloon("MDM arka planda",
-                "Gizli simgelerde çalışmaya devam ediyor. Çıkmak için tepsi menüsünden «Çıkış».");
+            ShowBalloon(Loc.T("tray.balloon.background_title", "MDM arka planda"),
+                Loc.T("tray.balloon.background_body",
+                    "Gizli simgelerde çalışmaya devam ediyor. Çıkmak için tepsi menüsünden «Çıkış»."));
         }
 
         public void ShowBalloon(string title, string message)
@@ -160,22 +196,22 @@ namespace MDM
                 GetCursorPos(out POINT pt);
                 int gen = ++_menuGeneration;
 
-                var openBtn = CreateMenuButton("MDM'yi aç", () =>
+                var openBtn = CreateMenuButton(Loc.T("tray.open", "MDM'yi aç"), () =>
                 {
                     CloseMenu(immediate: true);
                     OpenRequested?.Invoke();
                 });
-                var updateBtn = CreateMenuButton("Güncellemeleri kontrol et", () =>
+                var updateBtn = CreateMenuButton(Loc.T("tray.check_updates", "Güncellemeleri kontrol et"), () =>
                 {
                     CloseMenu(immediate: true);
                     CheckUpdateRequested?.Invoke();
                 });
-                var settingsBtn = CreateMenuButton("Ayarlar", () =>
+                var settingsBtn = CreateMenuButton(Loc.T("tray.settings", "Ayarlar"), () =>
                 {
                     CloseMenu(immediate: true);
                     SettingsRequested?.Invoke();
                 });
-                var exitBtn = CreateMenuButton("Çıkış", () =>
+                var exitBtn = CreateMenuButton(Loc.T("tray.exit", "Çıkış"), () =>
                 {
                     CloseMenu(immediate: true);
                     ExitRequested?.Invoke();
@@ -290,7 +326,7 @@ namespace MDM
 
             var label = new TextBlock
             {
-                Text = "Dosyalar",
+                Text = Loc.T("tray.files", "Dosyalar"),
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -335,7 +371,7 @@ namespace MDM
                 {
                     list.Children.Add(new TextBlock
                     {
-                        Text = "Henüz dosya yok",
+                        Text = Loc.T("tray.files.empty", "Henüz dosya yok"),
                         FontSize = 11,
                         Foreground = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
                         Margin = new Thickness(10, 8, 10, 8)
@@ -680,6 +716,7 @@ namespace MDM
         {
             if (_disposed) return;
             _disposed = true;
+            try { Loc.Changed -= _locChanged; } catch { /* ignore */ }
             try { CloseMenu(immediate: true); } catch { /* ignore */ }
             try
             {

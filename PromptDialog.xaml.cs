@@ -12,6 +12,7 @@ namespace MDM
 
         private string _originalExtension = "";
         private bool _lockExtensionMode;
+        private bool _titleConfigured;
 
         public string ResultText => TxtInput.Text;
         public bool AllowExtensionChange => ChkChangeExtension.IsChecked == true;
@@ -19,12 +20,29 @@ namespace MDM
         public PromptDialog()
         {
             InitializeComponent();
+            ApplyLocalizedTexts();
+            Loc.Changed += OnLocChanged;
+        }
+
+        private void OnLocChanged() => Dispatcher.BeginInvoke(ApplyLocalizedTexts);
+
+        private void ApplyLocalizedTexts()
+        {
+            FlowDirection = Loc.Flow;
+            // Başlık ve alt yazı Configure() ile çağıran tarafından verilir
+            if (TxtTitle != null && !_titleConfigured)
+                TxtTitle.Text = Loc.T("prompt.title", "Başlık");
+            if (ChkChangeExtension != null)
+                ChkChangeExtension.Content = Loc.T("prompt.allow_ext_change", "Dosya uzantısını değiştirmeye izin ver (.zip, .rar vb.)");
+            if (BtnCancel != null) BtnCancel.Content = Loc.T("dialog.cancel", "İptal");
+            if (BtnOk != null) BtnOk.Content = Loc.T("dialog.ok", "Tamam");
         }
 
         public void Configure(string title, string prompt, string defaultValue = "", bool extensionLockMode = false)
         {
             _lockExtensionMode = extensionLockMode;
             _originalExtension = Path.GetExtension(defaultValue);
+            _titleConfigured = !string.IsNullOrWhiteSpace(title);
             TxtTitle.Text = title;
             TxtPrompt.Text = prompt;
             TxtInput.Text = defaultValue;

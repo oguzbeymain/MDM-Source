@@ -50,6 +50,10 @@ namespace MDM
         public bool TorrentSequential { get; set; }
         public int TorrentMaxConnections { get; set; } = 120;
         public bool AutoReconnect { get; set; } = true;
+        /// <summary>Aynı URL 3'ten fazla indirilince güvenlik onayı iste (varsayılan açık).</summary>
+        public bool ConfirmRepeatDownloads { get; set; } = true;
+        /// <summary>UI dili: tr, en, de, fr, es, ru, ar, zh-CN, zh-TW, ja, ko, it, fa</summary>
+        public string UiLanguage { get; set; } = "tr";
     }
 
     public static class AppSettingsStore
