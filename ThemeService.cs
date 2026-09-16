@@ -59,6 +59,8 @@ namespace MDM
                 confirm.ApplyThemeSurface(light);
             else if (window is CategoryCreateDialog categoryCreate)
                 categoryCreate.ApplyThemeSurface(light);
+            else if (window is ScanResultsWindow scan)
+                scan.ApplyThemeSurface(light);
         }
 
         private static void ApplyWindowShell(Window window, bool light)

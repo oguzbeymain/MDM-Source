@@ -1,6 +1,7 @@
 ﻿bin/
 obj/
 artifacts/
+Setup/Payload/
 .vs/
 *.user
 *.suo

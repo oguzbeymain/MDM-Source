@@ -73,8 +73,10 @@
   "ext.playing": "Reproduciendo · {0}p",
   "ext.video": "Vídeo",
   "ext.menu_download": "Descargar con MDM",
+  "ext.menu_download_image": "Descargar la imagen con MDM",
+  "ext.menu_download_media": "Descargar el medio con MDM",
   "ext.menu_links": "Descargar los enlaces seleccionados con MDM",
-  "ext.menu_scan": "Buscar vídeos en la página",
+  "ext.menu_scan": "Escanear página",
   "ext.note_ytdlp": "Se recomienda yt-dlp para la lista completa de calidades",
   "ext.error_no_media": "No hay una URL de medios válida — reproduce el vídeo e inténtalo de nuevo",
   "session.resume": "Reanudar",
@@ -200,5 +202,10 @@
   "popup.site_add": "Añadir",
   "popup.site_remove": "Quitar",
   "popup.sites_hint": "En estos sitios el botón se oculta y las descargas se quedan en el navegador.",
-  "popup.saved": "Guardado"
+  "popup.saved": "Guardado",
+  "popup.scan_title": "Escaneo de página",
+  "popup.scan_action": "Escanear página",
+  "popup.scan_hint": "Muestra en MDM las imágenes, los vídeos y los archivos de esta página, donde puede elegir qué descargar.",
+  "popup.scan_running": "Escaneando la página…",
+  "popup.scan_offline": "MDM no está en ejecución, por lo que no se pudo enviar el escaneo."
 }

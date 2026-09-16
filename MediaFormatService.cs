@@ -247,10 +247,32 @@ namespace MDM
             return SortAndFinish(resp);
         }
 
+        /// <summary>
+        /// Görsel/doküman gibi doğrudan dosya yakalamaları. Sayfa YouTube veya video sayfası
+        /// olsa bile bunlar video sanılmamalı (örn. kapak fotoğrafına sağ tık).
+        /// </summary>
+        public static bool IsDirectFileCapture(ExtCaptureRequest req)
+        {
+            string kind = (req.Kind ?? "").Trim().ToLowerInvariant();
+            if (kind is "image" or "file") return true;
+            if (kind is "hls" or "dash" or "yt-dlp") return false;
+
+            return PageScanService.KindOf(PageScanService.ExtensionOfUrl(req.Url))
+                is ScanKind.Image or ScanKind.Document or ScanKind.Archive or ScanKind.App;
+        }
+
         public static ExtCaptureRequest ResolveCapture(ExtCaptureRequest req)
         {
             string kind = (req.Kind ?? "").Trim().ToLowerInvariant();
             string formatId = req.FormatId ?? "";
+
+            // Doğrudan dosya: video/kalite çözümlemesine hiç girmez
+            if (IsDirectFileCapture(req))
+            {
+                req.Kind = kind is "image" or "file" ? kind : "progressive";
+                req.FormatId = "";
+                return req;
+            }
 
             // YouTube: asla CDN — watch URL + formatId
             bool youtube = YtDlpHelper.IsYouTubeUrl(req.PageUrl) || YtDlpHelper.IsYouTubeUrl(req.Url);

@@ -176,6 +176,77 @@
     document.querySelectorAll("video, audio").forEach((el) => registerMedia(el));
   }
 
+  /** Sayfayı tara: DOM'daki görsel/video/ses/dosya adaylarını toplar (masaüstü ekranı için) */
+  function collectPageCandidates() {
+    const out = [];
+    const seen = new Set();
+    const MAX = 800;
+
+    function push(raw, kind) {
+      if (out.length >= MAX) return;
+      const value = String(raw || "").trim();
+      if (!value || /^(data|blob|javascript|about):/i.test(value)) return;
+      let url = "";
+      try { url = new URL(value, location.href).href; } catch (_) { return; }
+      if (!/^https?:/i.test(url)) return;
+      const key = url.split("#")[0];
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({ url, kind: kind || "" });
+    }
+
+    function pushSrcSet(value, kind) {
+      String(value || "").split(",").forEach((part) => {
+        const first = part.trim().split(/\s+/)[0];
+        push(first, kind);
+      });
+    }
+
+    function pushBackground(el) {
+      let image = "";
+      try { image = getComputedStyle(el).backgroundImage || ""; } catch (_) { return; }
+      if (!image || image === "none") return;
+      const rx = /url\((['"]?)(.*?)\1\)/g;
+      let m;
+      while ((m = rx.exec(image)) !== null) push(m[2], "image");
+    }
+
+    try {
+      document.querySelectorAll("img").forEach((img) => {
+        push(img.currentSrc || img.getAttribute("src"), "image");
+        pushSrcSet(img.getAttribute("srcset"), "image");
+        ["data-src", "data-original", "data-lazy", "data-lazy-src", "data-full", "data-image"]
+          .forEach((attr) => push(img.getAttribute(attr), "image"));
+        pushSrcSet(img.getAttribute("data-srcset"), "image");
+      });
+
+      document.querySelectorAll("picture source, source[type^='image']").forEach((s) => {
+        push(s.getAttribute("src"), "image");
+        pushSrcSet(s.getAttribute("srcset"), "image");
+      });
+
+      document.querySelectorAll("video").forEach((v) => {
+        push(v.currentSrc || v.getAttribute("src"), "video");
+        push(v.getAttribute("poster"), "image");
+      });
+      document.querySelectorAll("video source").forEach((s) => push(s.getAttribute("src"), "video"));
+
+      document.querySelectorAll("audio").forEach((a) => push(a.currentSrc || a.getAttribute("src"), "audio"));
+      document.querySelectorAll("audio source").forEach((s) => push(s.getAttribute("src"), "audio"));
+
+      // Sniff edilen HLS/DASH master'ları da listeye girsin
+      mastersForPage().forEach((c) => push(c.url, "video"));
+
+      // Bağlantılar: uzantısı tanınanları masaüstü tarafı seçer
+      document.querySelectorAll("a[href]").forEach((a) => push(a.getAttribute("href"), ""));
+
+      // Yalnızca inline background taşıyan öğeler — tüm ağacı taramak pahalı
+      document.querySelectorAll("[style*='background']").forEach(pushBackground);
+    } catch (_) { /* kısmi sonuç yeter */ }
+
+    return out;
+  }
+
   /** "www.a.com" -> "a.com" */
   function bareHost(value) {
     return String(value || "").trim().toLowerCase().replace(/^www\./, "");
@@ -542,7 +613,19 @@
   });
 
   try {
-    chrome.runtime.onMessage.addListener((msg) => {
+    chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (msg?.type === "mdm-collect-page") {
+        try {
+          sendResponse({
+            items: collectPageCandidates(),
+            pageUrl: location.href,
+            title: document.title || ""
+          });
+        } catch (_) {
+          sendResponse({ items: [], pageUrl: location.href, title: "" });
+        }
+        return true;
+      }
       if (msg?.type === "mdm-rescan") scanMedia();
       if (msg?.type === "mdm-set-enabled") {
         captureEnabled = msg.enabled !== false;

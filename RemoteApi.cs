@@ -49,7 +49,8 @@ namespace MDM
             string token,
             Action<string, string, string> onCapture,
             IRemoteJobHost? jobs,
-            Action<ExtCaptureRequest>? onExtCapture = null)
+            Action<ExtCaptureRequest>? onExtCapture = null,
+            Action<ScanRequest>? onExtScan = null)
         {
             method = (method ?? "GET").ToUpperInvariant();
             string rawPath = path ?? "/";
@@ -184,6 +185,20 @@ namespace MDM
                 return RemoteApiResult.Text(200, "OK");
             }
 
+            // Eklentinin "Sayfayı tara" sonucu — masaüstünde seçim ekranı açılır
+            if (method == "POST" && p == "/ext/scan")
+            {
+                var scan = TryReadScanRequest(body);
+                if (scan == null)
+                    return RemoteApiResult.Text(400, "Bad Request");
+                ExtensionPresence.NotifyPing();
+                if (onExtScan == null)
+                    return RemoteApiResult.Text(503, "Scan UI unavailable");
+                onExtScan(scan);
+                return RemoteApiResult.Json(200,
+                    JsonSerializer.Serialize(new { ok = true, count = scan.Items.Count }, JsonOpts));
+            }
+
             if (method != "GET" && method != "POST" && method != "OPTIONS")
                 return RemoteApiResult.Text(405, "Method Not Allowed");
 
@@ -279,6 +294,55 @@ namespace MDM
                 {
                     foreach (var prop in hdrEl.EnumerateObject())
                         req.Headers[prop.Name] = prop.Value.GetString() ?? "";
+                }
+                return req;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ScanRequest? TryReadScanRequest(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                var req = new ScanRequest();
+                if (root.TryGetProperty("pageUrl", out var pageEl))
+                    req.PageUrl = pageEl.GetString() ?? "";
+                if (root.TryGetProperty("title", out var titleEl))
+                    req.Title = titleEl.GetString() ?? "";
+                if (!root.TryGetProperty("items", out var itemsEl) || itemsEl.ValueKind != JsonValueKind.Array)
+                    return req;
+
+                foreach (var el in itemsEl.EnumerateArray())
+                {
+                    if (el.ValueKind == JsonValueKind.String)
+                    {
+                        string? plain = el.GetString();
+                        if (!string.IsNullOrWhiteSpace(plain))
+                            req.Items.Add(new ScanCandidate { Url = plain });
+                        continue;
+                    }
+                    if (el.ValueKind != JsonValueKind.Object) continue;
+
+                    var candidate = new ScanCandidate();
+                    if (el.TryGetProperty("url", out var urlEl))
+                        candidate.Url = urlEl.GetString() ?? "";
+                    if (el.TryGetProperty("kind", out var kindEl))
+                        candidate.Kind = kindEl.GetString() ?? "";
+                    if (el.TryGetProperty("size", out var sizeEl))
+                    {
+                        if (sizeEl.ValueKind == JsonValueKind.Number && sizeEl.TryGetInt64(out long s))
+                            candidate.SizeBytes = s;
+                        else if (sizeEl.ValueKind == JsonValueKind.String && long.TryParse(sizeEl.GetString(), out long s2))
+                            candidate.SizeBytes = s2;
+                    }
+                    if (!string.IsNullOrWhiteSpace(candidate.Url))
+                        req.Items.Add(candidate);
                 }
                 return req;
             }

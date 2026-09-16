@@ -73,8 +73,10 @@
   "ext.playing": "در حال پخش · {0}p",
   "ext.video": "ویدیو",
   "ext.menu_download": "دانلود با MDM",
+  "ext.menu_download_image": "دانلود تصویر با MDM",
+  "ext.menu_download_media": "دانلود رسانه با MDM",
   "ext.menu_links": "دانلود پیوندهای انتخاب‌شده با MDM",
-  "ext.menu_scan": "پویش ویدیوهای صفحه",
+  "ext.menu_scan": "پویش صفحه",
   "ext.note_ytdlp": "برای فهرست کامل کیفیت‌ها استفاده از yt-dlp توصیه می‌شود",
   "ext.error_no_media": "نشانی URL رسانه معتبر نیست — ویدیو را پخش کنید و دوباره تلاش کنید",
   "session.resume": "ادامه",
@@ -200,5 +202,10 @@
   "popup.site_add": "افزودن",
   "popup.site_remove": "حذف",
   "popup.sites_hint": "در این سایت‌ها دکمه پنهان می‌شود و دانلودها در مرورگر می‌مانند.",
-  "popup.saved": "ذخیره شد"
+  "popup.saved": "ذخیره شد",
+  "popup.scan_title": "پویش صفحه",
+  "popup.scan_action": "پویش صفحه",
+  "popup.scan_hint": "تصویرها، ویدیوها و فایل‌های این صفحه را در MDM فهرست می‌کند تا همان‌جا انتخاب کنید چه چیزی دانلود شود.",
+  "popup.scan_running": "در حال پویش صفحه…",
+  "popup.scan_offline": "برنامهٔ MDM اجرا نیست؛ پویش ارسال نشد."
 }

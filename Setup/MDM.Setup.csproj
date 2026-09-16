@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>MDM-Setup</AssemblyName>
+    <RootNamespace>MDM.Setup</RootNamespace>
+    <Product>MuckDownloadManager</Product>
+    <AssemblyTitle>MuckDownloadManager Setup</AssemblyTitle>
+    <Version>1.0.35</Version>
+    <AssemblyVersion>1.0.35.0</AssemblyVersion>
+    <FileVersion>1.0.35.0</FileVersion>
+    <ApplicationIcon>..\Assets\mdm.ico</ApplicationIcon>
+    <SatelliteResourceLanguages></SatelliteResourceLanguages>
+    <!-- Tek dosya, .NET kurulu olmayan makinede de calisir -->
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\Assets\mdm.ico" Link="Assets\mdm.ico" />
+    <Resource Include="..\Assets\mdm-logo.png" Link="Assets\mdm-logo.png" />
+  </ItemGroup>
+
+  <!-- Sihirbaz metinleri ve kategori adlari uygulamanin dil dosyalarindan gelir -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Locales\*.json" LogicalName="Locales.%(Filename).json" />
+  </ItemGroup>
+
+  <!-- Kurulacak uygulama paketi (Build-Setup.ps1 uretir) -->
+  <ItemGroup Condition="Exists('Payload\payload.zip')">
+    <EmbeddedResource Include="Payload\payload.zip" LogicalName="payload.zip" />
+  </ItemGroup>
+</Project>

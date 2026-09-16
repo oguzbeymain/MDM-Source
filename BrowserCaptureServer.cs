@@ -18,6 +18,7 @@ namespace MDM
 
         private readonly Action<string, string, string> _onDownloadRequested;
         private readonly Action<ExtCaptureRequest>? _onExtCapture;
+        private readonly Action<ScanRequest>? _onExtScan;
         private readonly bool _lan;
         private readonly string _token;
         private readonly IRemoteJobHost? _jobs;
@@ -34,10 +35,12 @@ namespace MDM
             bool lan = false,
             string? token = null,
             IRemoteJobHost? jobs = null,
-            Action<ExtCaptureRequest>? onExtCapture = null)
+            Action<ExtCaptureRequest>? onExtCapture = null,
+            Action<ScanRequest>? onExtScan = null)
         {
             _onDownloadRequested = onDownloadRequested;
             _onExtCapture = onExtCapture;
+            _onExtScan = onExtScan;
             _lan = lan;
             _token = token ?? "";
             _jobs = jobs;
@@ -234,7 +237,8 @@ namespace MDM
 
                     string json = bodyBytes.Length == 0 ? "" : Encoding.UTF8.GetString(bodyBytes);
                     var result = RemoteApiRouter.Route(
-                        method, path, json, isLoopback, auth, _lan, _token, _onDownloadRequested, _jobs, _onExtCapture);
+                        method, path, json, isLoopback, auth, _lan, _token, _onDownloadRequested, _jobs,
+                        _onExtCapture, _onExtScan);
                     await WriteResponseAsync(stream, result);
                 }
                 catch (Exception ex)

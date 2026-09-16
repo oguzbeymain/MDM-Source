@@ -73,8 +73,10 @@
   "ext.playing": "In riproduzione · {0}p",
   "ext.video": "Video",
   "ext.menu_download": "Scarica con MDM",
+  "ext.menu_download_image": "Scarica l'immagine con MDM",
+  "ext.menu_download_media": "Scarica il contenuto multimediale con MDM",
   "ext.menu_links": "Scarica i link selezionati con MDM",
-  "ext.menu_scan": "Cerca i video nella pagina",
+  "ext.menu_scan": "Scansiona pagina",
   "ext.note_ytdlp": "Per l'elenco completo delle qualità è consigliato yt-dlp",
   "ext.error_no_media": "Nessun URL multimediale valido — riproduci il video e riprova",
   "session.resume": "Riprendi",
@@ -200,5 +202,10 @@
   "popup.site_add": "Aggiungi",
   "popup.site_remove": "Rimuovi",
   "popup.sites_hint": "Su questi siti il pulsante è nascosto e i download restano nel browser.",
-  "popup.saved": "Salvato"
+  "popup.saved": "Salvato",
+  "popup.scan_title": "Scansione pagina",
+  "popup.scan_action": "Scansiona pagina",
+  "popup.scan_hint": "Elenca in MDM le immagini, i video e i file di questa pagina, dove scegli cosa scaricare.",
+  "popup.scan_running": "Scansione della pagina in corso…",
+  "popup.scan_offline": "MDM non è in esecuzione, quindi non è stato possibile inviare la scansione."
 }

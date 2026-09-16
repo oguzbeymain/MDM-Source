@@ -865,6 +865,20 @@ namespace MDM
                             Debug.WriteLine($"Ext capture error: {ex.Message}");
                         }
                     }, System.Windows.Threading.DispatcherPriority.Normal);
+                },
+                onExtScan: scan =>
+                {
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        try
+                        {
+                            ShowExtensionScan(scan);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Ext scan error: {ex.Message}");
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Normal);
                 });
                 _captureServer.Start();
             }
@@ -2909,7 +2923,7 @@ namespace MDM
                     InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.paste_page_url", "Taranacak sayfa adresini yapıştırın."));
                     return;
                 }
-                await GrabAndEnqueueAsync(page);
+                ScanResultsWindow.ShowForPage(this, page);
                 return;
             }
             if (urls.Count == 0)
@@ -3006,6 +3020,44 @@ namespace MDM
             {
                 InfoDialog.Show(this, Loc.T("title.linkgrabber", "LinkGrabber"), Loc.T("msg.grab.scan_failed", "Sayfa taranamadı."), ex.Message);
             }
+        }
+
+        /// <summary>Sayfa tarama ekranında seçilenleri kuyruğa alır.</summary>
+        public int EnqueueScanItems(IEnumerable<ScanItem> items)
+        {
+            int added = 0;
+            foreach (var scan in items)
+            {
+                string name = string.IsNullOrWhiteSpace(scan.FileName)
+                    ? BuildQuickFileName(scan.Url, "", null)
+                    : scan.FileName;
+                string categoryId = ResolveCategoryForNewFile(name);
+                string folder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+                if (string.IsNullOrWhiteSpace(folder))
+                    folder = _defaultFolder;
+                if (BeginDownloadFromSession(scan.Url, name, folder, notify: false) != null)
+                    added++;
+            }
+
+            if (added == 0)
+                InfoDialog.Show(this, Loc.T("scan.title", "Sayfa taraması"),
+                    Loc.T("scan.none_added", "Seçilen bağlantılar kurallara takıldı veya zaten listede."));
+            return added;
+        }
+
+        /// <summary>Eklentiden gelen sayfa taraması sonuçlarını gösterir.</summary>
+        private void ShowExtensionScan(ScanRequest request)
+        {
+            var items = PageScanService.FromCandidates(request.Items);
+            if (items.Count == 0)
+            {
+                ShowFromTray();
+                InfoDialog.Show(this, Loc.T("scan.title", "Sayfa taraması"),
+                    Loc.T("scan.no_results", "Sayfada indirilebilir dosya bulunamadı."));
+                return;
+            }
+
+            ScanResultsWindow.ShowForItems(this, request.PageUrl, items);
         }
 
         private void TryAutoExtract(DownloadItem item)
@@ -4050,6 +4102,8 @@ namespace MDM
             if (capture == null) return false;
             string kind = (capture.Kind ?? "").Trim().ToLowerInvariant();
             if (kind is "yt-dlp" or "hls" or "dash") return true;
+            // Görsel/doküman (örn. YouTube kapak fotoğrafı) düz dosyadır — yt-dlp gerekmez
+            if (MediaFormatService.IsDirectFileCapture(capture)) return false;
             string page = capture.PageUrl ?? "";
             string u = !string.IsNullOrWhiteSpace(capture.Url) ? capture.Url : (url ?? "");
             if (YtDlpHelper.IsYouTubeUrl(page) || YtDlpHelper.IsYouTubeUrl(u)) return true;
@@ -4064,6 +4118,16 @@ namespace MDM
             string url = ext.Url;
             if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(ext.PageUrl))
                 url = ext.PageUrl;
+
+            // Görsel/doküman: sayfa video sayfası olsa da düz dosya olarak inilir
+            if (MediaFormatService.IsDirectFileCapture(ext))
+            {
+                if (string.IsNullOrWhiteSpace(url) || url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+                    return;
+                EnsureCaptureReferer(ext);
+                await StartDownloadProcess(url, name, ext.Mime, selectItem: false, capture: ext);
+                return;
+            }
 
             // Altyazı / junk URL → master adayı dene veya reddet
             if (MediaFormatService.IsJunkMediaUrl(url)
@@ -4252,11 +4316,20 @@ namespace MDM
         }
         private static string BuildExtCaptureFilename(ExtCaptureRequest ext)
         {
+            bool directFile = MediaFormatService.IsDirectFileCapture(ext);
             string baseName = FileNameHelper.DecodeDisplayName(ext.Filename);
+
+            // Görsel/doküman: URL'deki dosya adı sayfa başlığından daha doğru
+            if (directFile && (string.IsNullOrWhiteSpace(baseName) || !baseName.Contains('.')))
+            {
+                string? fromUrl = FileNameHelper.TryFileNameFromUrl(ext.Url);
+                if (!string.IsNullOrWhiteSpace(fromUrl) && fromUrl.Contains('.'))
+                    baseName = FileNameHelper.DecodeDisplayName(fromUrl);
+            }
             if (string.IsNullOrWhiteSpace(baseName) && !string.IsNullOrWhiteSpace(ext.Title))
                 baseName = FileNameHelper.DecodeDisplayName(ext.Title);
             if (string.IsNullOrWhiteSpace(baseName))
-                baseName = "video";
+                baseName = directFile ? "dosya" : "video";
 
             // FormatId teknik id ise (h-1080-..., bv*+ba) veya yükseklik etiketi ise isme ekleme
             bool technicalId = !string.IsNullOrWhiteSpace(ext.FormatId)
@@ -4272,6 +4345,15 @@ namespace MDM
 
             if (!baseName.Contains('.'))
             {
+                // Görsel/doküman asla .mp4 almaz — uzantı URL'den veya MIME'dan gelir
+                if (directFile)
+                {
+                    string fileExt = PageScanService.ExtensionOfUrl(ext.Url);
+                    if (string.IsNullOrWhiteSpace(fileExt))
+                        fileExt = ExtensionFromMime(ext.Mime);
+                    return baseName + (string.IsNullOrWhiteSpace(fileExt) ? ".bin" : "." + fileExt);
+                }
+
                 string mime = ext.Mime ?? "";
                 if (mime.Contains("audio", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(ext.Kind, "audio", StringComparison.OrdinalIgnoreCase))
@@ -4292,6 +4374,32 @@ namespace MDM
                     baseName += ".mp4";
             }
             return baseName;
+        }
+
+        /// <summary>image/png → png, application/pdf → pdf. Bilinmiyorsa boş.</summary>
+        private static string ExtensionFromMime(string? mime)
+        {
+            string m = (mime ?? "").Trim().ToLowerInvariant();
+            int semi = m.IndexOf(';');
+            if (semi > 0) m = m[..semi].Trim();
+            if (m.Length == 0) return "";
+
+            return m switch
+            {
+                "image/jpeg" or "image/jpg" => "jpg",
+                "image/png" => "png",
+                "image/webp" => "webp",
+                "image/gif" => "gif",
+                "image/avif" => "avif",
+                "image/bmp" => "bmp",
+                "image/tiff" => "tiff",
+                "image/svg+xml" => "svg",
+                "image/x-icon" or "image/vnd.microsoft.icon" => "ico",
+                "application/pdf" => "pdf",
+                _ => m.StartsWith("image/", StringComparison.Ordinal)
+                    ? m[6..].Replace("+xml", "", StringComparison.Ordinal)
+                    : ""
+            };
         }
 
         private async Task EnrichSessionMetaAsync(

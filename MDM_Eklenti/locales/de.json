@@ -73,8 +73,10 @@
   "ext.playing": "Wiedergabe · {0}p",
   "ext.video": "Video",
   "ext.menu_download": "Mit MDM herunterladen",
+  "ext.menu_download_image": "Bild mit MDM herunterladen",
+  "ext.menu_download_media": "Medien mit MDM herunterladen",
   "ext.menu_links": "Ausgewählte Links mit MDM herunterladen",
-  "ext.menu_scan": "Videos auf der Seite suchen",
+  "ext.menu_scan": "Seite scannen",
   "ext.note_ytdlp": "Für die vollständige Qualitätsliste wird yt-dlp empfohlen",
   "ext.error_no_media": "Keine gültige Medien-URL — Video abspielen und erneut versuchen",
   "session.resume": "Fortsetzen",
@@ -200,5 +202,10 @@
   "popup.site_add": "Hinzufügen",
   "popup.site_remove": "Entfernen",
   "popup.sites_hint": "Auf diesen Seiten ist die Schaltfläche ausgeblendet und Downloads bleiben im Browser.",
-  "popup.saved": "Gespeichert"
+  "popup.saved": "Gespeichert",
+  "popup.scan_title": "Seitenscan",
+  "popup.scan_action": "Seite scannen",
+  "popup.scan_hint": "Listet die Bilder, Videos und Dateien dieser Seite in MDM auf, wo Sie auswählen, was heruntergeladen wird.",
+  "popup.scan_running": "Seite wird gescannt…",
+  "popup.scan_offline": "MDM läuft nicht, daher konnte der Scan nicht gesendet werden."
 }

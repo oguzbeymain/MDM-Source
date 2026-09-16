@@ -73,8 +73,10 @@
   "ext.playing": "قيد التشغيل · {0}p",
   "ext.video": "فيديو",
   "ext.menu_download": "التنزيل باستخدام MDM",
+  "ext.menu_download_image": "تنزيل الصورة باستخدام MDM",
+  "ext.menu_download_media": "تنزيل الوسائط باستخدام MDM",
   "ext.menu_links": "تنزيل الروابط المحددة باستخدام MDM",
-  "ext.menu_scan": "فحص مقاطع الفيديو في الصفحة",
+  "ext.menu_scan": "فحص الصفحة",
   "ext.note_ytdlp": "يُنصح باستخدام yt-dlp للحصول على قائمة الجودة الكاملة",
   "ext.error_no_media": "لا يوجد عنوان URL وسائط صالح — شغّل الفيديو وحاول مرة أخرى",
   "session.resume": "استئناف",
@@ -200,5 +202,10 @@
   "popup.site_add": "إضافة",
   "popup.site_remove": "إزالة",
   "popup.sites_hint": "في هذه المواقع يُخفى الزر وتبقى التنزيلات داخل المتصفح.",
-  "popup.saved": "تم الحفظ"
+  "popup.saved": "تم الحفظ",
+  "popup.scan_title": "فحص الصفحة",
+  "popup.scan_action": "فحص الصفحة",
+  "popup.scan_hint": "يعرض صور هذه الصفحة ومقاطع الفيديو والملفات فيها داخل MDM، حيث تختار ما تريد تنزيله.",
+  "popup.scan_running": "جارٍ فحص الصفحة…",
+  "popup.scan_offline": "تطبيق MDM غير مُشغَّل، لذا تعذّر إرسال الفحص."
 }

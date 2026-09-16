@@ -73,8 +73,10 @@
   "ext.playing": "播放中 · {0}p",
   "ext.video": "影片",
   "ext.menu_download": "使用 MDM 下載",
+  "ext.menu_download_image": "使用 MDM 下載圖片",
+  "ext.menu_download_media": "使用 MDM 下載媒體",
   "ext.menu_links": "使用 MDM 下載選取的連結",
-  "ext.menu_scan": "掃描頁面中的影片",
+  "ext.menu_scan": "掃描頁面",
   "ext.note_ytdlp": "建議使用 yt-dlp 以取得完整的畫質清單",
   "ext.error_no_media": "沒有有效的媒體 URL — 請播放影片後重試",
   "session.resume": "繼續",
@@ -200,5 +202,10 @@
   "popup.site_add": "新增",
   "popup.site_remove": "移除",
   "popup.sites_hint": "在這些網站上按鈕會隱藏，下載會留在瀏覽器中。",
-  "popup.saved": "已儲存"
+  "popup.saved": "已儲存",
+  "popup.scan_title": "頁面掃描",
+  "popup.scan_action": "掃描頁面",
+  "popup.scan_hint": "在 MDM 中列出此頁面上的圖片、影片與檔案，可在那裡選擇要下載的內容。",
+  "popup.scan_running": "正在掃描頁面…",
+  "popup.scan_offline": "MDM 未執行，無法傳送掃描要求。"
 }

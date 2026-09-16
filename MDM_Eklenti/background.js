@@ -654,9 +654,70 @@ chrome.downloads.onChanged.addListener((delta) => {
   } catch (_) {}
 });
 
+// ——— sayfayı tara ———
+async function mdmFlashBadge(tab, text, color) {
+  const tabId = tab?.id;
+  if (tabId == null) return;
+  try {
+    chrome.action.setBadgeText({ tabId, text });
+    chrome.action.setBadgeBackgroundColor({ tabId, color });
+  } catch (_) {}
+  setTimeout(() => {
+    try {
+      const blocked = mdmIsBlockedHost(mdmHostOf(tab.url || ""));
+      chrome.action.setBadgeText({ tabId, text: blocked ? "X" : "" });
+      if (blocked) chrome.action.setBadgeBackgroundColor({ tabId, color: "#666" });
+    } catch (_) {}
+  }, 3000);
+}
+
+/** Sekmedeki medyayı toplayıp masaüstündeki seçim ekranına gönderir. */
+async function mdmScanPage(tab) {
+  if (!tab || tab.id == null) return { ok: false, reason: "tab" };
+
+  let collected = null;
+  try {
+    collected = await chrome.tabs.sendMessage(tab.id, { type: "mdm-collect-page" }, { frameId: 0 });
+  } catch (_) {
+    try { collected = await chrome.tabs.sendMessage(tab.id, { type: "mdm-collect-page" }); }
+    catch (_) { collected = null; }
+  }
+
+  const items = Array.isArray(collected?.items) ? collected.items : [];
+  const payload = {
+    pageUrl: collected?.pageUrl || tab.url || "",
+    title: collected?.title || tab.title || "",
+    items
+  };
+
+  const resp = await mdmPostJson("/ext/scan", payload, 8000);
+  if (!resp) {
+    await mdmFlashBadge(tab, "!", "#E53935");
+    return { ok: false, reason: "offline" };
+  }
+  return { ok: true, count: typeof resp.count === "number" ? resp.count : items.length };
+}
+
 // ——— messages ———
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return;
+
+  if (msg.type === "mdm-scan-page") {
+    (async () => {
+      let tab = null;
+      if (msg.tabId != null) {
+        try { tab = await chrome.tabs.get(msg.tabId); } catch (_) { tab = null; }
+      }
+      if (!tab) {
+        try {
+          const list = await chrome.tabs.query({ active: true, currentWindow: true });
+          tab = list && list[0] ? list[0] : null;
+        } catch (_) { tab = null; }
+      }
+      sendResponse(await mdmScanPage(tab));
+    })();
+    return true;
+  }
 
   if (msg.type === "mdm-get-cookies") {
     mdmGetCookies(msg.url || "").then((cookies) => sendResponse({ cookies }));
@@ -892,7 +953,7 @@ chrome.webNavigation?.onHistoryStateUpdated?.addListener?.((details) => {
 
 // ——— init ———
 mdmDisableBrowserDownloadUi();
-mdmInitMenus(mdmCaptureUrl);
+mdmInitMenus(mdmCaptureUrl, mdmScanPage);
 try { chrome.alarms.create("mdm-presence", { periodInMinutes: 1 }); } catch (_) {}
 
 chrome.runtime.onInstalled.addListener(() => {

@@ -23,8 +23,10 @@
     "ext.playing": "Oynayan · {0}p",
     "ext.video": "Video",
     "ext.menu_download": "MDM ile indir",
+    "ext.menu_download_image": "Görseli MDM ile indir",
+    "ext.menu_download_media": "Medyayı MDM ile indir",
     "ext.menu_links": "Seçili bağlantıları MDM ile indir",
-    "ext.menu_scan": "Sayfadaki videoları tara",
+    "ext.menu_scan": "Sayfayı tara",
     "ext.note_ytdlp": "Tam kalite listesi için yt-dlp önerilir"
   };
 

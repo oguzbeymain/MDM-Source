@@ -73,8 +73,10 @@
   "ext.playing": "재생 중 · {0}p",
   "ext.video": "동영상",
   "ext.menu_download": "MDM으로 다운로드",
+  "ext.menu_download_image": "이미지를 MDM으로 다운로드",
+  "ext.menu_download_media": "미디어를 MDM으로 다운로드",
   "ext.menu_links": "선택한 링크를 MDM으로 다운로드",
-  "ext.menu_scan": "페이지의 동영상 검색",
+  "ext.menu_scan": "페이지 스캔",
   "ext.note_ytdlp": "전체 화질 목록을 보려면 yt-dlp 사용을 권장합니다",
   "ext.error_no_media": "유효한 미디어 URL이 없습니다 — 동영상을 재생한 뒤 다시 시도하세요",
   "session.resume": "재개",
@@ -200,5 +202,10 @@
   "popup.site_add": "추가",
   "popup.site_remove": "제거",
   "popup.sites_hint": "이 사이트에서는 버튼이 숨겨지고 다운로드는 브라우저에서 처리됩니다.",
-  "popup.saved": "저장됨"
+  "popup.saved": "저장됨",
+  "popup.scan_title": "페이지 스캔",
+  "popup.scan_action": "페이지 스캔",
+  "popup.scan_hint": "이 페이지의 이미지, 동영상, 파일을 MDM에 나열하고 거기서 다운로드할 항목을 선택합니다.",
+  "popup.scan_running": "페이지를 스캔하는 중…",
+  "popup.scan_offline": "MDM이 실행 중이 아니어서 스캔을 보내지 못했습니다."
 }

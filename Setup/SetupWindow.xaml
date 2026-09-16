@@ -1,0 +1,209 @@
+<Window x:Class="MDM.Setup.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MuckDownloadManager" Height="580" Width="660"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="NoResize"
+        AllowsTransparency="True" Background="Transparent" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+    <Border x:Name="Root" Background="{DynamicResource Surface}" CornerRadius="12"
+            BorderBrush="{DynamicResource EdgeBorder}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="46"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Başlık çubuğu -->
+            <Border Grid.Row="0" x:Name="TitleBarArea" Background="{DynamicResource TitleBar}"
+                    CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                        <Image Source="/Assets/mdm-logo.png" Width="18" Height="18" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TxtWindowTitle" Text="MuckDownloadManager" Margin="9,0,0,0"
+                                   FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFg}"/>
+                    </StackPanel>
+                    <Button x:Name="BtnClose" Content="✕" Width="44" Height="46" HorizontalAlignment="Right"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand" FontSize="13"
+                            Foreground="{DynamicResource MutedFg}" Click="BtnCancel_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <!-- Yuvarlak vurgu: RTL'de de köşeye taşmaz -->
+                                <Border x:Name="bd" Background="Transparent" CornerRadius="8" Margin="6">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="bd" Property="Background" Value="#C42B1C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Sayfalar -->
+            <Grid Grid.Row="1" Margin="26,20,26,8">
+                <!-- 1: Karşılama + dil -->
+                <Grid x:Name="PageWelcome">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Assets/mdm-logo.png" Width="44" Height="44" VerticalAlignment="Center"/>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtWelcomeTitle" Style="{StaticResource SetupText}"
+                                       FontSize="17" FontWeight="SemiBold" Text="MuckDownloadManager Kurulumu"/>
+                            <TextBlock x:Name="TxtVersion" Style="{StaticResource SetupHint}" Margin="0,3,0,0"
+                                       Text="1.0.35"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock x:Name="TxtLanguageLabel" Grid.Row="1" Style="{StaticResource SetupText}"
+                               Margin="0,20,0,8" Text="Kurulum dili"/>
+
+                    <Border Grid.Row="2" Background="{DynamicResource InputBg}" CornerRadius="10"
+                            BorderBrush="{DynamicResource EdgeBorder}" BorderThickness="1" Padding="4">
+                        <ListBox x:Name="LstLanguage" Background="Transparent" BorderThickness="0"
+                                 ItemContainerStyle="{StaticResource LanguageItem}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectionChanged="LstLanguage_SelectionChanged"/>
+                    </Border>
+
+                    <TextBlock x:Name="TxtLanguageHint" Grid.Row="3" Style="{StaticResource SetupHint}"
+                               Margin="0,10,0,0"
+                               Text="Seçtiğiniz dil uygulamada kullanılır ve indirme kategorisi klasörleri bu dilde oluşturulur."/>
+                </Grid>
+
+                <!-- 2: Seçenekler -->
+                <Grid x:Name="PageOptions" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="TxtOptionsTitle" Style="{StaticResource SetupText}" FontSize="16"
+                               FontWeight="SemiBold" Text="Kurulum seçenekleri"/>
+
+                    <StackPanel Grid.Row="1" Margin="0,18,0,0">
+                        <TextBlock x:Name="TxtInstallFolder" Style="{StaticResource SetupText}" Text="Kurulum klasörü"/>
+                        <Grid Margin="0,7,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtInstallPath" Style="{StaticResource SetupTextBox}"/>
+                            <Button x:Name="BtnBrowseInstall" Grid.Column="1" Style="{StaticResource SoftButton}"
+                                    Content="Gözat" Margin="8,0,0,0" MinWidth="78" Click="BtnBrowseInstall_Click"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                        <TextBlock x:Name="TxtDownloadFolder" Style="{StaticResource SetupText}" Text="İndirme klasörü"/>
+                        <Grid Margin="0,7,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="TxtDownloadPath" Style="{StaticResource SetupTextBox}"/>
+                            <Button x:Name="BtnBrowseDownload" Grid.Column="1" Style="{StaticResource SoftButton}"
+                                    Content="Gözat" Margin="8,0,0,0" MinWidth="78" Click="BtnBrowseDownload_Click"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3" Margin="0,16,0,0">
+                        <TextBlock x:Name="TxtThemeLabel" Style="{StaticResource SetupText}" Text="Görünüm"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                            <ToggleButton x:Name="ChipDark" Style="{StaticResource ChoiceChip}" Content="Koyu tema"
+                                          Checked="ChipTheme_Checked" Unchecked="ChipTheme_Unchecked"/>
+                            <ToggleButton x:Name="ChipLight" Style="{StaticResource ChoiceChip}" Content="Açık tema"
+                                          Checked="ChipTheme_Checked" Unchecked="ChipTheme_Unchecked"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="4" Margin="0,20,0,0">
+                        <CheckBox x:Name="ChkDesktop" Style="{StaticResource SetupCheckBox}" IsChecked="True"
+                                  Content="Masaüstüne kısayol ekle"/>
+                        <CheckBox x:Name="ChkStartMenu" Style="{StaticResource SetupCheckBox}" IsChecked="True"
+                                  Content="Başlat menüsüne ekle"/>
+                        <CheckBox x:Name="ChkAutoStart" Style="{StaticResource SetupCheckBox}" IsChecked="True"
+                                  Content="Windows açılışında başlat"/>
+                        <CheckBox x:Name="ChkFolders" Style="{StaticResource SetupCheckBox}" IsChecked="True"
+                                  Content="Kategori klasörlerini seçilen dilde oluştur"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 3: Kurulum -->
+                <Grid x:Name="PageProgress" Visibility="Collapsed" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtProgressTitle" Style="{StaticResource SetupText}" FontSize="16"
+                                   FontWeight="SemiBold" Text="Kuruluyor…" HorizontalAlignment="Center"/>
+                        <ProgressBar x:Name="BarProgress" Style="{StaticResource SetupProgress}" Margin="0,22,0,0"
+                                     Minimum="0" Maximum="1"/>
+                        <TextBlock x:Name="TxtProgressStep" Style="{StaticResource SetupHint}" Margin="0,12,0,0"
+                                   HorizontalAlignment="Center" Text=""/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 4: Bitti -->
+                <Grid x:Name="PageDone" Visibility="Collapsed" VerticalAlignment="Center">
+                    <StackPanel HorizontalAlignment="Center">
+                        <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource Accent}"
+                                HorizontalAlignment="Center">
+                            <Path Data="M 4,12 L 10,18 L 20,5" Stroke="White" StrokeThickness="2.6"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  FlowDirection="LeftToRight"
+                                  StrokeEndLineCap="Round" StrokeStartLineCap="Round"/>
+                        </Border>
+                        <TextBlock x:Name="TxtDoneTitle" Style="{StaticResource SetupText}" FontSize="16"
+                                   FontWeight="SemiBold" Margin="0,18,0,0" HorizontalAlignment="Center"
+                                   Text="Kurulum tamamlandı"/>
+                        <TextBlock x:Name="TxtDoneText" Style="{StaticResource SetupHint}" Margin="0,8,0,0"
+                                   HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="420"
+                                   Text="MuckDownloadManager bilgisayarınıza kuruldu."/>
+                        <CheckBox x:Name="ChkLaunch" Style="{StaticResource SetupCheckBox}" IsChecked="True"
+                                  Margin="0,20,0,0" HorizontalAlignment="Center" Content="Uygulamayı başlat"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 5: Kaldırma -->
+                <Grid x:Name="PageUninstall" Visibility="Collapsed" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtUninstallTitle" Style="{StaticResource SetupText}" FontSize="16"
+                                   FontWeight="SemiBold" Text="MuckDownloadManager kaldırılsın mı?"/>
+                        <TextBlock x:Name="TxtUninstallText" Style="{StaticResource SetupHint}" Margin="0,10,0,0"
+                                   Text="Uygulama dosyaları ve kısayollar bilgisayarınızdan kaldırılır. İndirdiğiniz dosyalar silinmez."/>
+                        <CheckBox x:Name="ChkRemoveData" Style="{StaticResource SetupCheckBox}" Margin="0,20,0,0"
+                                  Content="Ayarları ve kategori bilgilerini de sil"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- Alt butonlar -->
+            <Border Grid.Row="2" Padding="26,14,26,20">
+                <Grid>
+                    <TextBlock x:Name="TxtFooterHint" Style="{StaticResource SetupHint}" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="BtnBack" Style="{StaticResource SoftButton}" Content="Geri"
+                                Margin="0,0,8,0" Visibility="Collapsed" Click="BtnBack_Click"/>
+                        <Button x:Name="BtnCancel" Style="{StaticResource SoftButton}" Content="İptal"
+                                Margin="0,0,8,0" Click="BtnCancel_Click"/>
+                        <Button x:Name="BtnNext" Style="{StaticResource AccentButton}" Content="İleri"
+                                Click="BtnNext_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

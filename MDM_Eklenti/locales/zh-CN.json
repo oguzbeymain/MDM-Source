@@ -73,8 +73,10 @@
   "ext.playing": "正在播放 · {0}p",
   "ext.video": "视频",
   "ext.menu_download": "使用 MDM 下载",
+  "ext.menu_download_image": "使用 MDM 下载图片",
+  "ext.menu_download_media": "使用 MDM 下载媒体",
   "ext.menu_links": "使用 MDM 下载选中的链接",
-  "ext.menu_scan": "扫描页面中的视频",
+  "ext.menu_scan": "扫描页面",
   "ext.note_ytdlp": "建议使用 yt-dlp 以获取完整的画质列表",
   "ext.error_no_media": "没有有效的媒体 URL — 请播放视频后重试",
   "session.resume": "继续",
@@ -200,5 +202,10 @@
   "popup.site_add": "添加",
   "popup.site_remove": "移除",
   "popup.sites_hint": "在这些网站上按钮会隐藏，下载将留在浏览器中。",
-  "popup.saved": "已保存"
+  "popup.saved": "已保存",
+  "popup.scan_title": "页面扫描",
+  "popup.scan_action": "扫描页面",
+  "popup.scan_hint": "在 MDM 中列出此页面上的图片、视频和文件，可在那里选择要下载的内容。",
+  "popup.scan_running": "正在扫描页面…",
+  "popup.scan_offline": "MDM 未运行，无法发送扫描请求。"
 }

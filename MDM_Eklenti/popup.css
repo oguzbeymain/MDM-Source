@@ -99,6 +99,23 @@ body {
 
 .offline-hint { margin: 8px 0 0; }
 
+/* Sayfayi tara */
+.action {
+  width: 100%;
+  padding: 9px 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #FFFFFF;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action:hover { background: #FF8533; }
+.action:disabled { opacity: 0.5; cursor: default; }
+
 /* Tema secici */
 .segment {
   display: flex;

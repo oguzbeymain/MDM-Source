@@ -73,8 +73,10 @@
   "ext.playing": "Playing · {0}p",
   "ext.video": "Video",
   "ext.menu_download": "Download with MDM",
+  "ext.menu_download_image": "Download image with MDM",
+  "ext.menu_download_media": "Download media with MDM",
   "ext.menu_links": "Download selected links with MDM",
-  "ext.menu_scan": "Scan videos on the page",
+  "ext.menu_scan": "Scan page",
   "ext.note_ytdlp": "yt-dlp is recommended for the full quality list",
   "ext.error_no_media": "No valid media URL — play the video and try again",
   "session.resume": "Resume",
@@ -200,5 +202,10 @@
   "popup.site_add": "Add",
   "popup.site_remove": "Remove",
   "popup.sites_hint": "On these sites the button is hidden and downloads stay in the browser.",
-  "popup.saved": "Saved"
+  "popup.saved": "Saved",
+  "popup.scan_title": "Page scan",
+  "popup.scan_action": "Scan page",
+  "popup.scan_hint": "Lists the images, videos and files on this page in MDM, where you choose what to download.",
+  "popup.scan_running": "Scanning the page…",
+  "popup.scan_offline": "MDM is not running, so the scan could not be sent."
 }

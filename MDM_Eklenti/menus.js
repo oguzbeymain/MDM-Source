@@ -6,22 +6,66 @@ function mdmT(key, ...args) {
   return key;
 }
 
+// URL yolundaki dosya adi (uzantisiz veya blob/data ise bos)
+function mdmNameFromUrl(url) {
+  try {
+    const path = new URL(url).pathname || "";
+    const last = decodeURIComponent(path.split("/").filter(Boolean).pop() || "");
+    return last.includes(".") ? last : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+// Baglanti dogrudan bir dosyaya mi gidiyor (sayfa degil)?
+const MDM_FILE_URL_RE = /\.(jpe?g|png|gif|webp|avif|bmp|svg|ico|tiff?|heic|mp4|webm|mkv|mov|m4v|avi|flv|ts|m3u8|mpd|mp3|m4a|aac|flac|wav|ogg|opus|zip|rar|7z|tar|gz|bz2|xz|pdf|docx?|xlsx?|pptx?|txt|csv|epub|apk|exe|msi|iso|dmg|torrent)(?:[?#]|$)/i;
+
+function mdmLooksLikeFileUrl(url) {
+  try {
+    return MDM_FILE_URL_RE.test(new URL(url).pathname || "");
+  } catch (_) {
+    return false;
+  }
+}
+
 function mdmInstallMenus() {
   try {
     chrome.contextMenus.removeAll(() => {
-      chrome.contextMenus.create({ id: "mdm-dl-link", title: mdmT("ext.menu_download"), contexts: ["link", "image", "video", "audio"] });
+      // Baglam basina ayri kalem: gorsele saginca gorsel, videoya saginca video inilir
+      chrome.contextMenus.create({ id: "mdm-dl-link", title: mdmT("ext.menu_download"), contexts: ["link"] });
+      chrome.contextMenus.create({ id: "mdm-dl-image", title: mdmT("ext.menu_download_image"), contexts: ["image"] });
+      chrome.contextMenus.create({ id: "mdm-dl-media", title: mdmT("ext.menu_download_media"), contexts: ["video", "audio"] });
       chrome.contextMenus.create({ id: "mdm-dl-selection", title: mdmT("ext.menu_links"), contexts: ["selection"] });
-      chrome.contextMenus.create({ id: "mdm-scan-page", title: mdmT("ext.menu_scan"), contexts: ["page"] });
+      chrome.contextMenus.create({ id: "mdm-scan-page", title: mdmT("ext.menu_scan"), contexts: ["page", "image", "video", "audio"] });
     });
   } catch (_) {}
 }
 
-function mdmInitMenus(onCaptureUrl) {
+function mdmInitMenus(onCaptureUrl, onScanPage) {
   mdmInstallMenus();
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!tab || tab.id == null) return;
-    if (info.menuItemId === "mdm-dl-link" && info.linkUrl) {
-      await onCaptureUrl(info.linkUrl, "", tab, info.pageUrl || tab.url || "");
+    const page = info.pageUrl || tab.url || "";
+
+    if (info.menuItemId === "mdm-dl-image") {
+      const src = info.srcUrl || info.linkUrl || "";
+      if (src) await onCaptureUrl(src, mdmNameFromUrl(src), tab, page, { kind: "image" });
+      return;
+    }
+    if (info.menuItemId === "mdm-dl-media") {
+      const src = info.srcUrl || info.linkUrl || "";
+      if (src) await onCaptureUrl(src, mdmNameFromUrl(src), tab, page, { kind: "progressive" });
+      return;
+    }
+    if (info.menuItemId === "mdm-dl-link") {
+      const link = info.linkUrl || "";
+      const src = info.srcUrl || "";
+      // Gorselin uzerinden tiklandiysa baglanti hedefi sayfa ise gorseli indir
+      const useImage = info.mediaType === "image" && src && !mdmLooksLikeFileUrl(link);
+      const target = useImage ? src : link || src;
+      if (!target) return;
+      await onCaptureUrl(target, useImage ? mdmNameFromUrl(target) : "", tab, page,
+        useImage ? { kind: "image" } : {});
       return;
     }
     if (info.menuItemId === "mdm-dl-selection" && info.selectionText) {
@@ -33,6 +77,7 @@ function mdmInitMenus(onCaptureUrl) {
       try {
         await chrome.tabs.sendMessage(tab.id, { type: "mdm-rescan" });
       } catch (_) {}
+      if (typeof onScanPage === "function") await onScanPage(tab);
     }
   });
 }

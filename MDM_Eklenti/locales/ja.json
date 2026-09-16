@@ -73,8 +73,10 @@
   "ext.playing": "再生中 · {0}p",
   "ext.video": "動画",
   "ext.menu_download": "MDM でダウンロード",
+  "ext.menu_download_image": "画像を MDM でダウンロード",
+  "ext.menu_download_media": "メディアを MDM でダウンロード",
   "ext.menu_links": "選択したリンクを MDM でダウンロード",
-  "ext.menu_scan": "ページ内の動画をスキャン",
+  "ext.menu_scan": "ページをスキャン",
   "ext.note_ytdlp": "完全な画質一覧には yt-dlp の使用をおすすめします",
   "ext.error_no_media": "有効なメディア URL がありません — 動画を再生してから再試行してください",
   "session.resume": "再開",
@@ -200,5 +202,10 @@
   "popup.site_add": "追加",
   "popup.site_remove": "削除",
   "popup.sites_hint": "これらのサイトではボタンが非表示になり、ダウンロードはブラウザーで処理されます。",
-  "popup.saved": "保存しました"
+  "popup.saved": "保存しました",
+  "popup.scan_title": "ページスキャン",
+  "popup.scan_action": "ページをスキャン",
+  "popup.scan_hint": "このページの画像・動画・ファイルを MDM に一覧表示し、そこでダウンロードするものを選べます。",
+  "popup.scan_running": "ページをスキャンしています…",
+  "popup.scan_offline": "MDM が起動していないため、スキャンを送信できませんでした。"
 }

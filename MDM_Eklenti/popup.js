@@ -20,6 +20,7 @@
     siteAdd: document.getElementById("siteAdd"),
     siteList: document.getElementById("siteList"),
     sitesEmpty: document.getElementById("sitesEmpty"),
+    scanPage: document.getElementById("scanPage"),
     toast: document.getElementById("toast")
   };
 
@@ -66,10 +67,11 @@
     showToast();
   }
 
-  function showToast() {
+  function showToast(text) {
+    el.toast.textContent = text || t("popup.saved");
     el.toast.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.toast.classList.remove("show"), 1200);
+    toastTimer = setTimeout(() => el.toast.classList.remove("show"), text ? 2200 : 1200);
   }
 
   // ——— render ———
@@ -159,6 +161,22 @@
   }
 
   function bind() {
+    el.scanPage.addEventListener("click", async () => {
+      el.scanPage.disabled = true;
+      showToast(t("popup.scan_running"));
+      let ok = false;
+      try {
+        const r = await chrome.runtime.sendMessage({ type: "mdm-scan-page" });
+        ok = !!(r && r.ok);
+      } catch (_) { ok = false; }
+      if (ok) {
+        window.close();
+        return;
+      }
+      showToast(t("popup.scan_offline"));
+      el.scanPage.disabled = false;
+    });
+
     el.themeDark.addEventListener("click", () => {
       if (prefs.theme === "dark") return;
       prefs.theme = "dark";

@@ -73,8 +73,10 @@
   "ext.playing": "Lecture · {0}p",
   "ext.video": "Vidéo",
   "ext.menu_download": "Télécharger avec MDM",
+  "ext.menu_download_image": "Télécharger l'image avec MDM",
+  "ext.menu_download_media": "Télécharger le média avec MDM",
   "ext.menu_links": "Télécharger les liens sélectionnés avec MDM",
-  "ext.menu_scan": "Rechercher les vidéos de la page",
+  "ext.menu_scan": "Scanner la page",
   "ext.note_ytdlp": "yt-dlp est recommandé pour la liste complète des qualités",
   "ext.error_no_media": "Aucune URL média valide — lancez la vidéo et réessayez",
   "session.resume": "Reprendre",
@@ -200,5 +202,10 @@
   "popup.site_add": "Ajouter",
   "popup.site_remove": "Supprimer",
   "popup.sites_hint": "Sur ces sites, le bouton est masqué et les téléchargements restent dans le navigateur.",
-  "popup.saved": "Enregistré"
+  "popup.saved": "Enregistré",
+  "popup.scan_title": "Analyse de la page",
+  "popup.scan_action": "Scanner la page",
+  "popup.scan_hint": "Liste dans MDM les images, les vidéos et les fichiers de cette page, où vous choisissez quoi télécharger.",
+  "popup.scan_running": "Analyse de la page en cours…",
+  "popup.scan_offline": "MDM n'est pas en cours d'exécution, l'analyse n'a pas pu être envoyée."
 }

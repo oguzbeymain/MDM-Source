@@ -233,7 +233,9 @@ namespace MDM
                     // Eksik kategori yeni eklenirken zaten def.Extensions gelir.
                     if (string.IsNullOrWhiteSpace(existing.Icon) || existing.Icon == "📁")
                         existing.Icon = def.Icon;
-                    if (string.Equals(existing.Id, "Images", StringComparison.OrdinalIgnoreCase)
+                    // Eski TR yapıdan gelen "Images" adını düzelt; İngilizce kurulumda dokunma
+                    if (Loc.Code == "tr"
+                        && string.Equals(existing.Id, "Images", StringComparison.OrdinalIgnoreCase)
                         && existing.Name is "Images" or "Image")
                         existing.Name = "Resimler";
                 }

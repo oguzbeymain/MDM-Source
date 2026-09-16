@@ -88,7 +88,7 @@ namespace MDM
 
             StyleSoft(BtnTorrent, soft, softHover, softFg, softHoverFg);
             StyleSoft(BtnCancel, soft, softHover, softFg, softHoverFg);
-            StyleSoft(BtnGrab, soft, softHover, softFg, Color.FromRgb(0xFF, 0x6B, 0x00));
+            StyleSoft(BtnGrab, soft, softHover, softFg, softHoverFg);
 
             if (BtnCloseX != null)
                 BtnCloseX.Foreground = Brush(Colors.White);

@@ -73,8 +73,10 @@
   "ext.playing": "Oynayan · {0}p",
   "ext.video": "Video",
   "ext.menu_download": "MDM ile indir",
+  "ext.menu_download_image": "Görseli MDM ile indir",
+  "ext.menu_download_media": "Medyayı MDM ile indir",
   "ext.menu_links": "Seçili bağlantıları MDM ile indir",
-  "ext.menu_scan": "Sayfadaki videoları tara",
+  "ext.menu_scan": "Sayfayı tara",
   "ext.note_ytdlp": "Tam kalite listesi için yt-dlp önerilir",
   "ext.error_no_media": "Geçerli medya URL’si yok — videoyu oynatıp tekrar deneyin",
   "session.resume": "Devam et",
@@ -200,5 +202,10 @@
   "popup.site_add": "Ekle",
   "popup.site_remove": "Kaldır",
   "popup.sites_hint": "Bu sitelerde düğme görünmez ve indirmeler tarayıcıda kalır.",
-  "popup.saved": "Kaydedildi"
+  "popup.saved": "Kaydedildi",
+  "popup.scan_title": "Sayfa taraması",
+  "popup.scan_action": "Sayfayı tara",
+  "popup.scan_hint": "Sayfadaki görselleri, videoları ve dosyaları MDM'de listeler; hangilerini indireceğinizi orada seçersiniz.",
+  "popup.scan_running": "Sayfa taranıyor…",
+  "popup.scan_offline": "MDM açık değil; tarama gönderilemedi."
 }

@@ -18,7 +18,7 @@
     <!-- NuGet uydu (tr/es/fr/Ã¢â‚¬Â¦) klasÃƒÂ¶rlerini ÃƒÂ§Ã„Â±ktÃ„Â±dan ÃƒÂ§Ã„Â±kar Ã¢â‚¬â€ UI zaten TR sabit -->
     <SatelliteResourceLanguages>
     </SatelliteResourceLanguages>
-    <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**;MDM.Tests\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);MDM.Updater\**;MDM.Tests\**;Setup\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="MDM.Updater\**" />
@@ -27,6 +27,10 @@
     <None Remove="MDM.Updater\**" />
     <Compile Remove="MDM.Tests\**" />
     <None Remove="MDM.Tests\**" />
+    <Compile Remove="Setup\**" />
+    <Page Remove="Setup\**" />
+    <EmbeddedResource Remove="Setup\**" />
+    <None Remove="Setup\**" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\mdm.ico" />
