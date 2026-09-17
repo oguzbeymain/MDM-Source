@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using MonoTorrent;
 using MonoTorrent.Client;
 
@@ -297,25 +296,8 @@ namespace MDM
             return false;
         }
 
-        private static async Task<byte[]> ReadTorrentBytesAsync(string src, CancellationToken token)
-        {
-            if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                || src.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                using var client = TransferHttp.CreateClient();
-                using var req = new HttpRequestMessage(HttpMethod.Get, src);
-                using var resp = await client.SendAsync(req, token).ConfigureAwait(false);
-                resp.EnsureSuccessStatusCode();
-                return await resp.Content.ReadAsByteArrayAsync(token).ConfigureAwait(false);
-            }
-
-            string path = src.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
-                ? new Uri(src).LocalPath
-                : src;
-            if (!File.Exists(path))
-                throw new FileNotFoundException("Torrent dosyası bulunamadı.", path);
-            return await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
-        }
+        private static Task<byte[]> ReadTorrentBytesAsync(string src, CancellationToken token)
+            => TorrentPeek.ReadTorrentFileBytesAsync(src, token);
 
         private async Task ApplySequentialAsync()
         {

@@ -688,6 +688,18 @@
     scanMedia();
   }
 
+  // Dil: masaustu ayarindan gelen sozluk storage'da; yuklenmezse metinler Turkce kalir
+  try {
+    if (typeof mdmI18n !== "undefined") {
+      mdmI18n.init().then(() => refreshAll());
+      mdmI18n.onChange(() => {
+        // Buton basligi ve panel metinleri olustururken t() cagriliyor; yeniden ciz
+        if (window.mdmOverlayApi) window.mdmOverlayApi.removeAll();
+        refreshAll();
+      });
+    }
+  } catch (_) { /* ignore */ }
+
   safeSend({ type: "mdm-content-ready" }).then((r) => {
     if (r && typeof r.online === "boolean") {
       desktopOnline = r.online;

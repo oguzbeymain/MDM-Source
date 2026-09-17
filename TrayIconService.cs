@@ -132,6 +132,7 @@ namespace MDM
         public void ShowBalloon(string title, string message)
         {
             if (!_added || _disposed) return;
+            if (GameModeGuard.ShouldSuppressUi()) return;
             try
             {
                 _data.uFlags = NifMessage | NifIcon | NifTip | NifInfo;

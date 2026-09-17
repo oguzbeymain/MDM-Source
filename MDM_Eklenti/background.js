@@ -452,6 +452,18 @@ function mdmShouldAutoTakeoverDownload(url, mime, filename) {
   // Yalnızca .bin isimli «dosya» — asla otomatik alma
   if (/\.bin$/i.test(name) && !MDM_REAL_FILE_NAME.test(name.replace(/\.bin$/i, ".zip"))) return false;
 
+  // Firefox downloads API kullanıcı indirmesidir (Chromium'daki media segment spam'i yok).
+  if (mdmIsFirefox()) {
+    if (/^blob:/i.test(url) || /^data:/i.test(url) || /^file:/i.test(url)) return false;
+    const ct = (mime || "").split(";")[0].trim().toLowerCase();
+    if (/^text\/(html|css|javascript)/i.test(ct) || /^application\/json/i.test(ct)) return false;
+    if (/^video\//i.test(ct) || /^audio\//i.test(ct)) {
+      return /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)(\?|$)/i.test(url)
+        || /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)$/i.test(name);
+    }
+    return true;
+  }
+
   const hasRealExt = MDM_REAL_FILE_NAME.test(name)
     || (typeof MDM_FILE_EXT !== "undefined" && MDM_FILE_EXT.test(url))
     || MDM_REAL_FILE_NAME.test(url.split(/[?#]/)[0].split("/").pop() || "");
@@ -505,35 +517,59 @@ function mdmHandoffFromHeaders(details, mime, disposition) {
 
 if (mdmIsFirefox()) {
   try {
-    // Drive / doğrudan dosya linkleri çoğu zaman main_frame değil "other" / xhr olur.
-    // Sadece main_frame dinlemek = rar/zip tarayıcıda kalır.
+    // İndirmeyi kesme — iptal + async handoff yarışı dosyayı hem tarayıcıda hem MDM'de kaybettiriyordu.
+    // Sadece orijinal URL'yi hatırla; asıl yakalama downloads.onCreated/onChanged.
     chrome.webRequest.onHeadersReceived.addListener(
-      function mdmFirefoxBlockDownload(details) {
+      function mdmFirefoxNoteDownload(details) {
         if (!mdmCaptureEnabled) return;
         const status = details.statusCode || 0;
         if (status !== 200 && status !== 206) return;
         const mime = mdmHeaderValue(details.responseHeaders, "content-type");
         const disposition = mdmHeaderValue(details.responseHeaders, "content-disposition");
-        if (!mdmLooksLikeBinaryDownload(details.url, mime, disposition)) return;
-        // HTML uyarı sayfasını (Drive virüs taraması) kesme
+        if (!mdmLooksLikeBinaryDownload(details.url, mime, disposition)
+            && !/attachment/i.test(disposition || "")) return;
         if (/^text\/html/i.test((mime || "").split(";")[0])) return;
-        mdmHandoffFromHeaders(details, mime, disposition);
-        return { cancel: true };
+        const fname = (typeof mdmFilenameFromHeaders === "function"
+          ? (mdmFilenameFromHeaders(details.url, disposition) || "") : "");
+        mdmRememberBinaryUrl(details.url, fname);
       },
       {
         urls: ["http://*/*", "https://*/*"],
-        // "media" bilinçli dışarıda — Shorts/oynatma parçalarını kesmesin
         types: ["main_frame", "sub_frame", "xmlhttprequest", "other", "object"]
       },
-      ["blocking", "responseHeaders"]
+      ["responseHeaders"]
     );
   } catch (e) {
-    console.warn("MDM: Firefox blocking webRequest unavailable", e);
+    console.warn("MDM: Firefox webRequest unavailable", e);
   }
 }
 
 // ——— downloads handoff (legacy file) ———
 const mdmHandledDownloadIds = new Set();
+const mdmPendingFirefoxDownloads = new Set();
+const mdmRecentBinaryUrls = [];
+
+function mdmRememberBinaryUrl(url, filename) {
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  mdmRecentBinaryUrls.unshift({ url, filename: (filename || "").split(/[/\\]/).pop() || "", t: Date.now() });
+  if (mdmRecentBinaryUrls.length > 40) mdmRecentBinaryUrls.pop();
+}
+
+function mdmResolveDownloadUrl(downloadItem) {
+  let url = downloadItem.finalUrl || downloadItem.url || "";
+  if (/^https?:\/\//i.test(url) || /^magnet:/i.test(url)) return url;
+  const name = (downloadItem.filename || "").split(/[/\\]/).pop() || "";
+  const now = Date.now();
+  for (const x of mdmRecentBinaryUrls) {
+    if (now - x.t > 25000) continue;
+    if (name && x.filename && name.toLowerCase() === x.filename.toLowerCase()) return x.url;
+  }
+  for (const x of mdmRecentBinaryUrls) {
+    if (now - x.t > 8000) continue;
+    return x.url;
+  }
+  return "";
+}
 
 function mdmReferrerString(v) {
   if (!v) return "";
@@ -551,10 +587,17 @@ async function mdmTakeoverDownload(downloadItem) {
   if (downloadItem.byExtensionId && downloadItem.byExtensionId === chrome.runtime.id) return false;
 
   await mdmDisableBrowserDownloadUi();
-  const url = downloadItem.finalUrl || downloadItem.url || "";
+  const url = mdmResolveDownloadUrl(downloadItem);
   // Popup'ta devre disi birakilan sitede indirme tarayicida kalir
   if (mdmIsBlockedHost(mdmHostOf(downloadItem.referrer || "") || mdmHostOf(url))) return false;
-  if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("file:")) return false;
+  if (!url) {
+    if (mdmIsFirefox()) mdmPendingFirefoxDownloads.add(downloadItem.id);
+    return false;
+  }
+  if (url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("file:")) {
+    if (mdmIsFirefox()) mdmPendingFirefoxDownloads.add(downloadItem.id);
+    return false;
+  }
   if (!/^https?:\/\//i.test(url) && !/^magnet:/i.test(url)) return false;
   if (mdmIsSessionRestoreReplay(downloadItem)) return false;
 
@@ -574,6 +617,7 @@ async function mdmTakeoverDownload(downloadItem) {
   }
 
   mdmHandledDownloadIds.add(downloadItem.id);
+  mdmPendingFirefoxDownloads.delete(downloadItem.id);
   const mime = downloadItem.mime || "";
   let rawFileName = (downloadItem.filename || "").split(/[/\\]/).pop() || "";
   if (!rawFileName || rawFileName === "download") rawFileName = "";
@@ -587,13 +631,6 @@ async function mdmTakeoverDownload(downloadItem) {
   if (referrer) headers.Referer = referrer;
   if (/google\.com|googleusercontent\.com/i.test(url))
     headers.Referer = headers.Referer || "https://drive.google.com/";
-
-  // Firefox: async handoff bitene kadar tarayıcı dosyayı yazar.
-  // Önce iptal et, sonra MDM'ye ver — aksi halde Drive rar vb. webde kalır.
-  const firefoxFirst = mdmIsFirefox();
-  if (firefoxFirst) {
-    await mdmCancelBrowserDownload(downloadItem.id);
-  }
 
   let accepted = false;
   try {
@@ -615,20 +652,8 @@ async function mdmTakeoverDownload(downloadItem) {
 
   if (accepted) {
     mdmRememberAccepted(url);
-    if (!firefoxFirst) await mdmCancelBrowserDownload(downloadItem.id);
+    await mdmCancelBrowserDownload(downloadItem.id);
     return true;
-  }
-
-  // Firefox'ta iptal ettik ama MDM yoksa: eklenti kaynaklı yeniden başlat (döngü yok — byExtensionId)
-  if (firefoxFirst) {
-    try {
-      await chrome.downloads.download({
-        url,
-        filename: rawFileName || undefined,
-        saveAs: false,
-        conflictAction: "uniquify"
-      });
-    } catch (_) {}
   }
 
   mdmHandledDownloadIds.delete(downloadItem.id);
@@ -636,6 +661,10 @@ async function mdmTakeoverDownload(downloadItem) {
 }
 
 chrome.downloads.onCreated.addListener((downloadItem) => {
+  if (mdmIsFirefox() && downloadItem && downloadItem.id != null) {
+    const u = downloadItem.finalUrl || downloadItem.url || "";
+    if (!u || /^blob:/i.test(u)) mdmPendingFirefoxDownloads.add(downloadItem.id);
+  }
   mdmTakeoverDownload(downloadItem).catch(() => {});
 });
 
@@ -643,7 +672,8 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
 chrome.downloads.onChanged.addListener((delta) => {
   if (!delta || delta.id == null) return;
   if (mdmHandledDownloadIds.has(delta.id)) return;
-  const interesting = delta.url || delta.filename || delta.state || delta.mime;
+  const pending = mdmPendingFirefoxDownloads.has(delta.id);
+  const interesting = delta.url || delta.filename || delta.state || delta.mime || pending;
   if (!interesting) return;
   try {
     const p = chrome.downloads.search({ id: delta.id });
@@ -973,5 +1003,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     mdmPingDesktop().then(() => mdmBroadcastDesktopStatus());
   }
 });
+
+// Sekme degisiminde de yoklama: uygulamada dil/durum degisince 1 dakikalik
+// alarmi beklemek yerine kullanici sekmeye dondugunde guncellenir.
+let mdmTabPingAt = 0;
+try {
+  chrome.tabs.onActivated.addListener(() => {
+    const now = Date.now();
+    if (now - mdmTabPingAt < 10000) return;
+    mdmTabPingAt = now;
+    mdmPingDesktop().then(() => mdmBroadcastDesktopStatus());
+  });
+} catch (_) { /* ignore */ }
 
 mdmPingDesktop().then(() => mdmBroadcastDesktopStatus());

@@ -75,7 +75,54 @@
     } catch (_) {}
   }
 
-  global.mdmI18n = { t, loadLocale, syncFromDesktop, get code() { return code; } };
+  const listeners = new Set();
+
+  function onChange(cb) {
+    if (typeof cb === "function") listeners.add(cb);
+  }
+
+  function notify() {
+    for (const cb of listeners) {
+      try { cb(code); } catch (_) {}
+    }
+  }
+
+  /**
+   * Sayfa/popup context'leri masaustune fetch atmadigi icin dili storage'dan alir.
+   * Cagrilmadiginda tum metinler Turkce FALLBACK'te kaliyordu.
+   */
+  async function init() {
+    try {
+      const d = await chrome.storage.local.get(["mdmLang", "mdmLangMap"]);
+      if (d && d.mdmLang) {
+        code = d.mdmLang;
+        if (d.mdmLangMap && typeof d.mdmLangMap === "object") map = d.mdmLangMap;
+        else await loadLocale(code);
+        notify();
+      }
+    } catch (_) {}
+    return code;
+  }
+
+  // Masaustunde dil degisince background yeni sozlugu storage'a yazar; tum
+  // context'ler (sayfa butonu, kalite paneli, popup) buradan haberdar olur.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes || !changes.mdmLang) return;
+      const next = changes.mdmLang.newValue;
+      if (!next || next === code) return;
+      code = next;
+      const fresh = changes.mdmLangMap && changes.mdmLangMap.newValue;
+      if (fresh && typeof fresh === "object") {
+        map = fresh;
+        notify();
+      } else {
+        loadLocale(next).then(notify);
+      }
+    });
+  } catch (_) {}
+
+  global.mdmI18n = { t, loadLocale, syncFromDesktop, init, onChange, get code() { return code; } };
 
   // Arka plan scriptleri için kısa yol: çeviri yoksa Türkçe metne düşer
   global.mdmErrText = function (key, fallback) {

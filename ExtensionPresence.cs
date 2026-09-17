@@ -65,6 +65,9 @@ namespace MDM
             if (id is "chrome" or "google chrome") return "chrome";
             if (id is "brave") return "brave";
             if (id is "firefox" or "mozilla firefox" or "fx") return "firefox";
+            if (id is "firefox-developer" or "firefox-dev" or "developer"
+                or "firefox developer edition" or "firefoxdeveloperedition")
+                return "firefox-developer";
             return id;
         }
     }

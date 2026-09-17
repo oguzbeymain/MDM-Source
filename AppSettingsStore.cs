@@ -35,6 +35,8 @@ namespace MDM
         public int HttpMaxChannels { get; set; }
         public bool NotifyOnComplete { get; set; } = true;
         public bool NotifyOnTrayMinimize { get; set; }
+        /// <summary>Açıkken tam ekran oyun/sunum sırasında bildirim ve mini pencereler çıkmaz (varsayılan kapalı).</summary>
+        public bool GameModeEnabled { get; set; }
         public bool AutoCreateCategoryFolders { get; set; } = true;
         public string Theme { get; set; } = "Dark";
         /// <summary>Açık tema parlaklığı (70–100). Yalnızca beyaz modda uygulanır.</summary>
@@ -53,7 +55,11 @@ namespace MDM
         public bool AutoReconnect { get; set; } = true;
         /// <summary>Aynı URL 3'ten fazla indirilince güvenlik onayı iste (varsayılan açık).</summary>
         public bool ConfirmRepeatDownloads { get; set; } = true;
-        /// <summary>UI dili: tr, en, de, fr, es, ru, ar, zh-CN, zh-TW, ja, ko, it, fa</summary>
+        /// <summary>Çalıştırılabilir/betik dosyalarda tarayıcı gibi izin sor (varsayılan açık).</summary>
+        public bool WarnDangerousFiles { get; set; } = true;
+        /// <summary>Tamamlanan dosyaya "internetten indirildi" damgası koy (varsayılan açık).</summary>
+        public bool MarkDownloadsFromInternet { get; set; } = true;
+        /// <summary>UI dili: tr, en, de, fr, es, it, ru, ar, fa, zh-CN, zh-TW, ja, ko</summary>
         public string UiLanguage { get; set; } = "tr";
     }
 

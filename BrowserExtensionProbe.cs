@@ -52,22 +52,31 @@ namespace MDM
                         "BraveSoftware", "Brave-Browser", "User Data"),
                     @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\brave.exe",
                     extRoot),
-                ProbeFirefox(),
+                ProbeFirefoxRelease(),
+                ProbeFirefoxDeveloper(),
             };
         }
 
-        private static BrowserExtensionStatus ProbeFirefox()
+        private static BrowserExtensionStatus ProbeFirefoxRelease()
+            => ProbeFirefoxChannel(
+                id: "firefox",
+                name: "Mozilla Firefox",
+                accent: "#FF7139",
+                exe: ExtensionInstaller.ResolveFirefoxReleaseExe(),
+                developer: false);
+
+        private static BrowserExtensionStatus ProbeFirefoxDeveloper()
+            => ProbeFirefoxChannel(
+                id: "firefox-developer",
+                name: "Firefox Developer Edition",
+                accent: "#00D4AA",
+                exe: ExtensionInstaller.ResolveFirefoxDeveloperExe(out _),
+                developer: true);
+
+        private static BrowserExtensionStatus ProbeFirefoxChannel(
+            string id, string name, string accent, string? exe, bool developer)
         {
-            const string id = "firefox";
-            const string name = "Mozilla Firefox";
-            const string accent = "#FF7139";
-
-            string? exe = ExtensionInstaller.ResolveFirefoxExe(out _);
-            bool browserOk = !string.IsNullOrWhiteSpace(exe)
-                || Directory.Exists(Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Mozilla", "Firefox"));
-
+            bool browserOk = !string.IsNullOrWhiteSpace(exe);
             if (!browserOk)
             {
                 return new BrowserExtensionStatus
@@ -79,7 +88,7 @@ namespace MDM
             }
 
             bool live = ExtensionPresence.SeenRecentlyForBrowser(id, TimeSpan.FromMinutes(5));
-            bool onDisk = ExtensionInstaller.FirefoxExtensionPresentOnDisk();
+            bool onDisk = ExtensionInstaller.FirefoxExtensionPresentOnDisk(developer);
             bool active = live;
             string detail;
             if (active)
@@ -87,9 +96,9 @@ namespace MDM
             else if (onDisk)
                 detail = Loc.T("extstatus.firefox_off", "Eklenti yüklü ama kapalı / oturum yok");
             else
-                detail = Loc.T("extstatus.firefox_missing", "Eklenti yok — «Firefox otomatik kur»");
+                detail = Loc.T("extstatus.firefox_missing", "Eklenti yok — «Kur»");
 
-            Debug.WriteLine($"ExtProbe[firefox]: live={live} disk={onDisk} → active={active}");
+            Debug.WriteLine($"ExtProbe[{id}]: live={live} disk={onDisk} → active={active}");
 
             return new BrowserExtensionStatus
             {

@@ -49,6 +49,15 @@ async function mdmResolveLiveBase() {
         await mdmSavePreferredPort(ep.port);
         mdmDesktopOnline = true;
         mdmDesktopCheckAt = Date.now();
+        // Her indirme/kalite isteginde dil de tazelenir; mdm-presence alarmini beklemeye gerek kalmaz
+        try {
+          const data = await resp.json();
+          if (data && data.language && typeof mdmI18n !== "undefined"
+              && mdmI18n.code !== data.language) {
+            await mdmI18n.loadLocale(data.language);
+            if (typeof mdmInstallMenus === "function") mdmInstallMenus();
+          }
+        } catch (_) { /* dil okunamazsa mevcut sozlukte kal */ }
         return ep.base;
       }
     } catch (_) { /* next */ }
@@ -212,10 +221,14 @@ async function mdmPingDesktop() {
   const preferred = await mdmGetPreferredPort();
   let browser = "chrome";
   try {
-    const ua = navigator.userAgent || "";
-    if (/Firefox\//.test(ua)) browser = "firefox";
-    else if (/Edg\//.test(ua)) browser = "edge";
-    else if (/Brave/i.test(ua)) browser = "brave";
+    if (typeof MDM_BROWSER_CHANNEL === "string" && MDM_BROWSER_CHANNEL)
+      browser = MDM_BROWSER_CHANNEL;
+    else {
+      const ua = navigator.userAgent || "";
+      if (/Firefox\//.test(ua)) browser = "firefox";
+      else if (/Edg\//.test(ua)) browser = "edge";
+      else if (/Brave/i.test(ua)) browser = "brave";
+    }
   } catch (_) {}
   for (const ep of mdmBuildEndpoints(preferred)) {
     const ctrl = new AbortController();

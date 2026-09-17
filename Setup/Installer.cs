@@ -119,6 +119,7 @@ namespace MDM.Setup
 
                 progress.Report((SetupLoc.T("setup.step_extract", "Dosyalar kopyalanıyor…"), 0.08));
                 CleanParkedFiles(options.InstallDir);
+                RemoveForeignArchitectureFiles(options.InstallDir);
                 ExtractPayload(options.InstallDir, progress);
 
                 progress.Report((SetupLoc.T("setup.step_settings", "Ayarlar hazırlanıyor…"), 0.86));
@@ -270,6 +271,50 @@ namespace MDM.Setup
                     Thread.Sleep(250);
                 }
             }
+        }
+
+        /// <summary>
+        /// 32-bit kurulumun üzerine 64-bit sürüm gelirse (veya tersi) klasörde kalan eski
+        /// mimarideki .dll'ler BadImageFormatException'a yol açar. Mimari değiştiyse uygulama
+        /// dosyaları silinir; kullanıcı ayarları ayrı klasörde olduğu için etkilenmez.
+        /// </summary>
+        private static void RemoveForeignArchitectureFiles(string installDir)
+        {
+            try
+            {
+                string installed = Path.Combine(installDir, ExeName);
+                if (!File.Exists(installed)) return;
+
+                ushort? existing = ReadPeMachine(installed);
+                ushort? incoming = ReadPeMachine(Environment.ProcessPath ?? "");
+                if (existing == null || incoming == null || existing == incoming) return;
+
+                foreach (string file in Directory.EnumerateFiles(installDir, "*", SearchOption.AllDirectories))
+                {
+                    if (string.Equals(file, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (file.EndsWith(UninstallExeName, StringComparison.OrdinalIgnoreCase)) continue;
+                    TryDeleteFile(file);
+                }
+            }
+            catch { /* okunamazsa normal kurulum akışı devam eder */ }
+        }
+
+        /// <summary>PE başlığındaki makine tipi: 0x8664 = x64, 0x014C = x86, 0xAA64 = arm64.</summary>
+        private static ushort? ReadPeMachine(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return null;
+                using var fs = File.OpenRead(path);
+                using var reader = new BinaryReader(fs);
+                if (reader.ReadUInt16() != 0x5A4D) return null;   // MZ
+
+                fs.Position = 0x3C;
+                fs.Position = reader.ReadInt32();
+                if (reader.ReadUInt32() != 0x00004550) return null; // PE\0\0
+                return reader.ReadUInt16();
+            }
+            catch { return null; }
         }
 
         /// <summary>Kilitli dosya yüzünden kenara çekilmiş eski kopyalar.</summary>

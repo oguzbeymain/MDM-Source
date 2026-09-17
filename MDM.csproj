@@ -10,11 +10,13 @@
     <RootNamespace>MDM</RootNamespace>
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MDM</AssemblyTitle>
-    <Version>1.0.40</Version>
-    <AssemblyVersion>1.0.40.0</AssemblyVersion>
-    <FileVersion>1.0.40.0</FileVersion>
-    <InformationalVersion>1.0.40</InformationalVersion>
+    <Version>1.0.46</Version>
+    <AssemblyVersion>1.0.46.0</AssemblyVersion>
+    <FileVersion>1.0.46.0</FileVersion>
+    <InformationalVersion>1.0.46</InformationalVersion>
     <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
+    <!-- Görev Yöneticisi'nde 32-bit görünmesin -->
+    <PlatformTarget>x64</PlatformTarget>
     <!-- NuGet uydu (tr/es/fr/Ã¢â‚¬Â¦) klasÃƒÂ¶rlerini ÃƒÂ§Ã„Â±ktÃ„Â±dan ÃƒÂ§Ã„Â±kar Ã¢â‚¬â€ UI zaten TR sabit -->
     <SatelliteResourceLanguages>
     </SatelliteResourceLanguages>
@@ -49,8 +51,8 @@
     <None Include="MDM_Eklenti\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="MDM_Eklenti" />
     <None Include="Locales\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="Locales" />
   </ItemGroup>
-  <!-- YanlÃ„Â±Ã…Å¸ mimari hostfxr exe'yi bozar ve dotnet dll ile terminal aÃƒÂ§mak gerekir -->
-  <Target Name="RemoveBundledHostFxr" AfterTargets="Build">
+  <!-- Yanlış mimari hostfxr, framework-dependent exe'yi bozar. Self-contained pakette hostfxr şarttır. -->
+  <Target Name="RemoveBundledHostFxr" AfterTargets="Build" Condition="'$(SelfContained)' != 'true'">
     <Delete Files="$(OutputPath)hostfxr.dll;$(OutputPath)hostpolicy.dll" ContinueOnError="true" />
   </Target>
   <!-- Kalan dil klasÃƒÂ¶rlerini locales altÃ„Â±na taÃ…Å¸Ã„Â± (varsa) -->

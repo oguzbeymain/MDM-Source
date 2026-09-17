@@ -362,6 +362,10 @@
                                                Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,12"/>
                                     <CheckBox x:Name="ChkNotifyDone" Content="Dosya indince bildirim göster"/>
                                     <TextBlock x:Name="TxtNotifyDoneHint" Text="İndirme bitince Windows tepsi bildirimi (Windows sesi). Kapalıysa bildirim ve ses gelmez."
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,6,0,12"/>
+
+                                    <CheckBox x:Name="ChkGameMode" Content="Oyun modu"/>
+                                    <TextBlock x:Name="TxtGameModeHint" Text="Açıkken tam ekran oyun veya sunum sırasında indirme bildirimi, tepsi balonu ve mini indirme penceresi çıkmaz. İndirmeler arka planda sürer. Varsayılan kapalıdır; isteğe bağlı açılır."
                                                Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,6,0,0"/>
                                 </StackPanel>
                             </Border>
@@ -641,6 +645,18 @@
                                     <CheckBox x:Name="ChkConfirmRepeat" Content="İndirme spam’inde güvenlik onayı (önerilir)"
                                               Margin="0,0,0,8"/>
                                     <TextBlock x:Name="TxtSecurityHint" Text="Açıkken kısa sürede aynı bağlantıya veya toplu indirme isteklerine karşı tek bir onay penceresi gösterilir. Onaylamazsanız istekler sessizce engellenir; normal indirmeleri etkilemez."
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"/>
+
+                                    <Border Background="{DynamicResource SettingsPanelBorderBrush}" Height="1" Margin="0,12,0,12" Opacity="0.6"/>
+
+                                    <CheckBox x:Name="ChkWarnDangerous" Content="Zararlı olabilecek dosyalarda izin sor (önerilir)"
+                                              Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="TxtDangerousHint" Text="Program, betik veya makro içeren dosyalar indirilmeden önce tarayıcıdaki gibi bir izin penceresi gösterilir. İzin vermezseniz indirme başlamaz."
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"/>
+
+                                    <CheckBox x:Name="ChkMarkFromInternet" Content="İndirilen dosyaları “internetten geldi” olarak işaretle"
+                                              Margin="0,14,0,8"/>
+                                    <TextBlock x:Name="TxtMarkHint" Text="Windows ve Microsoft Defender dosyayı açarken kendi güvenlik denetimini uygular. Kapatırsanız bu uyarılar çıkmaz."
                                                Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="28,0,0,0"/>
                                 </StackPanel>
                             </Border>

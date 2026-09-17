@@ -130,7 +130,7 @@ namespace MDM
                 "chrome" => ChromeMark(),
                 "edge" => EdgeMark(),
                 "brave" => BraveMark(),
-                "firefox" => FirefoxMark(),
+                "firefox" or "firefox-developer" => FirefoxMark(),
                 _ => GenericMark()
             };
         }
@@ -236,7 +236,9 @@ namespace MDM
         private static string? ResolveExe(string id)
         {
             if (id == "firefox")
-                return ExtensionInstaller.ResolveFirefoxExe(out _);
+                return ExtensionInstaller.ResolveFirefoxReleaseExe();
+            if (id == "firefox-developer")
+                return ExtensionInstaller.ResolveFirefoxDeveloperExe(out _);
 
             string? fromReg = id switch
             {

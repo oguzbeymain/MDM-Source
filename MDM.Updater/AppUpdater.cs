@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -266,6 +267,26 @@ namespace MDM.Updater
             return Version.TryParse(match.Value, out var version) ? Normalize(version) : null;
         }
 
+        /// <summary>
+        /// Yayında birden fazla mimari paketi olabiliyor; yanlış olanı kopyalamak uygulamayı
+        /// açılmaz hale getirir. Mimari etiketi olmayan adlar (eski yayınlar) kabul edilir.
+        /// </summary>
+        private static bool MatchesProcessArchitecture(string assetName)
+        {
+            string[] tags = { "win-x64", "win-x86", "win-arm64", "x64", "x86", "arm64" };
+            string? found = Array.Find(
+                tags, t => assetName.Contains(t, StringComparison.OrdinalIgnoreCase));
+            if (found == null) return true;
+
+            string wanted = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X86 => "x86",
+                Architecture.Arm64 => "arm64",
+                _ => "x64"
+            };
+            return found.EndsWith(wanted, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool TryPickAsset(JsonElement release, out string name, out string url)
         {
             name = "";
@@ -278,6 +299,7 @@ namespace MDM.Updater
             foreach (JsonElement asset in assets.EnumerateArray())
             {
                 string assetName = asset.GetProperty("name").GetString() ?? "";
+                if (!MatchesProcessArchitecture(assetName)) continue;
                 if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                     zip ??= asset;
                 else if (assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&

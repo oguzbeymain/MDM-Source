@@ -1590,6 +1590,8 @@
                                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                                 <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Focusable" Value="False"/>
                                 <Setter Property="ContextMenu" Value="{StaticResource ColumnHeaderContextMenu}"/>
                                 <EventSetter Event="PreviewMouseLeftButtonDown" Handler="ColumnHeader_PreviewMouseLeftButtonDown"/>
                                 <Setter Property="Template">
@@ -1731,7 +1733,7 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn x:Name="ColFileName" Header="Dosya Adı" Width="2*" MinWidth="64"
+                            <DataGridTemplateColumn x:Name="ColFileName" Header="Dosya Adı" Width="*" MinWidth="64"
                                                     IsReadOnly="True" SortMemberPath="FileName" CanUserSort="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -1791,8 +1793,8 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
 
-                            <DataGridTemplateColumn x:Name="ColStatus" Header="Durum" Width="*" MinWidth="120" MaxWidth="240"
-                                                    IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
+                            <DataGridTemplateColumn x:Name="ColStatus" Header="Durum" Width="160" MinWidth="120" MaxWidth="160"
+                                                    IsReadOnly="True" SortMemberPath="Status" CanUserSort="True" CanUserReorder="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid VerticalAlignment="Center" Margin="0,2">
@@ -1850,7 +1852,7 @@
                             <!-- Satir aksiyonlari: tamamlaninca gizlenir -->
                             <DataGridTemplateColumn x:Name="ColActions" Header="" SortMemberPath="__actions"
                                                     Width="100" MinWidth="100" MaxWidth="100"
-                                                    CanUserResize="False" CanUserSort="False" IsReadOnly="True">
+                                                    CanUserResize="False" CanUserSort="False" CanUserReorder="False" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellStyle>
                                     <Style TargetType="DataGridCell">
                                         <Setter Property="Padding" Value="2,1"/>

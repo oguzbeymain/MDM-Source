@@ -32,13 +32,13 @@ namespace MDM
             ("fr", "Français"),
             ("es", "Español"),
             ("ru", "Русский"),
+            ("it", "Italiano"),
             ("ar", "العربية"),
+            ("fa", "فارسی"),
             ("zh-CN", "简体中文"),
             ("zh-TW", "繁體中文"),
             ("ja", "日本語"),
             ("ko", "한국어"),
-            ("it", "Italiano"),
-            ("fa", "فارسی"),
         };
 
         public static void Initialize()

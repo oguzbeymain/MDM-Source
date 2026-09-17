@@ -11,6 +11,8 @@ namespace MDM
         {
             if (!AppSettingsStore.Load().NotifyOnComplete)
                 return;
+            if (GameModeGuard.ShouldSuppressUi())
+                return;
 
             string name = string.IsNullOrWhiteSpace(fileName) ? "Dosya" : fileName.Trim();
             try

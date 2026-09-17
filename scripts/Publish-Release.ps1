@@ -16,7 +16,7 @@ param(
     [string]$AppRepo = "oguzbeymain/MDM-App",
 
     [ValidateSet("win-x86", "win-x64")]
-    [string]$Runtime = "win-x86"
+    [string]$Runtime = "win-x64"
 )
 
 $ErrorActionPreference = "Stop"

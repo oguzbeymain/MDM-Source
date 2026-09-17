@@ -51,6 +51,8 @@ namespace MDM
             ChkAutoFolders.IsChecked = settings.AutoCreateCategoryFolders;
             ChkNotifyTray.IsChecked = settings.NotifyOnTrayMinimize;
             ChkNotifyDone.IsChecked = settings.NotifyOnComplete;
+            if (ChkGameMode != null)
+                ChkGameMode.IsChecked = settings.GameModeEnabled;
             _themePreviewBusy = true;
             try
             {
@@ -82,6 +84,10 @@ namespace MDM
             ChkAutoReconnect.IsChecked = settings.AutoReconnect;
             if (ChkConfirmRepeat != null)
                 ChkConfirmRepeat.IsChecked = settings.ConfirmRepeatDownloads;
+            if (ChkWarnDangerous != null)
+                ChkWarnDangerous.IsChecked = settings.WarnDangerousFiles;
+            if (ChkMarkFromInternet != null)
+                ChkMarkFromInternet.IsChecked = settings.MarkDownloadsFromInternet;
             FillLanguageCombo(settings.UiLanguage);
             TxtSpeedLimit.Text = Math.Max(0, settings.SpeedLimitKBps).ToString();
             TxtMaxConcurrent.Text = Math.Max(0, settings.MaxConcurrentDownloads).ToString();
@@ -549,19 +555,23 @@ namespace MDM
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            if (b.Id == "firefox" && b.BrowserInstalled && !b.ExtensionActive)
+            if (b.Id is "firefox" or "firefox-developer")
             {
-                var installBtn = new Button
+                if (b.BrowserInstalled && !b.ExtensionActive)
                 {
-                    Content = Loc.T("settings.ext.install", "Kur"),
-                    Margin = new Thickness(0, 0, 8, 0),
-                    Padding = new Thickness(12, 4, 12, 4),
-                    FontSize = 11,
-                    Cursor = Cursors.Hand,
-                    Style = TryFindResource("SoftButton") as Style
-                };
-                installBtn.Click += (_, _) => InstallFirefoxExtension();
-                right.Children.Add(installBtn);
+                    string captureId = b.Id;
+                    var installBtn = new Button
+                    {
+                        Content = Loc.T("settings.ext.install", "Kur"),
+                        Margin = new Thickness(0, 0, 8, 0),
+                        Padding = new Thickness(12, 4, 12, 4),
+                        FontSize = 11,
+                        Cursor = Cursors.Hand,
+                        Style = TryFindResource("SoftButton") as Style
+                    };
+                    installBtn.Click += (_, _) => InstallFirefoxExtension(captureId);
+                    right.Children.Add(installBtn);
+                }
             }
 
             right.Children.Add(statusPill);
@@ -584,47 +594,63 @@ namespace MDM
             };
         }
 
-        private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallFirefoxExtension();
+        private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallFirefoxExtension(null);
 
-        private void InstallFirefoxExtension()
+        /// <summary>
+        /// Developer Edition indirme sayfasını açar ve kurulum bitene kadar bekler. Kullanıcı
+        /// «Devam»a bastığında yeniden aranır; bulunursa eklenti kurulumu kesintisiz sürer.
+        /// </summary>
+        private bool WaitForDeveloperEdition()
+        {
+            FirefoxInstallDialog.OpenDeveloperEditionPage();
+
+            while (true)
+            {
+                bool proceed = ConfirmDialog.Show(OwnerWindow,
+                    "Firefox Developer Edition",
+                    Loc.T("settings.ext.firefox_dev_message",
+                        "İndirme sayfası açıldı. Developer Edition kurulumunu tamamladıktan sonra «Devam» deyin."),
+                    Loc.T("settings.ext.firefox_dev_detail",
+                        "Devam'a bastığınızda MDM eklentiyi Developer Edition'a kalıcı olarak kurar."),
+                    confirmText: Loc.T("settings.ext.firefox_dev_continue", "Devam"),
+                    cancelText: Loc.T("dialog.cancel", "İptal"),
+                    forceFloating: true);
+
+                if (!proceed) return false;
+                if (ExtensionInstaller.IsDeveloperEditionInstalled()) return true;
+
+                InfoDialog.Show(OwnerWindow, "Firefox Developer Edition",
+                    Loc.T("settings.ext.firefox_dev_missing", "Developer Edition hâlâ bulunamadı."),
+                    Loc.T("settings.ext.firefox_dev_missing_detail",
+                        "Kurulumu tamamlayıp bir kez açtıktan sonra tekrar «Devam» deyin."));
+            }
+        }
+
+        private void InstallFirefoxExtension(string? browserId)
         {
             try
             {
-                bool devInstalled = ExtensionInstaller.IsDeveloperEditionInstalled();
-                // Release kullanıcıya seçim ekranı; Dev zaten varsa doğrudan kalıcı akışa da gidebilir
-                string? defaultExe = ExtensionInstaller.ResolveFirefoxExe(out string channel);
-                bool isPermanentChannel = channel is "developer" or "nightly" or "esr";
-
                 ExtensionInstaller.FirefoxInstallMode mode;
-                if (isPermanentChannel && string.Equals(
-                        defaultExe, ExtensionInstaller.ResolveFirefoxDeveloperExe(out _),
-                        StringComparison.OrdinalIgnoreCase))
+
+                if (browserId == "firefox-developer")
                 {
-                    // Varsayılan zaten Dev/Nightly — seçim sormadan kalıcı kur
+                    if (!ExtensionInstaller.IsDeveloperEditionInstalled()
+                        && !WaitForDeveloperEdition())
+                        return;
                     mode = ExtensionInstaller.FirefoxInstallMode.Permanent;
                 }
                 else
                 {
+                    bool devInstalled = ExtensionInstaller.IsDeveloperEditionInstalled();
                     var choice = FirefoxInstallDialog.Show(OwnerWindow, devInstalled);
                     if (choice == FirefoxInstallChoice.Cancel)
                         return;
 
                     if (choice == FirefoxInstallChoice.OpenDeveloperEdition)
                     {
-                        if (devInstalled)
-                        {
-                            mode = ExtensionInstaller.FirefoxInstallMode.Permanent;
-                        }
-                        else
-                        {
-                            FirefoxInstallDialog.OpenDeveloperEditionPage();
-                            InfoDialog.Show(OwnerWindow, "Firefox Developer Edition",
-                                Loc.T("settings.ext.firefox_dev_message", "İndirme sayfası açıldı."),
-                                Loc.T("settings.ext.firefox_dev_detail",
-                                    "Developer Edition’ı kurup açtıktan sonra MDM’ye dön ve tekrar «Firefox otomatik kur»a bas — kalıcı kurulum yapılacak.\n\n"
-                                    + "Şimdilik normal Firefox ile devam etmek istersen aynı butondan «Geçici kur» seçebilirsin."));
+                        if (!devInstalled && !WaitForDeveloperEdition())
                             return;
-                        }
+                        mode = ExtensionInstaller.FirefoxInstallMode.Permanent;
                     }
                     else
                     {
@@ -634,13 +660,6 @@ namespace MDM
 
                 bool ok = ExtensionInstaller.TryInstallFirefox(
                     out string title, out string message, out string detail, mode);
-                try
-                {
-                    string manifest = Path.Combine(ExtensionInstaller.FirefoxStagingRoot, "manifest.json");
-                    if (File.Exists(manifest))
-                        Clipboard.SetText(manifest);
-                }
-                catch { /* ignore */ }
 
                 InfoDialog.Show(OwnerWindow, title, message, detail);
                 if (ok)
@@ -866,6 +885,14 @@ namespace MDM
             if (ChkConfirmRepeat != null) ChkConfirmRepeat.Content = Loc.T("settings.security.spam_confirm", "İndirme spam’inde güvenlik onayı (önerilir)");
             if (TxtSecurityHint != null) TxtSecurityHint.Text = Loc.T("settings.security.spam_hint",
                 "Açıkken kısa sürede aynı bağlantıya veya toplu indirme isteklerine karşı tek bir onay penceresi gösterilir. Onaylamazsanız istekler sessizce engellenir; normal indirmeleri etkilemez.");
+            if (ChkWarnDangerous != null) ChkWarnDangerous.Content = Loc.T("settings.security.dangerous_confirm",
+                "Zararlı olabilecek dosyalarda izin sor (önerilir)");
+            if (TxtDangerousHint != null) TxtDangerousHint.Text = Loc.T("settings.security.dangerous_hint",
+                "Program, betik veya makro içeren dosyalar indirilmeden önce tarayıcıdaki gibi bir izin penceresi gösterilir. İzin vermezseniz indirme başlamaz.");
+            if (ChkMarkFromInternet != null) ChkMarkFromInternet.Content = Loc.T("settings.security.mark_internet",
+                "İndirilen dosyaları “internetten geldi” olarak işaretle");
+            if (TxtMarkHint != null) TxtMarkHint.Text = Loc.T("settings.security.mark_internet_hint",
+                "Windows ve Microsoft Defender dosyayı açarken kendi güvenlik denetimini uygular. Kapatırsanız bu uyarılar çıkmaz.");
             if (TxtLanguageTitle != null) TxtLanguageTitle.Text = Loc.T("settings.language.title", "Uygulama dili");
             if (TxtLanguageHint != null) TxtLanguageHint.Text = Loc.T("settings.language.hint",
                 "Dil değişikliği uygulama arayüzüne ve tarayıcı eklentisine uygulanır.");
@@ -910,6 +937,9 @@ namespace MDM
             if (ChkNotifyDone != null) ChkNotifyDone.Content = Loc.T("settings.notify.done", "Dosya indince bildirim göster");
             if (TxtNotifyDoneHint != null) TxtNotifyDoneHint.Text = Loc.T("settings.notify.done_hint",
                 "İndirme bitince Windows tepsi bildirimi (Windows sesi). Kapalıysa bildirim ve ses gelmez.");
+            if (ChkGameMode != null) ChkGameMode.Content = Loc.T("settings.notify.game_mode", "Oyun modu");
+            if (TxtGameModeHint != null) TxtGameModeHint.Text = Loc.T("settings.notify.game_mode_hint",
+                "Açıkken tam ekran oyun veya sunum sırasında indirme bildirimi, tepsi balonu ve mini indirme penceresi çıkmaz. İndirmeler arka planda sürer. Varsayılan kapalıdır; isteğe bağlı açılır.");
 
             // Eklenti klasörü
             if (TxtExtFolderLabel != null) TxtExtFolderLabel.Text = Loc.T("settings.ext.folder_label", "Eklenti klasörü");
@@ -1120,6 +1150,7 @@ namespace MDM
             s.AutoCreateCategoryFolders = ChkAutoFolders.IsChecked == true;
             s.NotifyOnTrayMinimize = ChkNotifyTray.IsChecked == true;
             s.NotifyOnComplete = ChkNotifyDone.IsChecked == true;
+            s.GameModeEnabled = ChkGameMode?.IsChecked == true;
             s.Theme = ThemeLight.IsChecked == true ? "Light" : "Dark";
             s.LightThemeBrightness = SldLightBrightness != null ? (int)SldLightBrightness.Value : 100;
             s.CopyFilesHotkeyEnabled = ChkCopyHotkey.IsChecked == true;
@@ -1138,6 +1169,8 @@ namespace MDM
             s.AutoReconnect = ChkAutoReconnect.IsChecked == true;
             if (ChkConfirmRepeat != null)
                 s.ConfirmRepeatDownloads = ChkConfirmRepeat.IsChecked == true;
+            s.WarnDangerousFiles = ChkWarnDangerous?.IsChecked == true;
+            s.MarkDownloadsFromInternet = ChkMarkFromInternet?.IsChecked == true;
             s.UiLanguage = SelectedLanguageCode();
             _ = int.TryParse(TxtSpeedLimit.Text, out int speedKb);
             s.SpeedLimitKBps = Math.Clamp(speedKb, 0, 1_000_000);

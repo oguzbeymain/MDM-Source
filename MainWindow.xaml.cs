@@ -167,6 +167,8 @@ namespace MDM
         {
             if (!AppSettingsStore.Load().NotifyOnComplete)
                 return;
+            if (GameModeGuard.ShouldSuppressUi())
+                return;
             try
             {
                 _tray?.ShowBalloon(Loc.T("main.download_complete", "İndirme tamamlandı"), fileName);
@@ -2642,7 +2644,7 @@ namespace MDM
                 double sizeMin = veryTight ? 58 : (tight ? 64 : 70);
                 double typeMin = veryTight ? 40 : (tight ? 44 : 46);
                 double dateMin = veryTight ? 68 : (tight ? 88 : 96);
-                double statusMin = veryTight ? 86 : (tight ? 104 : Math.Min(180, Math.Max(120, gridW * 0.26)));
+                double statusMin = veryTight ? 120 : 160;
 
                 ColSize.MinWidth = sizeMin;
                 ColType.MinWidth = typeMin;
@@ -2655,8 +2657,11 @@ namespace MDM
                 ColFileName.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
 
                 ColStatus.MinWidth = statusMin;
-                ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
-                ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColStatus.MaxWidth = statusMin;
+                ColStatus.Width = new DataGridLength(statusMin);
+                ColSize.MinWidth = sizeMin;
+                ColSize.MaxWidth = veryTight ? 88 : 120;
+                ColSize.Width = DataGridLength.Auto;
             }
         }
 
@@ -3048,6 +3053,8 @@ namespace MDM
         /// <summary>Eklentiden gelen sayfa taraması sonuçlarını gösterir.</summary>
         private void ShowExtensionScan(ScanRequest request)
         {
+            if (GameModeGuard.ShouldSuppressUi())
+                return;
             var items = PageScanService.FromCandidates(request.Items);
             if (items.Count == 0)
             {
@@ -3062,6 +3069,8 @@ namespace MDM
 
         private void TryAutoExtract(DownloadItem item)
         {
+            if (GameModeGuard.ShouldSuppressUi())
+                return;
             var settings = AppSettingsStore.Load();
             if (!File.Exists(item.FilePath) || !ArchiveExtractor.IsArchive(item.FilePath))
                 return;
@@ -4021,6 +4030,8 @@ namespace MDM
                     _recentCaptureUrls[urlKey] = DateTime.UtcNow;
                     if (fromCapture && DateTime.UtcNow < _captureQuietUntilUtc)
                         return;
+                    if (fromCapture && GameModeGuard.ShouldSuppressUi())
+                        return;
                     try
                     {
                         if (!kv.Value.IsVisible) kv.Value.Show();
@@ -4052,6 +4063,20 @@ namespace MDM
 
             try
             {
+                if (fromCapture && GameModeGuard.ShouldSuppressUi())
+                {
+                    try
+                    {
+                        StartDownloadQuietly(url, incomingFilename, mimeHint, capture);
+                    }
+                    finally
+                    {
+                        lock (_captureGate)
+                            _pendingSessionUrls.Remove(urlKey);
+                    }
+                    return;
+                }
+
                 // Ağ beklemeden hemen göster — isim/boyut arka planda netleşir
                 string quickName = BuildQuickFileName(url, incomingFilename, mimeHint);
                 string categoryId = ResolveCategoryForNewFile(quickName);
@@ -4082,6 +4107,16 @@ namespace MDM
                     _pendingSessionUrls.Remove(urlKey);
                 throw;
             }
+        }
+
+        private void StartDownloadQuietly(string url, string incomingFilename, string? mimeHint, ExtCaptureRequest? capture)
+        {
+            string quickName = BuildQuickFileName(url, incomingFilename, mimeHint);
+            string categoryId = ResolveCategoryForNewFile(quickName);
+            string defaultFolder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+            if (string.IsNullOrWhiteSpace(defaultFolder))
+                defaultFolder = _defaultFolder;
+            BeginDownloadFromSession(url, quickName, defaultFolder, notify: false, ytdlpCapture: capture);
         }
 
         private static string BuildQuickFileName(string url, string incomingFilename, string? mimeHint)
@@ -4234,6 +4269,8 @@ namespace MDM
 
         private bool TryConfirmRepeatDownload(string url, string? filename = null)
         {
+            if (GameModeGuard.ShouldSuppressUi())
+                return true;
             var decision = RepeatDownloadGuard.Evaluate(url, filename: filename);
             if (decision == RepeatDownloadGuard.AdmitResult.Allow)
                 return true;
@@ -4268,8 +4305,51 @@ namespace MDM
             }
         }
 
+        private void MarkDownloadedFile(DownloadItem item)
+        {
+            try
+            {
+                if (!AppSettingsStore.Load().MarkDownloadsFromInternet) return;
+                DangerousFileGuard.MarkAsFromInternet(item.FilePath, item.Url);
+            }
+            catch { /* damga yazılamazsa indirme yine geçerli */ }
+        }
+
+        /// <summary>
+        /// Çalıştırılabilir veya betik türündeki dosyalarda indirmeye başlamadan izin ister.
+        /// Ayarlar > Güvenlik'ten kapatılabilir; kapalıyken indirme sorulmadan sürer.
+        /// </summary>
+        private bool TryConfirmDangerousFile(string fileName, AppSettings settings, bool notify)
+        {
+            if (!settings.WarnDangerousFiles || !notify) return true;
+
+            var risk = DangerousFileGuard.Evaluate(fileName);
+            if (risk == DangerousFileGuard.Risk.None) return true;
+
+            return ConfirmDialog.Show(this,
+                Loc.T("dialog.dangerous_title", "Bu dosya bilgisayarınıza zarar verebilir"),
+                string.Format(Loc.T("dialog.dangerous_message",
+                    "{0} dosyasını indirmek istediğinizden emin misiniz?"), fileName),
+                DangerousFileGuard.DescribeRisk(risk) + "\n" + Loc.T("dialog.dangerous_detail",
+                    "Kaynağına güvenmiyorsanız izin vermeyin. Bu uyarıyı Ayarlar > Güvenlik'ten kapatabilirsiniz."),
+                confirmText: Loc.T("dialog.dangerous_allow", "İzin ver"),
+                cancelText: Loc.T("dialog.dangerous_block", "İzin verme"),
+                danger: true,
+                forceFloating: true);
+        }
+
         private void OpenYtDlpSessionWindow(ExtCaptureRequest ext, string fileName, string sessionUrl)
         {
+            if (GameModeGuard.ShouldSuppressUi())
+            {
+                string categoryId = ResolveCategoryForNewFile(fileName);
+                string defaultFolder = CategoryStore.GetCategoryFolderPath(Categories, categoryId, _defaultFolder);
+                if (string.IsNullOrWhiteSpace(defaultFolder))
+                    defaultFolder = _defaultFolder;
+                BeginDownloadFromSession(sessionUrl, fileName, defaultFolder, notify: false, ytdlpCapture: ext);
+                return;
+            }
+
             if (!TryConfirmRepeatDownload(sessionUrl))
                 return;
 
@@ -4745,6 +4825,10 @@ namespace MDM
             string savePath = GetUniqueFilePath(saveFolder, fileName);
             string finalFileName = Path.GetFileName(savePath);
 
+            // Tarayıcıdaki uyarının aynısı: çalıştırılabilir dosya indirilmeden izin sorulur
+            if (!TryConfirmDangerousFile(finalFileName, settings, notify))
+                return null;
+
             var item = new DownloadItem
             {
                 Id = Guid.NewGuid().ToString("N")[..12],
@@ -4809,7 +4893,11 @@ namespace MDM
                     item.FileType = FileNameHelper.FormatTypeLabel(finalFileName);
                     item.FileIcon = IconHelper.GetIconForExtension(finalFileName, _listIconPx);
                 }
-                engine = new DownloadEngine(new[] { url }, savePath, threadCount);
+                engine = new TorrentFileSaveBackend(
+                    url,
+                    savePath,
+                    ytdlpCapture?.Cookies,
+                    ytdlpCapture?.Headers);
             }
             else
             {
@@ -5273,6 +5361,7 @@ namespace MDM
                     // Boyut zaten probe ile sabitlendiyse dokunma
                     if (item.FileSizeBytes <= 0 && File.Exists(item.FilePath))
                         SetItemFileSize(item, new FileInfo(item.FilePath).Length);
+                    MarkDownloadedFile(item);
                     TryAutoExtract(item);
                     _engines.Remove(item);
                     CompleteNotify.PlayIfEnabled(item.FileName);
@@ -5531,16 +5620,17 @@ namespace MDM
 
                 ColCheck.DisplayIndex = 0;
                 ColFileName.DisplayIndex = 1;
-                ColFileName.Width = new DataGridLength(2, DataGridLengthUnitType.Star);
+                ColFileName.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
                 ColSize.DisplayIndex = 2;
-                ColSize.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColSize.Width = DataGridLength.Auto;
                 ColType.DisplayIndex = 3;
                 ColType.Width = DataGridLength.Auto;
                 ColDate.DisplayIndex = 4;
                 ColDate.Width = DataGridLength.Auto;
                 ColStatus.DisplayIndex = 5;
-                ColStatus.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                ColStatus.Width = new DataGridLength(160);
                 ColActions.DisplayIndex = 6;
+                ColActions.Width = new DataGridLength(ActionColumnWidth);
 
                 ApplyResponsiveLayout(ActualWidth);
             }

@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -259,6 +260,30 @@ namespace MDM
             Installer
         }
 
+        /// <summary>
+        /// Yayında hem win-x64 hem win-x86 paketi olabiliyor. Yanlış mimarideki paket kopyalanırsa
+        /// uygulama BadImageFormatException ile açılmıyor; etiketsiz adlar (eski yayınlar) kabul edilir.
+        /// </summary>
+        internal static bool MatchesProcessArchitecture(string assetName)
+            => MatchesArchitecture(assetName, RuntimeInformation.ProcessArchitecture);
+
+        internal static bool MatchesArchitecture(string assetName, Architecture architecture)
+        {
+            string[] tags = { "win-x64", "win-x86", "win-arm64", "x64", "x86", "arm64" };
+            string? found = tags.FirstOrDefault(
+                t => assetName.Contains(t, StringComparison.OrdinalIgnoreCase));
+            if (found == null) return true;   // mimari belirtilmemiş: tek paketli eski yayınlar
+
+            string wanted = architecture switch
+            {
+                Architecture.X86 => "x86",
+                Architecture.Arm64 => "arm64",
+                _ => "x64"
+            };
+            // "x64" araması "arm64" içinde de geçtiği için etiketin tamamı karşılaştırılır
+            return found.EndsWith(wanted, StringComparison.OrdinalIgnoreCase);
+        }
+
         internal static bool TryPickAsset(JsonElement release, out string name, out string url, out PackageKind kind)
         {
             name = "";
@@ -274,14 +299,17 @@ namespace MDM
             {
                 string assetName = asset.GetProperty("name").GetString() ?? "";
                 if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                    zip ??= asset;
-                else if (!assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (MatchesProcessArchitecture(assetName)) zip ??= asset;
                     continue;
-                else if (assetName.Contains("Updater", StringComparison.OrdinalIgnoreCase))
+                }
+                if (!assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     continue;
-                else if (assetName.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+                if (assetName.Contains("Updater", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (assetName.Contains("Setup", StringComparison.OrdinalIgnoreCase))
                     installer ??= asset;
-                else
+                else if (MatchesProcessArchitecture(assetName))
                     payloadExe ??= asset;
             }
 

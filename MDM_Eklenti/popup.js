@@ -124,6 +124,15 @@
   }
 
   // ——— init ———
+  function applyTexts(lang) {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = /^(ar|fa|he|ur)/i.test(lang) ? "rtl" : "ltr";
+    document.querySelectorAll("[data-i18n]").forEach((node) => {
+      node.textContent = t(node.dataset.i18n);
+    });
+    el.siteInput.placeholder = t("popup.site_placeholder");
+  }
+
   async function initI18n() {
     let lang = "tr";
     try {
@@ -131,12 +140,9 @@
       if (d && d.mdmLang) lang = d.mdmLang;
     } catch (_) { /* ignore */ }
     try { await mdmI18n.loadLocale(lang); } catch (_) { /* ignore */ }
-    document.documentElement.lang = lang;
-    document.documentElement.dir = /^(ar|fa|he|ur)/i.test(lang) ? "rtl" : "ltr";
-    document.querySelectorAll("[data-i18n]").forEach((node) => {
-      node.textContent = t(node.dataset.i18n);
-    });
-    el.siteInput.placeholder = t("popup.site_placeholder");
+    applyTexts(lang);
+    // Popup acilirken atilan ping yeni dili getirebilir; metinler o an tazelenir
+    try { mdmI18n.onChange((next) => applyTexts(next)); } catch (_) { /* ignore */ }
   }
 
   async function initTab() {

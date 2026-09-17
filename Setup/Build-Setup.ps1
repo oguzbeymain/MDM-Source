@@ -4,7 +4,7 @@
 #   .\Setup\Build-Setup.ps1 -Fast           -> mevcut Debug cikitisini paketler (hizli test)
 #
 param(
-  [string]$Runtime = "win-x86",
+  [string]$Runtime = "win-x64",
   [string]$Configuration = "Release",
   [switch]$Fast,
   [string]$OutDir = ""
