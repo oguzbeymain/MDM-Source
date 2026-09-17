@@ -96,6 +96,43 @@ public class RemainingMatrixTests
         SpeedLimiter.ResetForTests();
     }
 
+    /// <summary>
+    /// Jeton kovası sürekli dolar: sabit saniye penceresi bütçe bitince tüm kanalları
+    /// durdurup hızı saniyede bir sıfıra düşürüyordu.
+    /// </summary>
+    [Fact]
+    public async Task Speed_limiter_spreads_budget_instead_of_bursting()
+    {
+        SpeedLimiter.ResetForTests();
+        try
+        {
+            const int limit = 1024 * 1024;      // 1 MB/s
+            const int piece = 64 * 1024;
+            SpeedLimiter.OverrideBytesPerSecond = limit;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            int longestGapMs = 0;
+            long previousMs = 0;
+
+            // 1 MB/s sınırında 1,5 MB ≈ 1,5 sn sürer
+            for (int i = 0; i < 24; i++)
+            {
+                await SpeedLimiter.AwaitAsync(piece, CancellationToken.None);
+                long now = sw.ElapsedMilliseconds;
+                longestGapMs = Math.Max(longestGapMs, (int)(now - previousMs));
+                previousMs = now;
+            }
+            sw.Stop();
+
+            Assert.InRange(sw.Elapsed.TotalSeconds, 0.8, 4.0);
+            Assert.True(longestGapMs < 500, $"tek beklemede {longestGapMs} ms durdu");
+        }
+        finally
+        {
+            SpeedLimiter.ResetForTests();
+        }
+    }
+
     [Fact]
     public void Cli_accepts_download_alias_and_bare_url()
     {

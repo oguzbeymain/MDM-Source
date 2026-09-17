@@ -2,13 +2,15 @@ namespace MDM
 {
     /// <summary>
     /// Global download throttle. 0 KB/s = unlimited.
-    /// Shared 1-second window so HTTP chunks, FTP and SFTP share the same cap.
+    /// Sürekli dolan jeton kovası: sabit saniye penceresi, bütçe bitince tüm kanalları
+    /// pencere dönene kadar durdurduğu için hız saniyede bir coşup düşüyordu.
+    /// HTTP parçaları, FTP ve SFTP aynı kovayı paylaşır.
     /// </summary>
     public static class SpeedLimiter
     {
         private static readonly object Gate = new();
-        private static long _windowStartMs = Environment.TickCount64;
-        private static long _windowBytes;
+        private static long _lastRefillMs = Environment.TickCount64;
+        private static double _tokens;
 
         internal static int? OverrideBytesPerSecond { get; set; }
 
@@ -35,31 +37,44 @@ namespace MDM
                 lock (Gate)
                 {
                     long now = Environment.TickCount64;
-                    if (now - _windowStartMs >= 1000)
-                    {
-                        _windowStartMs = now;
-                        _windowBytes = 0;
-                    }
+                    double elapsedSec = Math.Max(0, now - _lastRefillMs) / 1000.0;
+                    _lastRefillMs = now;
 
-                    if (_windowBytes + bytes <= limit)
+                    // Kova yarım saniyelik kredi tutar; tek okuma bundan büyükse ona göre büyür
+                    double cap = Math.Max(limit * 0.5, bytes);
+                    _tokens = Math.Min(_tokens + elapsedSec * limit, cap);
+
+                    if (_tokens >= bytes)
                     {
-                        _windowBytes += bytes;
+                        _tokens -= bytes;
                         return;
                     }
 
-                    waitMs = (int)Math.Clamp(1000 - (now - _windowStartMs), 15, 1000);
+                    waitMs = (int)Math.Clamp((bytes - _tokens) / limit * 1000.0, 5, 250);
                 }
 
                 await Task.Delay(waitMs, token).ConfigureAwait(false);
             }
         }
 
+        /// <summary>
+        /// Hız sınırı varken 1 MB'lık okuma tek seferde saniyelerce bekleme borcu yaratır;
+        /// akışın düzgün kalması için okuma parçası sınıra göre küçültülür.
+        /// </summary>
+        public static int SuggestReadSize(int max)
+        {
+            int limit = LimitBytesPerSecond;
+            if (limit <= 0)
+                return max;
+            return Math.Clamp(limit / 8, 32 * 1024, max);
+        }
+
         internal static void ResetForTests()
         {
             lock (Gate)
             {
-                _windowStartMs = Environment.TickCount64;
-                _windowBytes = 0;
+                _lastRefillMs = Environment.TickCount64;
+                _tokens = 0;
             }
             OverrideBytesPerSecond = null;
         }

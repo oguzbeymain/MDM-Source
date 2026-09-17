@@ -13,8 +13,18 @@ namespace MDM
 {
     public class ChunkState
     {
+        private long _end;
+
         public long Start { get; set; }
-        public long End { get; set; }
+        /// <summary>
+        /// Parça bölünürken başka bir iş parçacığı burayı küçültebilir; okuma döngüsü
+        /// güncel değeri görsün diye erişim Volatile ile yapılır.
+        /// </summary>
+        public long End
+        {
+            get => Volatile.Read(ref _end);
+            set => Volatile.Write(ref _end, value);
+        }
         public long CurrentOffset { get; set; }
     }
 
@@ -25,6 +35,8 @@ namespace MDM
         /// <summary>Bir okuma bu süre içinde veri getirmezse parça yeniden istenir.</summary>
         private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(25);
         private const int SpeedTickMs = 500;
+        /// <summary>Bu kadar tur boyunca hiç bayt gelmezse hata bildirilir.</summary>
+        private const int MaxStalledRounds = 5;
         /// <summary>EMA katsayısı: 1'e yakın = daha durağan gösterim.</summary>
         private const double SpeedSmoothing = 0.75;
 
@@ -388,17 +400,24 @@ namespace MDM
                     return;
                 _lastStateSaveTick = now;
 
+                // Bölme sırasında listeye ekleme yapılıyor; kilitsiz gezinme kaydı düşürüyordu
+                List<ChunkDto> snapshot;
+                lock (_chunkLock)
+                {
+                    snapshot = _chunks.Select(c => new ChunkDto
+                    {
+                        Start = c.Start,
+                        End = c.End,
+                        CurrentOffset = c.CurrentOffset
+                    }).ToList();
+                }
+
                 var dto = new EngineStateDto
                 {
                     Url = _url,
                     TotalSize = _totalSize,
                     SingleStream = _singleStreamMode,
-                    Chunks = _chunks.Select(c => new ChunkDto
-                    {
-                        Start = c.Start,
-                        End = c.End,
-                        CurrentOffset = c.CurrentOffset
-                    }).ToList()
+                    Chunks = snapshot
                 };
 
                 string dir = Path.GetDirectoryName(_statePath) ?? "";
@@ -459,8 +478,13 @@ namespace MDM
             using var fileStream = new FileStream(_savePath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite, 4096, useAsync: true);
             var fileHandle = fileStream.SafeFileHandle;
 
+            Exception? lastError = null;
+            int stalledRounds = 0;
+
             while (true)
             {
+                long bytesAtRoundStart = Interlocked.Read(ref _totalBytesDownloaded);
+
                 var pending = new ConcurrentQueue<ChunkState>();
                 foreach (var chunk in _chunks!)
                 {
@@ -497,7 +521,17 @@ namespace MDM
 
                             if (chunk == null)
                                 return;
-                            await DownloadOneChunkAsync(client, chunk, fileHandle, token);
+
+                            try
+                            {
+                                await DownloadOneChunkAsync(client, chunk, fileHandle, token);
+                            }
+                            catch (Exception ex) when (!token.IsCancellationRequested)
+                            {
+                                // Tek parçanın hatası diğer kanalları düşürmesin; parça
+                                // sonraki turda kaldığı bayttan yeniden istenir
+                                Interlocked.Exchange(ref lastError, ex);
+                            }
                         }
                     }, token));
                 }
@@ -521,6 +555,12 @@ namespace MDM
 
                 if (AreAllChunksComplete())
                     break;
+
+                // Tur boyunca hiç bayt gelmediyse sonsuza kadar denemek yerine hatayı bildir
+                if (Interlocked.Read(ref _totalBytesDownloaded) > bytesAtRoundStart)
+                    stalledRounds = 0;
+                else if (++stalledRounds >= MaxStalledRounds)
+                    throw lastError ?? new IOException("İndirme ilerlemedi; sunucu yanıt vermiyor.");
 
                 if (!await NetworkWatcher.WaitForReconnectAsync(
                         token,
@@ -576,6 +616,7 @@ namespace MDM
 
                     using Stream stream = await chunkResponse.Content.ReadAsStreamAsync(token);
                     byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
+                    int readSize = SpeedLimiter.SuggestReadSize(buffer.Length);
                     try
                     {
                         while (chunk.CurrentOffset <= chunk.End)
@@ -583,7 +624,7 @@ namespace MDM
                             long remaining = chunk.End - chunk.CurrentOffset + 1;
                             if (remaining <= 0)
                                 break;
-                            int toRead = (int)Math.Min(buffer.Length, remaining);
+                            int toRead = (int)Math.Min(readSize, remaining);
                             int bytesRead = await ReadWithTimeoutAsync(stream, buffer.AsMemory(0, toRead), token)
                                 .ConfigureAwait(false);
                             if (bytesRead <= 0)
@@ -595,8 +636,9 @@ namespace MDM
                                 break;
                             int toWrite = (int)Math.Min(bytesRead, remaining);
 
-                            await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, toWrite), chunk.CurrentOffset, token);
+                            // Şekillendirme yazmadan önce: sınır aşıldıktan sonra beklemek anlamsız
                             await SpeedLimiter.AwaitAsync(toWrite, token).ConfigureAwait(false);
+                            await RandomAccess.WriteAsync(fileHandle, buffer.AsMemory(0, toWrite), chunk.CurrentOffset, token);
                             chunk.CurrentOffset += toWrite;
 
                             long currentTotal = Interlocked.Add(ref _totalBytesDownloaded, toWrite);
@@ -780,6 +822,7 @@ namespace MDM
             using FileStream fileStream = CreateSequentialFile(_savePath, FileMode.Create);
 
             byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
+            int readSize = SpeedLimiter.SuggestReadSize(buffer.Length);
             int bytesRead;
             long totalDownloaded = 0;
             long? totalSize = initialResponse.Content.Headers.ContentLength;
@@ -791,11 +834,11 @@ namespace MDM
 
             try
             {
-                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer, token).ConfigureAwait(false)) > 0)
+                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer.AsMemory(0, readSize), token).ConfigureAwait(false)) > 0)
                 {
                     token.ThrowIfCancellationRequested();
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
                     await SpeedLimiter.AwaitAsync(bytesRead, token).ConfigureAwait(false);
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
                     totalDownloaded += bytesRead;
                     Interlocked.Exchange(ref _totalBytesDownloaded, totalDownloaded);
 
@@ -848,6 +891,7 @@ namespace MDM
             using FileStream fileStream = CreateSequentialFile(_savePath, FileMode.Append);
 
             byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkBufferBytes);
+            int readSize = SpeedLimiter.SuggestReadSize(buffer.Length);
             int bytesRead;
             long totalDownloaded = existing;
 
@@ -858,11 +902,11 @@ namespace MDM
 
             try
             {
-                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer, token).ConfigureAwait(false)) > 0)
+                while ((bytesRead = await ReadWithTimeoutAsync(stream, buffer.AsMemory(0, readSize), token).ConfigureAwait(false)) > 0)
                 {
                     token.ThrowIfCancellationRequested();
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
                     await SpeedLimiter.AwaitAsync(bytesRead, token).ConfigureAwait(false);
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
                     totalDownloaded += bytesRead;
                     Interlocked.Exchange(ref _totalBytesDownloaded, totalDownloaded);
                     if (totalSize.HasValue && totalSize.Value > 0)
