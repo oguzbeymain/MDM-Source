@@ -111,6 +111,34 @@
             </Setter>
         </Style>
 
+        <!-- Bakım ekranı: onar / değiştir / kaldır seçenekleri -->
+        <Style x:Key="MaintenanceCard" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{DynamicResource InputBg}" CornerRadius="10"
+                                BorderBrush="{DynamicResource EdgeBorder}" BorderThickness="1"
+                                Padding="16,13">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SoftHoverBg}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SetupCheckBox" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextFg}"/>
             <Setter Property="FontSize" Value="12"/>

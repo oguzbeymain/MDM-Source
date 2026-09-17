@@ -74,16 +74,36 @@ namespace MDM.Setup
             catch { return null; }
         }
 
+        /// <summary>Kayıt defterindeki kurulu sürüm; bakım ekranı bunu gösterir.</summary>
+        public static string? ReadInstalledVersion()
+        {
+            try
+            {
+                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(UninstallKeyPath);
+                string? version = key?.GetValue("DisplayVersion") as string;
+                return string.IsNullOrWhiteSpace(version) ? null : version;
+            }
+            catch { return null; }
+        }
+
         /// <summary>Kurulu uygulamanın UI dili; kaldırma sihirbazı aynı dilde açılır.</summary>
-        public static string? ReadInstalledLanguage()
+        public static string? ReadInstalledLanguage() => ReadSetting("UiLanguage");
+
+        /// <summary>Kurulu uygulamanın indirme klasörü; onarımda korunur.</summary>
+        public static string? ReadInstalledDownloadFolder() => ReadSetting("DefaultDownloadFolder");
+
+        /// <summary>Kurulu tema ("Dark"/"Light"); bakım ekranı aynı görünümle açılır.</summary>
+        public static string? ReadInstalledTheme() => ReadSetting("Theme");
+
+        private static string? ReadSetting(string key)
         {
             try
             {
                 string path = Path.Combine(DataDir, "settings.json");
                 if (!File.Exists(path)) return null;
                 if (JsonNode.Parse(File.ReadAllText(path)) is not JsonObject root) return null;
-                string? code = root["UiLanguage"]?.GetValue<string>();
-                return string.IsNullOrWhiteSpace(code) ? null : code;
+                string? value = root[key]?.GetValue<string>();
+                return string.IsNullOrWhiteSpace(value) ? null : value;
             }
             catch { return null; }
         }
@@ -98,6 +118,7 @@ namespace MDM.Setup
                 Directory.CreateDirectory(options.InstallDir);
 
                 progress.Report((SetupLoc.T("setup.step_extract", "Dosyalar kopyalanıyor…"), 0.08));
+                CleanParkedFiles(options.InstallDir);
                 ExtractPayload(options.InstallDir, progress);
 
                 progress.Report((SetupLoc.T("setup.step_settings", "Ayarlar hazırlanıyor…"), 0.86));
@@ -131,7 +152,10 @@ namespace MDM.Setup
                 RemoveAutoStart();
 
                 progress.Report((SetupLoc.T("setup.step_remove_files", "Dosyalar kaldırılıyor…"), 0.6));
-                string dir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+                // Setup'ın bakım ekranından çalıştırıldığında süreç kurulum klasöründe
+                // olmaz; hedef her zaman kayıtlı kurulum klasörü olmalı
+                string dir = FindExistingInstall()
+                    ?? Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
                 RemoveInstallFiles(dir);
 
                 if (removeData)
@@ -169,7 +193,12 @@ namespace MDM.Setup
                     try
                     {
                         if (p.MainWindowHandle != IntPtr.Zero) p.CloseMainWindow();
-                        if (!p.WaitForExit(4000)) p.Kill(entireProcessTree: true);
+                        if (!p.WaitForExit(4000))
+                        {
+                            p.Kill(entireProcessTree: true);
+                            // Kill asenkron: beklemezsek dosyalar hâlâ kilitliyken kopyalamaya başlarız
+                            p.WaitForExit(4000);
+                        }
                     }
                     catch { /* erişilemeyen süreç */ }
                     finally { p.Dispose(); }
@@ -200,7 +229,7 @@ namespace MDM.Setup
                 else
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-                    entry.ExtractToFile(full, overwrite: true);
+                    ExtractOverLockedFile(entry, full);
                 }
 
                 done++;
@@ -210,6 +239,48 @@ namespace MDM.Setup
                     progress.Report((SetupLoc.T("setup.step_extract", "Dosyalar kopyalanıyor…"), pct));
                 }
             }
+        }
+
+        /// <summary>
+        /// Onarım/güncellemede hedef dosya hâlâ kullanımda olabilir (dll'ler uygulama
+        /// kapandıktan sonra da kısa süre kilitli kalır). Windows kilitli dosyayı silmeye
+        /// izin vermez ama yeniden adlandırmaya izin verir; eski kopya .old olarak
+        /// kenara çekilip yeni dosya yazılır, kalıntılar sonraki kurulumda silinir.
+        /// </summary>
+        private static void ExtractOverLockedFile(ZipArchiveEntry entry, string target)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    entry.ExtractToFile(target, overwrite: true);
+                    return;
+                }
+                catch (IOException) when (attempt < 3)
+                {
+                    if (attempt == 0) { Thread.Sleep(250); continue; }
+
+                    string parked = target + ".old-" + Guid.NewGuid().ToString("N")[..6];
+                    try { File.Move(target, parked); }
+                    catch (IOException) { Thread.Sleep(400); continue; }
+                    TryDeleteFile(parked);
+                }
+                catch (UnauthorizedAccessException) when (attempt < 3)
+                {
+                    Thread.Sleep(250);
+                }
+            }
+        }
+
+        /// <summary>Kilitli dosya yüzünden kenara çekilmiş eski kopyalar.</summary>
+        private static void CleanParkedFiles(string installDir)
+        {
+            try
+            {
+                foreach (string file in Directory.EnumerateFiles(installDir, "*.old-*", SearchOption.AllDirectories))
+                    TryDeleteFile(file);
+            }
+            catch { /* temizlik başarısız olsa da kurulum çalışır */ }
         }
 
         private static void CopySelf(string installDir)
@@ -422,7 +493,9 @@ namespace MDM.Setup
                 // Denetim Masası / Ayarlar > Uygulamalar buradan Uninstall.exe'yi açar
                 key.SetValue("UninstallString", $"\"{uninstaller}\"");
                 key.SetValue("QuietUninstallString", $"\"{uninstaller}\" /silent");
-                key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+                // Ayarlar > Uygulamalar'daki Değiştir düğmesi onar/değiştir/kaldır ekranını açar
+                key.SetValue("ModifyPath", $"\"{uninstaller}\" /maintenance");
+                key.SetValue("NoModify", 0, RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                 key.SetValue("EstimatedSize", DirectorySizeKb(options.InstallDir), RegistryValueKind.DWord);
                 key.SetValue("InstallDate", DateTime.Now.ToString("yyyyMMdd"));

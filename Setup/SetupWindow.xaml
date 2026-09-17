@@ -177,6 +177,60 @@
                     </StackPanel>
                 </Grid>
 
+                <!-- 0: Bakım — uygulama zaten kuruluysa ilk ekran -->
+                <Grid x:Name="PageMaintenance" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Assets/mdm-logo.png" Width="44" Height="44" VerticalAlignment="Center"/>
+                        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtMaintTitle" Style="{StaticResource SetupText}"
+                                       FontSize="17" FontWeight="SemiBold" Text="MuckDownloadManager zaten kurulu"/>
+                            <TextBlock x:Name="TxtMaintVersions" Style="{StaticResource SetupHint}" Margin="0,3,0,0"
+                                       Text=""/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock x:Name="TxtMaintHint" Grid.Row="1" Style="{StaticResource SetupHint}"
+                               Margin="0,16,0,14" Text="Ne yapmak istediğinizi seçin."/>
+
+                    <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                        <Button x:Name="BtnMaintRepair" Style="{StaticResource MaintenanceCard}"
+                                Click="BtnMaintRepair_Click">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtRepairTitle" Style="{StaticResource SetupText}"
+                                           FontWeight="SemiBold" Text="Onar"/>
+                                <TextBlock x:Name="TxtRepairText" Style="{StaticResource SetupHint}" Margin="0,4,0,0"
+                                           Text="Eksik veya bozuk dosyalar orijinalleriyle değiştirilir, kısayollar ve kayıt defteri girdileri yenilenir. Ayarlarınız korunur."/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="BtnMaintModify" Style="{StaticResource MaintenanceCard}"
+                                Click="BtnMaintModify_Click">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtModifyTitle" Style="{StaticResource SetupText}"
+                                           FontWeight="SemiBold" Text="Değiştir"/>
+                                <TextBlock x:Name="TxtModifyText" Style="{StaticResource SetupHint}" Margin="0,4,0,0"
+                                           Text="Dil, tema, klasörler, kısayollar ve Windows açılışında başlatma seçeneklerini yeniden ayarlayın."/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="BtnMaintRemove" Style="{StaticResource MaintenanceCard}"
+                                Click="BtnMaintRemove_Click">
+                            <StackPanel>
+                                <TextBlock x:Name="TxtRemoveTitle" Style="{StaticResource SetupText}"
+                                           FontWeight="SemiBold" Text="Kaldır"/>
+                                <TextBlock x:Name="TxtRemoveText" Style="{StaticResource SetupHint}" Margin="0,4,0,0"
+                                           Text="Uygulamayı, kısayolları ve kayıt defteri girdilerini bilgisayarınızdan siler. İndirdiğiniz dosyalar kalır."/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
                 <!-- 5: Kaldırma -->
                 <Grid x:Name="PageUninstall" Visibility="Collapsed" VerticalAlignment="Center">
                     <StackPanel>

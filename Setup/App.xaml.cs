@@ -13,6 +13,9 @@ namespace MDM.Setup
 
         public static bool Silent { get; private set; }
 
+        /// <summary>Windows "Uygulamalar" listesindeki Değiştir düğmesi bu kiple açar.</summary>
+        public static bool MaintenanceMode { get; private set; }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             foreach (string arg in e.Args)
@@ -20,10 +23,12 @@ namespace MDM.Setup
                 string a = arg.Trim().TrimStart('-', '/').ToLowerInvariant();
                 if (a is "uninstall" or "remove") UninstallMode = true;
                 else if (a is "silent" or "s" or "quiet") Silent = true;
+                else if (a is "maintenance" or "modify" or "repair") MaintenanceMode = true;
             }
 
-            // Kurulum klasöründeki Uninstall.exe çift tıklanınca doğrudan kaldırma açılır
-            if (!UninstallMode
+            // Kurulum klasöründeki Uninstall.exe çift tıklanınca doğrudan kaldırma açılır;
+            // aynı dosya /maintenance ile çağrılınca onar/değiştir/kaldır ekranı gelir
+            if (!UninstallMode && !MaintenanceMode
                 && Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "")
                     .StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
                 UninstallMode = true;
@@ -31,10 +36,9 @@ namespace MDM.Setup
             DispatcherUnhandledException += OnDispatcherException;
             AppDomain.CurrentDomain.UnhandledException += (_, args) => Log(args.ExceptionObject as Exception);
 
-            // Kaldırmada kurulumda seçilen dil kullanılır; kurulumda Windows dili
-            SetupLoc.Apply(UninstallMode
-                ? Installer.ReadInstalledLanguage() ?? SetupLoc.DetectSystemLanguage()
-                : SetupLoc.DetectSystemLanguage());
+            // Uygulama kuruluysa sihirbaz onun dilinde açılır (kaldırma, onarım, bakım);
+            // ilk kurulumda Windows dili seçilir
+            SetupLoc.Apply(Installer.ReadInstalledLanguage() ?? SetupLoc.DetectSystemLanguage());
             base.OnStartup(e);
 
             var window = new SetupWindow();

@@ -10,7 +10,7 @@ namespace MDM.Setup
 {
     public partial class SetupWindow : Window
     {
-        private enum Step { Welcome, Options, Progress, Done, Uninstall }
+        private enum Step { Maintenance, Welcome, Options, Progress, Done, Uninstall }
 
         private readonly InstallOptions _options = new();
         private Step _step;
@@ -18,13 +18,22 @@ namespace MDM.Setup
         private bool _completed;
         private bool _syncingTheme;
         private bool _ready;
+        /// <summary>Kurulu sürüm varsa setup bakım kipinde açılır (onar / değiştir / kaldır).</summary>
+        private readonly string? _installedDir;
+        private readonly string? _installedVersion;
+        private bool _repairing;
 
         public SetupWindow()
         {
             InitializeComponent();
 
+            _installedDir = Installer.FindExistingInstall();
+            _installedVersion = Installer.ReadInstalledVersion();
+
             _options.Language = SetupLoc.Code;
-            _options.InstallDir = Installer.FindExistingInstall() ?? InstallOptions.DefaultInstallDir;
+            _options.InstallDir = _installedDir ?? InstallOptions.DefaultInstallDir;
+            // Yeniden kurulumda kullanıcının klasörü varsayılana dönmesin
+            _options.DownloadDir = Installer.ReadInstalledDownloadFolder() ?? _options.DownloadDir;
 
             foreach (var lang in SetupLoc.Languages)
                 LstLanguage.Items.Add(new ListBoxItem { Content = lang.NativeName, Tag = lang.Code });
@@ -34,11 +43,15 @@ namespace MDM.Setup
             TxtDownloadPath.Text = _options.DownloadDir;
             TxtVersion.Text = "v" + Installer.Version;
 
-            ApplyTheme(dark: true);
+            bool dark = !string.Equals(Installer.ReadInstalledTheme(), "Light", StringComparison.OrdinalIgnoreCase);
+            _options.DarkTheme = dark;
+            ApplyTheme(dark);
             _ready = true;
-            ChipDark.IsChecked = true;
+            if (dark) ChipDark.IsChecked = true; else ChipLight.IsChecked = true;
 
-            _step = App.UninstallMode ? Step.Uninstall : Step.Welcome;
+            _step = App.UninstallMode ? Step.Uninstall
+                : _installedDir != null ? Step.Maintenance
+                : Step.Welcome;
             ApplyTexts();
             ShowStep(_step);
 
@@ -75,15 +88,19 @@ namespace MDM.Setup
         private void ShowStep(Step step)
         {
             _step = step;
+            PageMaintenance.Visibility = Collapse(step == Step.Maintenance);
             PageWelcome.Visibility = Collapse(step == Step.Welcome);
             PageOptions.Visibility = Collapse(step == Step.Options);
             PageProgress.Visibility = Collapse(step == Step.Progress);
             PageDone.Visibility = Collapse(step == Step.Done);
             PageUninstall.Visibility = Collapse(step == Step.Uninstall);
 
-            BtnBack.Visibility = Collapse(step == Step.Options);
-            BtnCancel.Visibility = Collapse(step is Step.Welcome or Step.Options or Step.Uninstall);
-            BtnNext.Visibility = Collapse(step != Step.Progress);
+            // Bakım ekranı varken dil ve kaldırma sayfalarından da geri dönülebilir
+            bool fromMaintenance = _installedDir != null && !App.UninstallMode;
+            BtnBack.Visibility = Collapse(step == Step.Options
+                || (fromMaintenance && step is Step.Welcome or Step.Uninstall));
+            BtnCancel.Visibility = Collapse(step is Step.Maintenance or Step.Welcome or Step.Options or Step.Uninstall);
+            BtnNext.Visibility = Collapse(step is not (Step.Progress or Step.Maintenance));
 
             BtnNext.Content = step switch
             {
@@ -131,7 +148,45 @@ namespace MDM.Setup
         private void BtnBack_Click(object sender, RoutedEventArgs e)
         {
             if (_busy) return;
+
+            bool fromMaintenance = _installedDir != null && !App.UninstallMode;
+            ShowStep(_step switch
+            {
+                Step.Options => Step.Welcome,
+                _ when fromMaintenance => Step.Maintenance,
+                _ => Step.Welcome
+            });
+        }
+
+        // --- Bakım ekranı ---
+
+        /// <summary>Onar: paket yeniden açılır, kısayol ve kayıt girdileri yenilenir, ayarlar korunur.</summary>
+        private async void BtnMaintRepair_Click(object sender, RoutedEventArgs e)
+        {
+            if (_busy) return;
+
+            _repairing = true;
+            _options.PreserveExistingSettings = true;
+            _options.InstallDir = _installedDir ?? _options.InstallDir;
+            await RunInstallAsync();
+            _repairing = false;
+        }
+
+        /// <summary>
+        /// Değiştir: dil sayfasından başlar (dil de değiştirilebilsin), ardından
+        /// seçenekler gelir. Burada yapılan seçimler mevcut ayarların üzerine yazılır.
+        /// </summary>
+        private void BtnMaintModify_Click(object sender, RoutedEventArgs e)
+        {
+            if (_busy) return;
+            _options.PreserveExistingSettings = false;
             ShowStep(Step.Welcome);
+        }
+
+        private void BtnMaintRemove_Click(object sender, RoutedEventArgs e)
+        {
+            if (_busy) return;
+            ShowStep(Step.Uninstall);
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
@@ -183,6 +238,9 @@ namespace MDM.Setup
 
             _busy = true;
             ShowStep(Step.Progress);
+            TxtProgressTitle.Text = _repairing
+                ? SetupLoc.T("setup.repairing", "Onarılıyor…")
+                : SetupLoc.T("setup.installing", "Kuruluyor…");
             BarProgress.Value = 0;
 
             var progress = new Progress<(string Step, double Percent)>(p =>
@@ -195,16 +253,21 @@ namespace MDM.Setup
             {
                 await Installer.InstallAsync(_options, progress);
                 _completed = true;
-                TxtDoneTitle.Text = SetupLoc.T("setup.done_title", "Kurulum tamamlandı");
+                TxtDoneTitle.Text = _repairing
+                    ? SetupLoc.T("setup.repair_done", "Onarım tamamlandı")
+                    : SetupLoc.T("setup.done_title", "Kurulum tamamlandı");
                 TxtDoneText.Text = string.Format(
-                    SetupLoc.T("setup.done_text", "MuckDownloadManager {0} klasörüne kuruldu."), _options.InstallDir);
+                    _repairing
+                        ? SetupLoc.T("setup.repair_done_text", "{0} klasöründeki dosyalar yenilendi.")
+                        : SetupLoc.T("setup.done_text", "MuckDownloadManager {0} klasörüne kuruldu."),
+                    _options.InstallDir);
                 _busy = false;
                 ShowStep(Step.Done);
             }
             catch (Exception ex)
             {
                 _busy = false;
-                ShowStep(Step.Options);
+                ShowStep(_repairing ? Step.Maintenance : Step.Options);
                 ShowError(ex.Message);
             }
         }
@@ -359,7 +422,11 @@ namespace MDM.Setup
 
             TxtWindowTitle.Text = App.UninstallMode
                 ? string.Format(SetupLoc.T("setup.window_title_uninstall", "{0} — Kaldır"), appName)
-                : string.Format(SetupLoc.T("setup.window_title", "{0} — Kurulum"), appName);
+                : _installedDir != null
+                    ? string.Format(SetupLoc.T("setup.window_title_maintenance", "{0} — Bakım"), appName)
+                    : string.Format(SetupLoc.T("setup.window_title", "{0} — Kurulum"), appName);
+
+            ApplyMaintenanceTexts(appName);
 
             TxtWelcomeTitle.Text = string.Format(SetupLoc.T("setup.welcome_title", "{0} Kurulumu"), appName);
             TxtLanguageLabel.Text = SetupLoc.T("setup.language", "Kurulum dili");
@@ -396,6 +463,49 @@ namespace MDM.Setup
 
             BtnBack.Content = SetupLoc.T("setup.back", "Geri");
             BtnCancel.Content = SetupLoc.T("setup.cancel", "İptal");
+        }
+
+        /// <summary>
+        /// Bakım ekranı: kurulu sürüm setup'takinden eskiyse ilk seçenek onarım yerine
+        /// güncelleme olarak sunulur — ikisi de paketi yeniden açar.
+        /// </summary>
+        private void ApplyMaintenanceTexts(string appName)
+        {
+            bool upgrade = IsUpgrade();
+
+            TxtMaintTitle.Text = string.Format(
+                SetupLoc.T("setup.maint_title", "{0} zaten kurulu"), appName);
+            TxtMaintVersions.Text = _installedVersion == null
+                ? "v" + Installer.Version
+                : string.Format(SetupLoc.T("setup.maint_versions", "Yüklü: v{0}  •  Bu kurulum: v{1}"),
+                    _installedVersion, Installer.Version);
+            TxtMaintHint.Text = SetupLoc.T("setup.maint_hint", "Ne yapmak istediğinizi seçin.");
+
+            TxtRepairTitle.Text = upgrade
+                ? SetupLoc.T("setup.maint_upgrade", "Güncelle")
+                : SetupLoc.T("setup.maint_repair", "Onar");
+            TxtRepairText.Text = upgrade
+                ? SetupLoc.T("setup.maint_upgrade_text",
+                    "Kurulu sürüm bu kurulumdaki sürüme yükseltilir. Ayarlarınız, kategorileriniz ve indirmeleriniz korunur.")
+                : SetupLoc.T("setup.maint_repair_text",
+                    "Eksik veya bozuk dosyalar orijinalleriyle değiştirilir, kısayollar ve kayıt defteri girdileri yenilenir. Ayarlarınız korunur.");
+
+            TxtModifyTitle.Text = SetupLoc.T("setup.maint_modify", "Değiştir");
+            TxtModifyText.Text = SetupLoc.T("setup.maint_modify_text",
+                "Dil, tema, klasörler, kısayollar ve Windows açılışında başlatma seçeneklerini yeniden ayarlayın.");
+
+            TxtRemoveTitle.Text = SetupLoc.T("setup.maint_remove", "Kaldır");
+            TxtRemoveText.Text = SetupLoc.T("setup.maint_remove_text",
+                "Uygulamayı, kısayolları ve kayıt defteri girdilerini bilgisayarınızdan siler. İndirdiğiniz dosyalar kalır.");
+        }
+
+        /// <summary>Setup'ın sürümü kurulu olandan yeni mi?</summary>
+        private bool IsUpgrade()
+        {
+            if (_installedVersion == null) return false;
+            return Version.TryParse(_installedVersion, out Version? installed)
+                && Version.TryParse(Installer.Version, out Version? setup)
+                && setup > installed;
         }
     }
 }
