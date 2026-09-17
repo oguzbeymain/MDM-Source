@@ -64,6 +64,9 @@ namespace MDM
             if (id is "edge" or "msedge" or "microsoft edge") return "edge";
             if (id is "chrome" or "google chrome") return "chrome";
             if (id is "brave") return "brave";
+            if (id is "opera") return "opera";
+            if (id is "opera-gx" or "operagx" or "opera gx") return "opera-gx";
+            if (id is "zen" or "zen browser" or "zenbrowser") return "zen";
             if (id is "firefox" or "mozilla firefox" or "fx") return "firefox";
             if (id is "firefox-developer" or "firefox-dev" or "developer"
                 or "firefox developer edition" or "firefoxdeveloperedition")

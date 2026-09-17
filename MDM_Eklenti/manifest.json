@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MDM Integration",
-  "version": "3.2.2",
+  "version": "3.2.4",
   "description": "MDM (Muck Download Manager) masaüstü entegrasyonu — evrensel video yakalama",
   "browser_specific_settings": {
     "gecko": {

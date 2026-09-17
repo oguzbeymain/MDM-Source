@@ -1,10 +1,13 @@
 // MDM — service worker / Firefox background orchestrator
 // Firefox staging manifest scripts[] ile yükler; SW'de importScripts gerekir.
-if (typeof importScripts === "function" && typeof mdmExtCapture !== "function") {
-  try {
-    importScripts("i18n.js", "classifier.js", "capture-store.js", "formats.js", "desktop.js", "menus.js");
-  } catch (e) {
-    console.warn("MDM: importScripts failed", e);
+if (typeof importScripts === "function") {
+  try { importScripts("mdm-channel.js"); } catch (_) { /* Chromium staging dışında yok */ }
+  if (typeof mdmExtCapture !== "function") {
+    try {
+      importScripts("i18n.js", "classifier.js", "capture-store.js", "formats.js", "desktop.js", "menus.js");
+    } catch (e) {
+      console.warn("MDM: importScripts failed", e);
+    }
   }
 }
 
@@ -121,18 +124,8 @@ function mdmIsSessionRestoreReplay(downloadItem) {
   const now = Date.now();
   const started = downloadItem.startTime ? Date.parse(downloadItem.startTime) : NaN;
   const ageMs = Number.isNaN(started) ? 0 : now - started;
-  // Firefox: «Farklı kaydet» / always-ask çoğu indirmeyi paused=true başlatır.
-  // Eski kod paused'ı "restore" sanıp takeover'ı tamamen atlıyordu → dosya tarayıcıda kalıyordu.
-  if (mdmIsFirefox()) {
-    if (downloadItem.state === "complete") return true;
-    // Sadece gerçekten ilerlemiş eski indirmeleri atla (oturum geri yükleme)
-    if ((downloadItem.bytesReceived || 0) > 512 * 1024 && ageMs > 8000) return true;
-    return false;
-  }
-  if (downloadItem.state === "interrupted" || downloadItem.paused === true) return true;
-  if ((downloadItem.bytesReceived || 0) > 0 && ageMs > 3000) return true;
-  if (ageMs > MDM_MAX_FRESH_AGE_MS) return true;
-  if (now < mdmStartupGuardUntil && ageMs > 2500) return true;
+  if (downloadItem.state === "complete") return true;
+  if ((downloadItem.bytesReceived || 0) > 512 * 1024 && ageMs > 8000) return true;
   return false;
 }
 
@@ -444,41 +437,22 @@ function mdmLooksLikeBinaryDownload(url, mime, disposition) {
 function mdmShouldAutoTakeoverDownload(url, mime, filename) {
   if (!url) return false;
   if (/^magnet:/i.test(url)) return true;
+  if (/^blob:/i.test(url) || /^data:/i.test(url) || /^file:/i.test(url)) return false;
   if (mdmIsStreamingMediaUrl(url) || mdmIsNoiseApiUrl(url)) return false;
   const name = (filename || "").split(/[/\\]/).pop() || "";
-  if (mdmIsJunkDownloadName(name)) return false;
+  if (name && mdmIsJunkDownloadName(name)) return false;
   if (/^videoplayback(\.|$)/i.test(name)) return false;
   if (/\.(m3u8|mpd|ts|m4s)(\?|$)/i.test(url) || /\.(m3u8|mpd|ts|m4s)$/i.test(name)) return false;
-  // Yalnızca .bin isimli «dosya» — asla otomatik alma
-  if (/\.bin$/i.test(name) && !MDM_REAL_FILE_NAME.test(name.replace(/\.bin$/i, ".zip"))) return false;
-
-  // Firefox downloads API kullanıcı indirmesidir (Chromium'daki media segment spam'i yok).
-  if (mdmIsFirefox()) {
-    if (/^blob:/i.test(url) || /^data:/i.test(url) || /^file:/i.test(url)) return false;
-    const ct = (mime || "").split(";")[0].trim().toLowerCase();
-    if (/^text\/(html|css|javascript)/i.test(ct) || /^application\/json/i.test(ct)) return false;
-    if (/^video\//i.test(ct) || /^audio\//i.test(ct)) {
-      return /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)(\?|$)/i.test(url)
-        || /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)$/i.test(name);
-    }
-    return true;
-  }
-
-  const hasRealExt = MDM_REAL_FILE_NAME.test(name)
-    || (typeof MDM_FILE_EXT !== "undefined" && MDM_FILE_EXT.test(url))
-    || MDM_REAL_FILE_NAME.test(url.split(/[?#]/)[0].split("/").pop() || "");
-  if (/drive\.usercontent\.google\.com\/download/i.test(url)) return true;
-  if (/[?&]export=download\b/i.test(url) && /google\.com/i.test(url)) return true;
-  if (!hasRealExt) return false;
+  if (name && /\.bin$/i.test(name) && !MDM_REAL_FILE_NAME.test(name.replace(/\.bin$/i, ".zip"))) return false;
 
   const ct = (mime || "").split(";")[0].trim().toLowerCase();
-  if (/^text\/(html|css|javascript|plain)/i.test(ct) || /^application\/json/i.test(ct)) return false;
+  if (/^text\/(html|css|javascript)/i.test(ct) || /^application\/json/i.test(ct)) return false;
   if (/^application\/(x-)?protobuf/i.test(ct) || /^text\/event-stream/i.test(ct)) return false;
   if (/^video\//i.test(ct) || /^audio\//i.test(ct)) {
     return /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)(\?|$)/i.test(url)
       || /\.(mp4|mkv|avi|mov|webm|m4v|flv|wmv|mp3|wav|flac|m4a|aac|ogg)$/i.test(name);
   }
-  return mdmLooksLikeBinaryDownload(url, mime, "");
+  return true;
 }
 
 function mdmHandoffFromHeaders(details, mime, disposition) {
@@ -632,6 +606,9 @@ async function mdmTakeoverDownload(downloadItem) {
   if (/google\.com|googleusercontent\.com/i.test(url))
     headers.Referer = headers.Referer || "https://drive.google.com/";
 
+  // Önce tarayıcı indirmesini kes; MDM cevabını beklemek dosyayı tarayıcıya bırakıyordu
+  await mdmCancelBrowserDownload(downloadItem.id);
+
   let accepted = false;
   try {
     const cookies = await mdmGetCookies(url);
@@ -652,11 +629,13 @@ async function mdmTakeoverDownload(downloadItem) {
 
   if (accepted) {
     mdmRememberAccepted(url);
-    await mdmCancelBrowserDownload(downloadItem.id);
     return true;
   }
 
   mdmHandledDownloadIds.delete(downloadItem.id);
+  try {
+    await chrome.downloads.download({ url, filename: rawFileName || undefined });
+  } catch (_) {}
   return false;
 }
 
@@ -667,6 +646,15 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
   }
   mdmTakeoverDownload(downloadItem).catch(() => {});
 });
+
+try {
+  if (chrome.downloads.onDeterminingFilename) {
+    chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+      try { suggest(); } catch (_) {}
+      mdmTakeoverDownload(item).catch(() => {});
+    });
+  }
+} catch (_) {}
 
 // Firefox: URL/filename bazen onCreated'da boş; Save As sonrası onChanged gelir
 chrome.downloads.onChanged.addListener((delta) => {

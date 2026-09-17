@@ -555,23 +555,20 @@ namespace MDM
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            if (b.Id is "firefox" or "firefox-developer")
+            if (b.BrowserInstalled && !b.ExtensionActive)
             {
-                if (b.BrowserInstalled && !b.ExtensionActive)
+                string captureId = b.Id;
+                var installBtn = new Button
                 {
-                    string captureId = b.Id;
-                    var installBtn = new Button
-                    {
-                        Content = Loc.T("settings.ext.install", "Kur"),
-                        Margin = new Thickness(0, 0, 8, 0),
-                        Padding = new Thickness(12, 4, 12, 4),
-                        FontSize = 11,
-                        Cursor = Cursors.Hand,
-                        Style = TryFindResource("SoftButton") as Style
-                    };
-                    installBtn.Click += (_, _) => InstallFirefoxExtension(captureId);
-                    right.Children.Add(installBtn);
-                }
+                    Content = Loc.T("settings.ext.install", "Kur"),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    Padding = new Thickness(12, 4, 12, 4),
+                    FontSize = 11,
+                    Cursor = Cursors.Hand,
+                    Style = TryFindResource("SoftButton") as Style
+                };
+                installBtn.Click += (_, _) => InstallBrowserExtension(captureId);
+                right.Children.Add(installBtn);
             }
 
             right.Children.Add(statusPill);
@@ -594,7 +591,45 @@ namespace MDM
             };
         }
 
-        private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallFirefoxExtension(null);
+        private void BtnExtHowto_Click(object sender, RoutedEventArgs e)
+        {
+            try { ExtensionInstaller.PrepareChromiumStaging("chrome"); }
+            catch { /* klasör yoksa yine yolu göster */ }
+            string staging = Path.GetFullPath(ExtensionInstaller.ChromiumStagingRoot);
+            InfoDialog.Show(OwnerWindow,
+                Loc.T("settings.ext.howto_title", "Kurulum nasıl yapılır?"),
+                Loc.T("settings.ext.chromium_message", "Kurulum — bir adım kaldı."),
+                string.Format(
+                    Loc.T("settings.ext.chromium_detail",
+                        "1) Açılan eklentiler sayfasında «Geliştirici modu»nu aç.\n2) «Paketlenmemiş öğe yükle»ye tıkla.\n3) Explorer’da zaten seçili klasörü seç — klasörü başka yere kopyalaman gerekmez:\n   {0}"),
+                    staging));
+        }
+
+        private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallBrowserExtension("firefox");
+
+        private void InstallBrowserExtension(string? browserId)
+        {
+            if (string.IsNullOrWhiteSpace(browserId) || browserId is "firefox" or "firefox-developer")
+            {
+                InstallFirefoxExtension(browserId);
+                return;
+            }
+
+            try
+            {
+                bool ok = ExtensionInstaller.TryInstallBrowser(
+                    browserId, out string title, out string message, out string detail);
+                InfoDialog.Show(OwnerWindow, title, message, detail);
+                if (ok)
+                    RefreshBrowserStatus();
+            }
+            catch (Exception ex)
+            {
+                InfoDialog.Show(OwnerWindow,
+                    Loc.T("settings.ext.dialog_title", "Eklenti"),
+                    Loc.T("settings.ext.firefox_error_message", "Kurulum başlatılamadı."), ex.Message);
+            }
+        }
 
         /// <summary>
         /// Developer Edition indirme sayfasını açar ve kurulum bitene kadar bekler. Kullanıcı
@@ -911,6 +946,7 @@ namespace MDM
                 "Seçince anında önizlenir. Kalıcı olması için Kaydet’e basın; İptal eski temaya döner.");
             if (TxtExtPanelTitle != null) TxtExtPanelTitle.Text = Loc.T("settings.ext.title", "Eklenti denetimi");
             if (BtnRefreshBrowsers != null) BtnRefreshBrowsers.Content = Loc.T("settings.ext.refresh", "Yenile");
+            if (BtnExtHowto != null) BtnExtHowto.Content = Loc.T("settings.ext.howto_button", "Kurulum nasıl yapılır?");
             if (BtnInstallFirefox != null) BtnInstallFirefox.Content = Loc.T("settings.ext.firefox_install", "Firefox otomatik kur");
 
             // Genel

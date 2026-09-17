@@ -3,7 +3,6 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using Microsoft.Win32;
 
 namespace MDM
 {
@@ -35,48 +34,42 @@ namespace MDM
         public static IReadOnlyList<BrowserExtensionStatus> ProbeAll()
         {
             string extRoot = ExtensionInstaller.InstallRoot;
-            return new[]
-            {
-                Probe("edge", "Microsoft Edge", "#0078D4",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Microsoft", "Edge", "User Data"),
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
-                    extRoot),
-                Probe("chrome", "Google Chrome", "#34A853",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Google", "Chrome", "User Data"),
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe",
-                    extRoot),
-                Probe("brave", "Brave", "#FB542B",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "BraveSoftware", "Brave-Browser", "User Data"),
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\brave.exe",
-                    extRoot),
-                ProbeFirefoxRelease(),
-                ProbeFirefoxDeveloper(),
-            };
+            return BrowserDiscovery.Installed(force: true)
+                .Select(t => t.Family == BrowserFamily.Gecko
+                    ? ProbeGecko(t)
+                    : ProbeChromium(t, extRoot))
+                .ToArray();
         }
 
-        private static BrowserExtensionStatus ProbeFirefoxRelease()
-            => ProbeFirefoxChannel(
-                id: "firefox",
-                name: "Mozilla Firefox",
-                accent: "#FF7139",
-                exe: ExtensionInstaller.ResolveFirefoxReleaseExe(),
-                developer: false);
-
-        private static BrowserExtensionStatus ProbeFirefoxDeveloper()
-            => ProbeFirefoxChannel(
-                id: "firefox-developer",
-                name: "Firefox Developer Edition",
-                accent: "#00D4AA",
-                exe: ExtensionInstaller.ResolveFirefoxDeveloperExe(out _),
-                developer: true);
-
-        private static BrowserExtensionStatus ProbeFirefoxChannel(
-            string id, string name, string accent, string? exe, bool developer)
+        private static BrowserExtensionStatus ProbeGecko(BrowserTarget target)
         {
-            bool browserOk = !string.IsNullOrWhiteSpace(exe);
+            bool developer = target.Id == "firefox-developer";
+            return ProbeGeckoChannel(
+                id: target.Id,
+                name: target.Name,
+                accent: target.AccentHex,
+                exe: target.ResolveExe(),
+                geckoRoot: target.GeckoRoot(),
+                developer: developer);
+        }
+
+        private static BrowserExtensionStatus ProbeChromium(BrowserTarget target, string extRoot)
+        {
+            string userData = target.UserDataRoot() ?? "";
+            bool exeOk = !string.IsNullOrWhiteSpace(target.ResolveExe()) && File.Exists(target.ResolveExe());
+            return Probe(
+                target.Id,
+                target.Name,
+                target.AccentHex,
+                userData,
+                extRoot,
+                browserOk: exeOk || Directory.Exists(userData));
+        }
+
+        private static BrowserExtensionStatus ProbeGeckoChannel(
+            string id, string name, string accent, string? exe, string? geckoRoot, bool developer)
+        {
+            bool browserOk = !string.IsNullOrWhiteSpace(exe) && File.Exists(exe);
             if (!browserOk)
             {
                 return new BrowserExtensionStatus
@@ -88,7 +81,9 @@ namespace MDM
             }
 
             bool live = ExtensionPresence.SeenRecentlyForBrowser(id, TimeSpan.FromMinutes(5));
-            bool onDisk = ExtensionInstaller.FirefoxExtensionPresentOnDisk(developer);
+            bool onDisk = id is "firefox" or "firefox-developer"
+                ? ExtensionInstaller.FirefoxExtensionPresentOnDisk(developer)
+                : ExtensionInstaller.GeckoExtensionPresentOnDisk(geckoRoot);
             bool active = live;
             string detail;
             if (active)
@@ -112,9 +107,8 @@ namespace MDM
         }
 
         private static BrowserExtensionStatus Probe(
-            string id, string name, string accent, string userData, string appPathKey, string extRoot)
+            string id, string name, string accent, string userData, string extRoot, bool browserOk)
         {
-            bool browserOk = BrowserInstalled(appPathKey) || Directory.Exists(userData);
             if (!browserOk)
             {
                 return new BrowserExtensionStatus
@@ -136,7 +130,7 @@ namespace MDM
             else if (disk.Present)
                 detail = Loc.T("extstatus.installed_off", "Eklenti yüklü ama kapalı");
             else
-                detail = Loc.T("extstatus.missing", "Eklenti yok / kaldırılmış");
+                detail = Loc.T("extstatus.firefox_missing", "Eklenti yok — «Kur»");
 
             Debug.WriteLine($"ExtProbe[{id}]: live={live} present={disk.Present} enabled={disk.Enabled} → active={active}");
 
@@ -314,6 +308,7 @@ namespace MDM
                     list.Add(dir);
             }
 
+            Add(userDataRoot);
             Add(Path.Combine(userDataRoot, "Default"));
             try
             {
@@ -340,18 +335,6 @@ namespace MDM
             catch { /* ignore */ }
 
             return list;
-        }
-
-        private static bool BrowserInstalled(string appPathKey)
-        {
-            try
-            {
-                using var key = Registry.LocalMachine.OpenSubKey(appPathKey)
-                    ?? Registry.CurrentUser.OpenSubKey(appPathKey);
-                string? path = key?.GetValue(null) as string;
-                return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
-            }
-            catch { return false; }
         }
 
         private static string? ReadShared(string path)

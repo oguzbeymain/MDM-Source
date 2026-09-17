@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -120,8 +121,12 @@ namespace MDM.Setup
                 progress.Report((SetupLoc.T("setup.step_extract", "Dosyalar kopyalanıyor…"), 0.08));
                 CleanParkedFiles(options.InstallDir);
                 RemoveForeignArchitectureFiles(options.InstallDir);
-                ExtractPayload(options.InstallDir, progress);
+            }).ConfigureAwait(false);
 
+            await ExtractPayloadAsync(options.InstallDir, progress).ConfigureAwait(false);
+
+            await Task.Run(() =>
+            {
                 progress.Report((SetupLoc.T("setup.step_settings", "Ayarlar hazırlanıyor…"), 0.86));
                 CopySelf(options.InstallDir);
                 SeedSettings(options);
@@ -207,13 +212,59 @@ namespace MDM.Setup
             }
         }
 
-        private static void ExtractPayload(string targetDir, IProgress<(string, double)> progress)
+        private static async Task ExtractPayloadAsync(string targetDir, IProgress<(string, double)> progress)
         {
-            using Stream? s = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip");
-            if (s == null)
-                throw new InvalidOperationException(SetupLoc.T("setup.error_payload", "Kurulum paketi eksik."));
+            using Stream? embedded = Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip");
+            if (embedded != null)
+            {
+                ExtractZipStream(embedded, targetDir, progress, 0.08, 0.86);
+                return;
+            }
 
-            using var zip = new ZipArchive(s, ZipArchiveMode.Read);
+            progress.Report((SetupLoc.T("setup.step_download", "Kurulum paketi indiriliyor…"), 0.08));
+            string url = $"https://github.com/oguzbeymain/MDM-App/releases/download/v{Version}/MDM-{Version}-win-x64.zip";
+            string tempZip = Path.Combine(Path.GetTempPath(), $"mdm-payload-{Version}.zip");
+            try
+            {
+                await DownloadFileAsync(url, tempZip, progress).ConfigureAwait(false);
+                await using FileStream fs = File.OpenRead(tempZip);
+                ExtractZipStream(fs, targetDir, progress, 0.55, 0.86);
+            }
+            finally
+            {
+                try { File.Delete(tempZip); } catch { /* ignore */ }
+            }
+        }
+
+        private static async Task DownloadFileAsync(string url, string dest, IProgress<(string, double)> progress)
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = true };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(15) };
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "MDM-Setup");
+            using var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            resp.EnsureSuccessStatusCode();
+            long total = resp.Content.Headers.ContentLength ?? 0;
+            await using Stream src = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            await using FileStream dst = File.Create(dest);
+            byte[] buffer = new byte[128 * 1024];
+            long read = 0;
+            int n;
+            while ((n = await src.ReadAsync(buffer).ConfigureAwait(false)) > 0)
+            {
+                await dst.WriteAsync(buffer.AsMemory(0, n)).ConfigureAwait(false);
+                read += n;
+                if (total > 0)
+                {
+                    double pct = 0.08 + 0.45 * read / total;
+                    progress.Report((SetupLoc.T("setup.step_download", "Kurulum paketi indiriliyor…"), pct));
+                }
+            }
+        }
+
+        private static void ExtractZipStream(
+            Stream zipStream, string targetDir, IProgress<(string, double)> progress, double fromPct, double toPct)
+        {
+            using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
             var entries = zip.Entries;
             int done = 0;
 
@@ -236,7 +287,7 @@ namespace MDM.Setup
                 done++;
                 if (done % 8 == 0 || done == entries.Count)
                 {
-                    double pct = 0.08 + 0.78 * done / Math.Max(1, entries.Count);
+                    double pct = fromPct + (toPct - fromPct) * done / Math.Max(1, entries.Count);
                     progress.Report((SetupLoc.T("setup.step_extract", "Dosyalar kopyalanıyor…"), pct));
                 }
             }

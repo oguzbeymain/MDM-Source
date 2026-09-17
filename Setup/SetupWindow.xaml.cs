@@ -230,12 +230,6 @@ namespace MDM.Setup
 
         private async Task RunInstallAsync()
         {
-            if (!Installer.HasPayload)
-            {
-                ShowError(SetupLoc.T("setup.error_payload", "Kurulum paketi eksik."));
-                return;
-            }
-
             _busy = true;
             ShowStep(Step.Progress);
             TxtProgressTitle.Text = _repairing

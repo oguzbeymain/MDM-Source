@@ -18,6 +18,8 @@ namespace MDM
     {
         public const string FirefoxAddonId = "mdm@muckdownloadmanager.local";
         public const string DeveloperEditionDownloadUrl = "https://www.mozilla.org/firefox/developer/";
+        private static readonly HashSet<string> OpenedBrowserUi = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly HashSet<string> OpenedExplorerFolders = new(StringComparer.OrdinalIgnoreCase);
 
         public static string InstallRoot =>
             Path.Combine(AppContext.BaseDirectory, "MDM_Eklenti");
@@ -34,12 +36,48 @@ namespace MDM
 
         public static string FirefoxXpiPathFor(string channelId)
         {
-            string name = channelId is "firefox-developer" or "firefox-dev" or "developer"
-                ? "MDM-FirefoxDev.xpi"
-                : "MDM-Firefox.xpi";
+            string name = channelId switch
+            {
+                "firefox-developer" or "firefox-dev" or "developer" => "MDM-FirefoxDev.xpi",
+                "zen" => "MDM-Zen.xpi",
+                _ => "MDM-Firefox.xpi"
+            };
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "MuckDownloadManager", name);
+        }
+
+        public static string ChromiumStagingRoot =>
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MuckDownloadManager", "ChromiumExtension");
+
+        public static string ChromiumCrxPath =>
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MuckDownloadManager", "MDM-Integration.crx");
+
+        /// <summary>
+        /// Tarayıcıya göre eklenti kurulumu. Gecko: XPI «Ekle» diyaloğu.
+        /// Chromium: eklentiler sayfası + paketlenmemiş klasör (CRX indirme yok).
+        /// </summary>
+        public static bool TryInstallBrowser(string browserId, out string title, out string message, out string detail)
+        {
+            var target = BrowserTargets.Find(browserId);
+            title = target?.Name ?? browserId;
+            message = "";
+            detail = "";
+            if (target == null)
+            {
+                message = string.Format(Loc.T("settings.ext.browser_missing_install", "{0} yüklü değil."), browserId);
+                detail = browserId;
+                return false;
+            }
+
+            title = string.Format(Loc.T("settings.ext.chromium_title", "{0} eklentisi"), target.Name);
+            if (target.Family == BrowserFamily.Gecko)
+                return TryInstallGeckoBrowser(target, out title, out message, out detail);
+            return TryInstallChromiumBrowser(target, out title, out message, out detail);
         }
 
         public static void EnsureInstalled()
@@ -47,6 +85,8 @@ namespace MDM
             try
             {
                 CleanupBrokenAutoInstallArtifacts();
+                if (Directory.Exists(InstallRoot) && File.Exists(Path.Combine(InstallRoot, "manifest.json")))
+                    PrepareChromiumStaging("chrome");
             }
             catch (Exception ex)
             {
@@ -69,7 +109,7 @@ namespace MDM
         public static bool TryInstallFirefox(out string title, out string message, out string detail,
             FirefoxInstallMode mode = FirefoxInstallMode.Auto)
         {
-            title = "Firefox eklentisi";
+            title = Loc.T("firefox.title", "Firefox eklentisi");
             message = "";
             detail = "";
 
@@ -77,7 +117,7 @@ namespace MDM
             {
                 if (!Directory.Exists(InstallRoot) || !File.Exists(Path.Combine(InstallRoot, "manifest.json")))
                 {
-                    message = "Eklenti klasörü bulunamadı.";
+                    message = Loc.T("firefox.howto.folder_missing", "Eklenti klasörü bulunamadı.");
                     detail = InstallRoot;
                     return false;
                 }
@@ -89,7 +129,7 @@ namespace MDM
             }
             catch (Exception ex)
             {
-                message = "Kurulum başlatılamadı.";
+                message = Loc.T("settings.ext.firefox_error_message", "Kurulum başlatılamadı.");
                 detail = ex.Message;
                 return false;
             }
@@ -97,12 +137,12 @@ namespace MDM
 
         private static bool TryInstallFirefoxTemporary(out string title, out string message, out string detail)
         {
-            title = "Firefox eklentisi";
+            title = Loc.T("firefox.title", "Firefox eklentisi");
             string? releaseExe = ResolveFirefoxReleaseExe();
             if (string.IsNullOrWhiteSpace(releaseExe))
             {
-                message = "Mozilla Firefox bulunamadı.";
-                detail = "Normal Firefox (Mozilla Firefox) kurulu değil.";
+                message = Loc.T("firefox.howto.missing_release", "Mozilla Firefox bulunamadı.");
+                detail = Loc.T("firefox.howto.missing_release_detail", "Normal Firefox (Mozilla Firefox) kurulu değil.");
                 return false;
             }
 
@@ -110,57 +150,103 @@ namespace MDM
             string staging = Path.GetFullPath(FirefoxStagingRoot);
             string manifest = Path.Combine(staging, "manifest.json");
 
-            LaunchFirefox(releaseExe, "about:debugging#/runtime/this-firefox");
+            LaunchGeckoPage(releaseExe, "about:debugging#/runtime/this-firefox");
             TryRevealFile(manifest);
             TryCopyText(manifest);
 
-            message = "Geçici kurulum — bir adım kaldı.";
-            detail =
-                "1) Açılan Firefox sayfasında «Geçici eklenti yükle»ye tıkla.\n" +
-                "2) Explorer’da seçili dosyayı seç:\n" +
-                $"   {manifest}\n\n" +
-                "İzinleri onayla. Bu oturumda çalışır; Firefox kapanınca silinir.\n" +
-                "Kalıcı kurulum için Firefox Developer Edition gerekir.";
+            message = Loc.T("firefox.howto.temp_message", "Geçici kurulum — bir adım kaldı.");
+            detail = string.Format(
+                Loc.T("firefox.howto.temp_detail",
+                    "1) Açılan Firefox sayfasında «Geçici eklenti yükle»ye tıkla.\n2) Explorer’da seçili dosyayı seç:\n   {0}\n\nİzinleri onayla. Bu oturumda çalışır; Firefox kapanınca silinir.\nKalıcı kurulum için Firefox Developer Edition gerekir."),
+                manifest);
             return true;
         }
 
         private static bool TryInstallFirefoxPermanent(out string title, out string message, out string detail)
         {
-            title = "Firefox eklentisi";
+            title = Loc.T("firefox.title", "Firefox eklentisi");
             string? devExe = ResolveFirefoxDeveloperExe(out string channel);
             if (string.IsNullOrWhiteSpace(devExe))
             {
-                message = "Firefox Developer Edition bulunamadı.";
-                detail = "Önce Developer Edition’ı kur, sonra tekrar dene.\n"
-                         + DeveloperEditionDownloadUrl;
+                message = Loc.T("firefox.howto.missing_dev", "Firefox Developer Edition bulunamadı.");
+                detail = Loc.T("firefox.howto.missing_dev_detail", "Önce Developer Edition’ı kur, sonra tekrar dene.")
+                         + "\n" + DeveloperEditionDownloadUrl;
                 return false;
             }
 
             InstallFirefoxChannel(devExe, "firefox-developer", permanent: true);
             string xpi = Path.GetFullPath(FirefoxXpiPathFor("firefox-developer"));
 
-            message = "Kalıcı kurulum — eklentiyi onaylayın.";
-            detail =
-                $"Kanal: {ChannelLabel(channel)}\n\n" +
-                "1) Açılan pencerede «Ekle» deyin (imza uyarısı normal).\n" +
-                "2) Gelmezse: about:addons → dişli → «Dosyadan eklenti yükle» →\n" +
-                $"   {xpi}\n\n" +
-                "Bu kanalda eklenti Firefox kapanınca da kalır.";
+            message = Loc.T("firefox.howto.perm_message", "Kalıcı kurulum — eklentiyi onaylayın.");
+            detail = string.Format(
+                Loc.T("firefox.howto.perm_detail",
+                    "Kanal: {0}\n\n1) Açılan pencerede «Ekle» deyin (imza uyarısı normal).\n2) Gelmezse: about:addons → dişli → «Dosyadan eklenti yükle» →\n   {1}\n\nBu kanalda eklenti Firefox kapanınca da kalır."),
+                ChannelLabel(channel),
+                xpi);
             return true;
+        }
+
+        private static string NormalizeDir(string path)
+        {
+            try { return Path.GetFullPath(path).TrimEnd('\\', '/'); }
+            catch { return path.TrimEnd('\\', '/'); }
         }
 
         private static void TryRevealFile(string path)
         {
             try
             {
+                string full = Path.GetFullPath(path);
+                string folder = Directory.Exists(full)
+                    ? full
+                    : Path.GetDirectoryName(full) ?? full;
+                folder = NormalizeDir(folder);
+                if (OpenedExplorerFolders.Contains(folder))
+                    return;
+                if (ExplorerWindowExists(folder))
+                {
+                    OpenedExplorerFolders.Add(folder);
+                    return;
+                }
+
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "explorer.exe",
-                    Arguments = "/select,\"" + path + "\"",
+                    Arguments = "\"" + folder + "\"",
                     UseShellExecute = true
                 });
+                OpenedExplorerFolders.Add(folder);
             }
             catch { /* ignore */ }
+        }
+
+        private static bool ExplorerWindowExists(string folder)
+        {
+            try
+            {
+                string want = NormalizeDir(folder);
+                string parent = NormalizeDir(Path.GetDirectoryName(want) ?? want);
+                Type? shellType = Type.GetTypeFromProgID("Shell.Application");
+                if (shellType == null) return false;
+                dynamic shell = Activator.CreateInstance(shellType)!;
+                foreach (dynamic win in shell.Windows())
+                {
+                    try
+                    {
+                        string? loc = null;
+                        try { loc = win.Document.Folder.Self.Path as string; }
+                        catch { /* ignore */ }
+                        if (string.IsNullOrWhiteSpace(loc)) continue;
+                        string have = NormalizeDir(loc);
+                        if (have.Equals(want, StringComparison.OrdinalIgnoreCase)
+                            || have.Equals(parent, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                    catch { /* ignore this window */ }
+                }
+            }
+            catch { /* COM yok */ }
+            return false;
         }
 
         private static void TryCopyText(string text)
@@ -183,7 +269,265 @@ namespace MDM
 
             TryRelaxSignaturePref();
             TrySideloadXpiIntoProfiles(xpi, developerOnly: true);
-            LaunchFirefox(exe, quotedXpi);
+            LaunchGeckoFile(exe, xpi);
+        }
+
+        private static bool TryInstallGeckoBrowser(BrowserTarget target, out string title, out string message, out string detail)
+        {
+            title = string.Format(Loc.T("settings.ext.chromium_title", "{0} eklentisi"), target.Name);
+            message = "";
+            detail = "";
+
+            if (!Directory.Exists(InstallRoot) || !File.Exists(Path.Combine(InstallRoot, "manifest.json")))
+            {
+                message = Loc.T("settings.ext.firefox_error_message", "Kurulum başlatılamadı.");
+                detail = InstallRoot;
+                return false;
+            }
+
+            string? exe = target.ResolveExe();
+            if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
+            {
+                message = string.Format(
+                    Loc.T("settings.ext.browser_missing_install", "{0} yüklü değil."),
+                    target.Name);
+                return false;
+            }
+
+            PackFirefoxXpi(target.Id);
+            string xpi = Path.GetFullPath(FirefoxXpiPathFor(target.Id));
+            foreach (string profile in EnumerateGeckoProfiles(target.GeckoRoot()))
+            {
+                try
+                {
+                    EnsureFirefoxUserPrefs(profile);
+                    string extDir = Path.Combine(profile, "extensions");
+                    Directory.CreateDirectory(extDir);
+                    File.Copy(xpi, Path.Combine(extDir, FirefoxAddonId + ".xpi"), overwrite: true);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Gecko sideload [{target.Id}]: {ex.Message}");
+                }
+            }
+
+            LaunchGeckoFile(exe, xpi);
+            message = Loc.T("settings.ext.prompt_message", "Kalıcı kurulum — eklentiyi onaylayın.");
+            detail = string.Format(
+                Loc.T("settings.ext.prompt_detail",
+                    "1) Açılan pencerede «Ekle» deyin (imza uyarısı normal).\n2) Gelmezse eklentiler sayfasında dosyadan yükleyin:\n   {0}\n\nEkledikten sonra eklenti tarayıcı kapanınca da kalır."),
+                xpi);
+            return true;
+        }
+
+        private static bool TryInstallChromiumBrowser(BrowserTarget target, out string title, out string message, out string detail)
+        {
+            title = string.Format(Loc.T("settings.ext.chromium_title", "{0} eklentisi"), target.Name);
+            message = "";
+            detail = "";
+
+            if (!Directory.Exists(InstallRoot) || !File.Exists(Path.Combine(InstallRoot, "manifest.json")))
+            {
+                message = Loc.T("settings.ext.firefox_error_message", "Kurulum başlatılamadı.");
+                detail = InstallRoot;
+                return false;
+            }
+
+            string? exe = target.ResolveExe();
+            if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
+            {
+                message = string.Format(
+                    Loc.T("settings.ext.browser_missing_install", "{0} yüklü değil."),
+                    target.Name);
+                return false;
+            }
+
+            PrepareChromiumStaging(target.Id);
+            string staging = Path.GetFullPath(ChromiumStagingRoot);
+            TryDeleteFile(ChromiumCrxPath);
+            TryDeleteFile(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "MDM-Integration.crx"));
+
+            TryEnableChromiumDeveloperMode(target.UserDataRoot());
+            LaunchChromiumExtensions(exe, target);
+            TryRevealFile(staging);
+            TryCopyText(staging);
+
+            message = Loc.T("settings.ext.chromium_message", "Kurulum — bir adım kaldı.");
+            detail = string.Format(
+                Loc.T("settings.ext.chromium_detail",
+                    "1) Açılan eklentiler sayfasında «Geliştirici modu»nu aç.\n2) «Paketlenmemiş öğe yükle»ye tıkla.\n3) Explorer’da zaten seçili klasörü seç — klasörü başka yere kopyalaman gerekmez:\n   {0}"),
+                staging);
+            return true;
+        }
+
+        private static void TryEnableChromiumDeveloperMode(string? userData)
+        {
+            if (string.IsNullOrWhiteSpace(userData) || !Directory.Exists(userData))
+                return;
+            TrySetDeveloperModeFlag(Path.Combine(userData, "Local State"));
+            TrySetDeveloperModeFlag(Path.Combine(userData, "Default", "Preferences"));
+        }
+
+        private static void TrySetDeveloperModeFlag(string jsonPath)
+        {
+            if (!File.Exists(jsonPath)) return;
+            try
+            {
+                string raw;
+                using (var fs = new FileStream(jsonPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    using (var reader = new StreamReader(fs, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true))
+                        raw = reader.ReadToEnd();
+
+                    var root = JsonNode.Parse(raw)?.AsObject();
+                    if (root == null) return;
+                    var ext = root["extensions"] as JsonObject ?? new JsonObject();
+                    root["extensions"] = ext;
+                    var ui = ext["ui"] as JsonObject ?? new JsonObject();
+                    ext["ui"] = ui;
+                    ui["developer_mode"] = true;
+                    byte[] bytes = Encoding.UTF8.GetBytes(root.ToJsonString() + "\n");
+                    fs.SetLength(0);
+                    fs.Position = 0;
+                    fs.Write(bytes);
+                }
+            }
+            catch
+            {
+                /* tarayıcı dosyayı kilitliyorsa atla */
+            }
+        }
+
+        public static void PrepareChromiumStaging(string channelId)
+        {
+            string src = InstallRoot;
+            string dst = ChromiumStagingRoot;
+            Directory.CreateDirectory(dst);
+
+            foreach (string file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
+            {
+                string rel = Path.GetRelativePath(src, file);
+                string target = Path.Combine(dst, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                try { File.Copy(file, target, overwrite: true); }
+                catch { /* tarayıcı dosyayı kilitliyorsa atla */ }
+            }
+
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(dst, "mdm-channel.js"),
+                    $"self.MDM_BROWSER_CHANNEL = \"{channelId}\";\n",
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            }
+            catch { /* ignore */ }
+        }
+
+        private static void LaunchChromiumExtensions(string exe, BrowserTarget target)
+        {
+            string url = ChromiumExtensionsCliUrl(target, exe);
+            LaunchBrowserOnce(exe, "--new-tab " + url, url);
+        }
+
+        /// <summary>
+        /// brave:// ve opera:// komut satırında yok sayılır; tarayıcı boş pencere açar.
+        /// Chromium ailesi chrome://extensions kabul eder; Edge edge:// de kabul eder.
+        /// </summary>
+        private static string ChromiumExtensionsCliUrl(BrowserTarget target, string exe)
+        {
+            string id = (target.Id ?? "").ToLowerInvariant();
+            string path = exe.ToLowerInvariant();
+            if (id.Contains("edge") || path.Contains("msedge"))
+                return "edge://extensions/";
+            return "chrome://extensions/";
+        }
+
+        private static void LaunchGeckoPage(string exe, string url)
+        {
+            LaunchBrowserOnce(exe, "-new-tab \"" + url + "\"", url);
+        }
+
+        private static void LaunchGeckoFile(string exe, string file)
+        {
+            string full = Path.GetFullPath(file);
+            LaunchBrowserOnce(exe, "\"" + full + "\"", full);
+        }
+
+        private static void LaunchBrowserOnce(string exe, string args, string uiKey)
+        {
+            string key = NormalizeExeKey(exe) + "|" + uiKey;
+            if (OpenedBrowserUi.Contains(key) && IsBrowserProcessRunning(exe))
+                return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    WorkingDirectory = Path.GetDirectoryName(exe) ?? ""
+                });
+                OpenedBrowserUi.Add(key);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"LaunchBrowserOnce: {ex.Message}");
+            }
+        }
+
+        private static string NormalizeExeKey(string exe)
+        {
+            try { return Path.GetFullPath(exe); }
+            catch { return exe; }
+        }
+
+        private static bool IsBrowserProcessRunning(string exe)
+        {
+            if (string.IsNullOrWhiteSpace(exe)) return false;
+            string name = Path.GetFileNameWithoutExtension(exe);
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            string? appDir = null;
+            try { appDir = Path.GetDirectoryName(Path.GetFullPath(exe)); }
+            catch { /* ignore */ }
+
+            Process[] procs;
+            try { procs = Process.GetProcessesByName(name); }
+            catch { return false; }
+
+            try
+            {
+                foreach (Process p in procs)
+                {
+                    try
+                    {
+                        string? path = p.MainModule?.FileName;
+                        if (string.IsNullOrWhiteSpace(path))
+                            return true;
+                        if (path.Equals(NormalizeExeKey(exe), StringComparison.OrdinalIgnoreCase))
+                            return true;
+                        if (!string.IsNullOrWhiteSpace(appDir)
+                            && path.StartsWith(appDir, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                        string? parent = Path.GetDirectoryName(path);
+                        if (!string.IsNullOrWhiteSpace(appDir) && !string.IsNullOrWhiteSpace(parent)
+                            && string.Equals(Path.GetDirectoryName(parent), appDir, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            finally
+            {
+                foreach (Process p in procs)
+                    p.Dispose();
+            }
         }
 
         public static bool IsFirefoxReleaseInstalled()
@@ -295,9 +639,12 @@ namespace MDM
                 File.Copy(file, target, overwrite: true);
             }
 
-            string boot = channelId is "firefox-developer" or "firefox-dev" or "developer"
-                ? "firefox-developer"
-                : "firefox";
+            string boot = channelId switch
+            {
+                "firefox-developer" or "firefox-dev" or "developer" => "firefox-developer",
+                "zen" => "zen",
+                _ => "firefox"
+            };
             File.WriteAllText(
                 Path.Combine(dst, "mdm-channel.js"),
                 $"self.MDM_BROWSER_CHANNEL = \"{boot}\";\n",
@@ -465,7 +812,7 @@ namespace MDM
             }
         }
 
-        private static string DetectChannel(string exePath)
+        internal static string DetectChannel(string exePath)
         {
             string p = exePath.ToLowerInvariant();
             if (p.Contains("developer")) return "developer";
@@ -483,15 +830,7 @@ namespace MDM
         };
 
         private static void LaunchFirefox(string exe, string args)
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exe,
-                Arguments = args,
-                UseShellExecute = false,
-                WorkingDirectory = Path.GetDirectoryName(exe) ?? ""
-            });
-        }
+            => LaunchBrowserOnce(exe, args, args);
 
         public static bool IsFirefoxExeRunning(string exe)
         {
@@ -636,10 +975,14 @@ namespace MDM
         }
 
         public static IEnumerable<string> EnumerateFirefoxProfiles()
-        {
-            string root = Path.Combine(
+            => EnumerateGeckoProfiles(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Mozilla", "Firefox");
+                "Mozilla", "Firefox"));
+
+        public static IEnumerable<string> EnumerateGeckoProfiles(string? root)
+        {
+            if (string.IsNullOrWhiteSpace(root))
+                yield break;
             string ini = Path.Combine(root, "profiles.ini");
             if (!File.Exists(ini))
                 yield break;
@@ -675,15 +1018,25 @@ namespace MDM
         }
 
         public static bool FirefoxExtensionPresentOnDisk(bool? developerProfiles = null)
+            => GeckoExtensionPresentOnDisk(
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Mozilla", "Firefox"),
+                developerProfiles);
+
+        public static bool GeckoExtensionPresentOnDisk(string? geckoRoot, bool? developerProfiles = null)
         {
             try
             {
                 string id = FirefoxAddonId;
-                foreach (string profile in EnumerateFirefoxProfiles())
+                foreach (string profile in EnumerateGeckoProfiles(geckoRoot))
                 {
-                    bool isDev = IsDeveloperProfile(profile);
-                    if (developerProfiles == true && !isDev) continue;
-                    if (developerProfiles == false && isDev) continue;
+                    if (developerProfiles != null)
+                    {
+                        bool isDev = IsDeveloperProfile(profile);
+                        if (developerProfiles == true && !isDev) continue;
+                        if (developerProfiles == false && isDev) continue;
+                    }
                     string extDir = Path.Combine(profile, "extensions");
                     if (File.Exists(Path.Combine(extDir, id + ".xpi")))
                         return true;

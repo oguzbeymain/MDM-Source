@@ -40,31 +40,38 @@ async function mdmSavePreferredPort(port) {
 
 async function mdmResolveLiveBase() {
   const preferred = await mdmGetPreferredPort();
-  for (const ep of mdmBuildEndpoints(preferred)) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), MDM_PROBE_TIMEOUT_MS);
-    try {
+  if (mdmDesktopOnline && preferred && (Date.now() - mdmDesktopCheckAt) < 20000)
+    return `http://127.0.0.1:${preferred}`;
+
+  const endpoints = mdmBuildEndpoints(preferred);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), MDM_PROBE_TIMEOUT_MS);
+  try {
+    const winner = await Promise.any(endpoints.map(async (ep) => {
       const resp = await fetch(`${ep.base}/ext/ping`, { signal: ctrl.signal });
-      if (resp.ok) {
-        await mdmSavePreferredPort(ep.port);
-        mdmDesktopOnline = true;
-        mdmDesktopCheckAt = Date.now();
-        // Her indirme/kalite isteginde dil de tazelenir; mdm-presence alarmini beklemeye gerek kalmaz
-        try {
-          const data = await resp.json();
-          if (data && data.language && typeof mdmI18n !== "undefined"
-              && mdmI18n.code !== data.language) {
-            await mdmI18n.loadLocale(data.language);
-            if (typeof mdmInstallMenus === "function") mdmInstallMenus();
-          }
-        } catch (_) { /* dil okunamazsa mevcut sozlukte kal */ }
-        return ep.base;
+      if (!resp.ok) throw new Error("down");
+      let data = null;
+      try { data = await resp.json(); } catch (_) {}
+      return { ep, data };
+    }));
+    try { ctrl.abort(); } catch (_) {}
+    await mdmSavePreferredPort(winner.ep.port);
+    mdmDesktopOnline = true;
+    mdmDesktopCheckAt = Date.now();
+    try {
+      if (winner.data && winner.data.language && typeof mdmI18n !== "undefined"
+          && mdmI18n.code !== winner.data.language) {
+        await mdmI18n.loadLocale(winner.data.language);
+        if (typeof mdmInstallMenus === "function") mdmInstallMenus();
       }
-    } catch (_) { /* next */ }
-    finally { clearTimeout(timer); }
+    } catch (_) {}
+    return winner.ep.base;
+  } catch (_) {
+    mdmDesktopOnline = false;
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  mdmDesktopOnline = false;
-  return null;
 }
 
 async function mdmPostJson(path, payload, timeoutMs = 1500) {
@@ -217,19 +224,49 @@ async function mdmFetchFormats(payload) {
   return remote || { ok: false, error: mdmErrText("ext.error_app_closed", "MDM açık değil"), ytDlpSuggested: false };
 }
 
-async function mdmPingDesktop() {
-  const preferred = await mdmGetPreferredPort();
-  let browser = "chrome";
+function mdmDetectBrowser() {
   try {
     if (typeof MDM_BROWSER_CHANNEL === "string" && MDM_BROWSER_CHANNEL)
-      browser = MDM_BROWSER_CHANNEL;
-    else {
-      const ua = navigator.userAgent || "";
-      if (/Firefox\//.test(ua)) browser = "firefox";
-      else if (/Edg\//.test(ua)) browser = "edge";
-      else if (/Brave/i.test(ua)) browser = "brave";
+      return MDM_BROWSER_CHANNEL;
+  } catch (_) {}
+  const ua = navigator.userAgent || "";
+  try {
+    const brands = navigator.userAgentData && navigator.userAgentData.brands;
+    if (Array.isArray(brands)) {
+      const names = brands.map((b) => b && b.brand ? String(b.brand) : "").join(" ");
+      if (/Brave/i.test(names)) return "brave";
+      if (/Opera GX/i.test(names)) return "opera-gx";
+      if (/Opera/i.test(names)) return "opera";
+      if (/Vivaldi/i.test(names)) return "vivaldi";
+      if (/Yandex/i.test(names)) return "yandex";
+      if (/DuckDuckGo/i.test(names)) return "duckduckgo";
+      if (/Thorium/i.test(names)) return "thorium";
+      if (/Edge/i.test(names) || /Microsoft Edge/i.test(names)) return "edge";
     }
   } catch (_) {}
+  try {
+    if (navigator.brave && typeof navigator.brave.isBrave === "function")
+      return "brave";
+  } catch (_) {}
+  if (/LibreWolf/i.test(ua)) return "librewolf";
+  if (/Waterfox/i.test(ua)) return "waterfox";
+  if (/Floorp/i.test(ua)) return "floorp";
+  if (/Zen\//i.test(ua) || /ZenBrowser/i.test(ua)) return "zen";
+  if (/Firefox\//.test(ua)) return "firefox";
+  if (/Edg\//.test(ua)) return "edge";
+  if (/OPR\//.test(ua) || /Opera/i.test(ua))
+    return /GX/i.test(ua) ? "opera-gx" : "opera";
+  if (/Vivaldi/i.test(ua)) return "vivaldi";
+  if (/YaBrowser/i.test(ua)) return "yandex";
+  if (/DuckDuckGo/i.test(ua)) return "duckduckgo";
+  if (/Thorium/i.test(ua)) return "thorium";
+  if (/Brave/i.test(ua)) return "brave";
+  return "chrome";
+}
+
+async function mdmPingDesktop() {
+  const preferred = await mdmGetPreferredPort();
+  let browser = mdmDetectBrowser();
   for (const ep of mdmBuildEndpoints(preferred)) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 800);
@@ -242,8 +279,10 @@ async function mdmPingDesktop() {
         try {
           const data = await resp.json();
           if (data && data.language && typeof mdmI18n !== "undefined" && mdmI18n.loadLocale) {
+            const prev = mdmI18n.code;
             await mdmI18n.loadLocale(data.language);
-            if (typeof mdmInstallMenus === "function") mdmInstallMenus();
+            if (typeof mdmInstallMenus === "function" && mdmI18n.code !== prev)
+              mdmInstallMenus();
           }
         } catch (_) { /* ping may be plain text on old builds */ }
         return true;

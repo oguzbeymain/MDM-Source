@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
 
 namespace MDM
 {
@@ -130,6 +129,8 @@ namespace MDM
                 "chrome" => ChromeMark(),
                 "edge" => EdgeMark(),
                 "brave" => BraveMark(),
+                "opera" or "opera-gx" => OperaMark(),
+                "zen" => ZenMark(),
                 "firefox" or "firefox-developer" => FirefoxMark(),
                 _ => GenericMark()
             };
@@ -220,6 +221,40 @@ namespace MDM
             return img;
         }
 
+        private static ImageSource OperaMark()
+        {
+            var dg = new DrawingGroup();
+            dg.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0xFF, 0x1B, 0x2D)),
+                null,
+                new EllipseGeometry(new Point(20, 20), 16, 16)));
+            dg.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+                null,
+                Geometry.Parse("M 12,20 A 8,10 0 1 1 28,20 A 8,10 0 1 1 12,20 Z")));
+            dg.Freeze();
+            var img = new DrawingImage(dg);
+            img.Freeze();
+            return img;
+        }
+
+        private static ImageSource ZenMark()
+        {
+            var dg = new DrawingGroup();
+            dg.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0xF7, 0x6B, 0x8A)),
+                null,
+                Geometry.Parse("M 20,4 L 34,14 L 30,34 L 10,34 L 6,14 Z")));
+            dg.Children.Add(new GeometryDrawing(
+                new SolidColorBrush(Color.FromRgb(0xFF, 0xC2, 0xD4)),
+                null,
+                Geometry.Parse("M 20,10 L 28,16 L 26,28 L 14,28 L 12,16 Z")));
+            dg.Freeze();
+            var img = new DrawingImage(dg);
+            img.Freeze();
+            return img;
+        }
+
         private static ImageSource GenericMark()
         {
             var dg = new DrawingGroup();
@@ -233,91 +268,6 @@ namespace MDM
             return img;
         }
 
-        private static string? ResolveExe(string id)
-        {
-            if (id == "firefox")
-                return ExtensionInstaller.ResolveFirefoxReleaseExe();
-            if (id == "firefox-developer")
-                return ExtensionInstaller.ResolveFirefoxDeveloperExe(out _);
-
-            string? fromReg = id switch
-            {
-                "edge" => ReadAppPath(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe"),
-                "chrome" => ReadAppPath(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"),
-                "brave" => ReadAppPath(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\brave.exe"),
-                _ => null
-            };
-            if (!string.IsNullOrWhiteSpace(fromReg) && File.Exists(fromReg))
-                return fromReg;
-
-            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-
-            string[] candidates = id switch
-            {
-                "edge" => new[]
-                {
-                    Path.Combine(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
-                    Path.Combine(pf86, "Microsoft", "Edge", "Application", "msedge.exe")
-                },
-                "chrome" => FindChromeCandidates(local, pf, pf86),
-                "brave" => new[]
-                {
-                    Path.Combine(local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-                    Path.Combine(pf, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")
-                },
-                _ => Array.Empty<string>()
-            };
-
-            return candidates.FirstOrDefault(File.Exists);
-        }
-
-        private static string[] FindChromeCandidates(string local, string pf, string pf86)
-        {
-            var list = new List<string>
-            {
-                Path.Combine(local, "Google", "Chrome", "Application", "chrome.exe"),
-                Path.Combine(pf, "Google", "Chrome", "Application", "chrome.exe"),
-                Path.Combine(pf86, "Google", "Chrome", "Application", "chrome.exe")
-            };
-
-            // Sürüm klasörü: ...\Application\120.0.x.x\chrome.exe
-            foreach (string root in new[]
-                     {
-                         Path.Combine(local, "Google", "Chrome", "Application"),
-                         Path.Combine(pf, "Google", "Chrome", "Application"),
-                         Path.Combine(pf86, "Google", "Chrome", "Application")
-                     })
-            {
-                try
-                {
-                    if (!Directory.Exists(root)) continue;
-                    foreach (string dir in Directory.EnumerateDirectories(root))
-                    {
-                        string exe = Path.Combine(dir, "chrome.exe");
-                        if (File.Exists(exe))
-                            list.Add(exe);
-                    }
-                }
-                catch { /* ignore */ }
-            }
-
-            return list.ToArray();
-        }
-
-        private static string? ReadAppPath(string key)
-        {
-            try
-            {
-                using var hk = Registry.LocalMachine.OpenSubKey(key)
-                    ?? Registry.CurrentUser.OpenSubKey(key);
-                return hk?.GetValue(null) as string;
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        private static string? ResolveExe(string id) => BrowserTargets.ResolveExe(id);
     }
 }

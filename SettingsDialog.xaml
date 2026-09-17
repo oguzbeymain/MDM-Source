@@ -474,6 +474,8 @@
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                                 <Button x:Name="BtnRefreshBrowsers" Content="Yenile" Margin="0,0,8,0"
                                         Click="BtnRefreshBrowsers_Click" Style="{StaticResource SoftButton}"/>
+                                <Button x:Name="BtnExtHowto" Content="Kurulum nasıl yapılır?" Margin="0,0,8,0"
+                                        Click="BtnExtHowto_Click" Style="{StaticResource SoftButton}"/>
                                 <Button x:Name="BtnInstallFirefox" Content="Firefox otomatik kur"
                                         Click="BtnInstallFirefox_Click" Style="{StaticResource SoftButton}"/>
                             </StackPanel>

@@ -29,20 +29,55 @@ function mdmLooksLikeFileUrl(url) {
 }
 
 function mdmInstallMenus() {
+  if (mdmMenuInstallBusy) {
+    mdmMenuInstallQueued = true;
+    return;
+  }
+  mdmMenuInstallBusy = true;
+  const gen = ++mdmMenuInstallGen;
   try {
     chrome.contextMenus.removeAll(() => {
-      // Baglam basina ayri kalem: gorsele saginca gorsel, videoya saginca video inilir
-      chrome.contextMenus.create({ id: "mdm-dl-link", title: mdmT("ext.menu_download"), contexts: ["link"] });
-      chrome.contextMenus.create({ id: "mdm-dl-image", title: mdmT("ext.menu_download_image"), contexts: ["image"] });
-      chrome.contextMenus.create({ id: "mdm-dl-media", title: mdmT("ext.menu_download_media"), contexts: ["video", "audio"] });
-      chrome.contextMenus.create({ id: "mdm-dl-selection", title: mdmT("ext.menu_links"), contexts: ["selection"] });
-      chrome.contextMenus.create({ id: "mdm-scan-page", title: mdmT("ext.menu_scan"), contexts: ["page", "image", "video", "audio"] });
+      void chrome.runtime.lastError;
+      if (gen !== mdmMenuInstallGen) {
+        mdmFinishMenuInstall();
+        return;
+      }
+      const items = [
+        { id: "mdm-dl-link", title: mdmT("ext.menu_download"), contexts: ["link"] },
+        { id: "mdm-dl-image", title: mdmT("ext.menu_download_image"), contexts: ["image"] },
+        { id: "mdm-dl-media", title: mdmT("ext.menu_download_media"), contexts: ["video", "audio"] },
+        { id: "mdm-dl-selection", title: mdmT("ext.menu_links"), contexts: ["selection"] },
+        { id: "mdm-scan-page", title: mdmT("ext.menu_scan"), contexts: ["page", "image", "video", "audio"] }
+      ];
+      for (const item of items) {
+        try {
+          chrome.contextMenus.create(item, () => { void chrome.runtime.lastError; });
+        } catch (_) {}
+      }
+      mdmFinishMenuInstall();
     });
-  } catch (_) {}
+  } catch (_) {
+    mdmFinishMenuInstall();
+  }
 }
+
+function mdmFinishMenuInstall() {
+  mdmMenuInstallBusy = false;
+  if (mdmMenuInstallQueued) {
+    mdmMenuInstallQueued = false;
+    mdmInstallMenus();
+  }
+}
+
+let mdmMenuInstallGen = 0;
+let mdmMenuInstallBusy = false;
+let mdmMenuInstallQueued = false;
+let mdmMenusClickBound = false;
 
 function mdmInitMenus(onCaptureUrl, onScanPage) {
   mdmInstallMenus();
+  if (mdmMenusClickBound) return;
+  mdmMenusClickBound = true;
   chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!tab || tab.id == null) return;
     const page = info.pageUrl || tab.url || "";
