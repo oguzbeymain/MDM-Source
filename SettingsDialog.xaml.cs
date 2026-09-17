@@ -970,12 +970,11 @@ namespace MDM
             if (TxtAdvRenameLabel != null) TxtAdvRenameLabel.Text = Loc.T("settings.advanced.rename_label", "Yeniden adlandır {name} {ext} {date} {host}");
             if (TxtAdvCliHint != null) TxtAdvCliHint.Text = Loc.T("settings.advanced.cli_hint",
                 "CLI: download URL  |  --add URL  |  --grab SAYFA  |  --list  |  --pause|--resume|--cancel ID");
-            if (TxtAdvNoteVideo != null) TxtAdvNoteVideo.Text = Loc.T("settings.advanced.note_video",
-                "! Video siteleri (YouTube vb.) — harici çıkarıcı yok, şimdilik kapalı");
-            if (TxtAdvNoteStream != null) TxtAdvNoteStream.Text = Loc.T("settings.advanced.note_stream",
-                "! Tarayıcıdaki gömülü stream yakalama — test edilmesi zor, şimdilik kapalı");
-            if (TxtAdvNoteRemote != null) TxtAdvNoteRemote.Text = Loc.T("settings.advanced.note_remote",
-                "! Mobil / web uzaktan kumanda uygulaması — şimdilik yalnızca LAN REST");
+            if (TxtAdvResetTitle != null) TxtAdvResetTitle.Text = Loc.T("settings.advanced.reset_title",
+                "Gelişmiş ayarları varsayılana döndür");
+            if (TxtAdvResetHint != null) TxtAdvResetHint.Text = Loc.T("settings.advanced.reset_hint",
+                "Bu bölümdeki tüm alanlar kurulumdaki haline döner. Diğer ayarlar etkilenmez.");
+            if (BtnAdvReset != null) BtnAdvReset.Content = Loc.T("settings.advanced.reset_button", "Varsayılana döndür");
 
             // Güncelleme
             if (TxtUpdateTitle != null) TxtUpdateTitle.Text = Loc.T("settings.update.title", "Uygulama güncellemesi");
@@ -998,15 +997,66 @@ namespace MDM
             RefreshBrowserStatus();
         }
 
-        /// <summary>Setup ile kurulduysa kurulum klasöründeki kaldırıcı; taşınabilir kopyada yok.</summary>
+        /// <summary>
+        /// Kaldırıcı yolu: önce uygulamanın yanı, sonra kayıt defterindeki kurulum klasörü.
+        /// Derleme çıktısından çalıştırılan kopyada da kurulu sürüm kaldırılabilsin.
+        /// </summary>
         private static string? UninstallerPath()
         {
             try
             {
-                string path = Path.Combine(AppContext.BaseDirectory, "Uninstall.exe");
-                return File.Exists(path) ? path : null;
+                string local = Path.Combine(AppContext.BaseDirectory, "Uninstall.exe");
+                if (File.Exists(local)) return local;
+
+                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Uninstall\MuckDownloadManager");
+                if (key?.GetValue("InstallLocation") as string is not { Length: > 0 } dir) return null;
+
+                string installed = Path.Combine(dir, "Uninstall.exe");
+                return File.Exists(installed) ? installed : null;
             }
             catch { return null; }
+        }
+
+        /// <summary>
+        /// Gelişmiş bölümündeki alanları fabrika değerlerine çevirir. Değişiklik yalnızca
+        /// forma yazılır; kullanıcı Kaydet'e basana kadar diske gitmez.
+        /// </summary>
+        private void BtnAdvReset_Click(object sender, RoutedEventArgs e)
+        {
+            var d = new AppSettings();
+
+            ChkSchedule.IsChecked = d.ScheduleEnabled;
+            TxtSchedStart.Text = d.ScheduleStartHour.ToString();
+            TxtSchedEnd.Text = d.ScheduleEndHour.ToString();
+            TxtCrawlDepth.Text = d.CrawlDepth.ToString();
+            ChkRemoteLan.IsChecked = d.RemoteApiLan;
+            TxtApiToken.Text = d.RemoteApiToken;
+            ChkHttp3.IsChecked = d.PreferHttp3;
+            ChkAutoReconnect.IsChecked = d.AutoReconnect;
+            TxtSpeedLimit.Text = d.SpeedLimitKBps.ToString();
+            TxtMaxConcurrent.Text = d.MaxConcurrentDownloads.ToString();
+            TxtHttpChannels.Text = d.HttpMaxChannels.ToString();
+            TxtTorrentPort.Text = d.TorrentListenPort.ToString();
+            ChkTorrentDht.IsChecked = d.TorrentDht;
+            ChkTorrentLpd.IsChecked = d.TorrentLocalPeers;
+            ChkTorrentUpnp.IsChecked = d.TorrentPortForward;
+            ChkTorrentSeq.IsChecked = d.TorrentSequential;
+            TxtTorrentSeed.Text = d.TorrentSeedRatio.ToString("0.##");
+            ChkSkipDup.IsChecked = d.SkipDuplicateUrls;
+            TxtSkipExt.Text = d.SkipExtensions;
+            TxtSkipUrl.Text = d.SkipUrlContains;
+            TxtSkipDomains.Text = d.SkipDomains;
+            TxtSkipRegex.Text = d.SkipUrlRegex;
+            TxtSkipMime.Text = d.SkipMimeContains;
+            TxtSkipMinMb.Text = d.SkipMinSizeMb.ToString();
+            TxtSkipMaxMb.Text = d.SkipMaxSizeMb.ToString();
+            TxtRename.Text = d.RenamePattern;
+
+            InfoDialog.Show(OwnerWindow,
+                Loc.T("settings.advanced.reset_title", "Gelişmiş ayarları varsayılana döndür"),
+                Loc.T("settings.advanced.reset_done", "Alanlar varsayılana döndü."),
+                Loc.T("settings.advanced.reset_done_detail", "Kalıcı olması için Kaydet'e basın."));
         }
 
         private void BtnUninstallApp_Click(object sender, RoutedEventArgs e)

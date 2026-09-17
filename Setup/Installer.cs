@@ -216,9 +216,12 @@ namespace MDM.Setup
                 if (self.Length > 0 && !string.Equals(self, target, StringComparison.OrdinalIgnoreCase))
                     File.Copy(self, target, overwrite: true);
 
-                // Eski sürümlerden kalan setup kopyası kurulum klasöründe durmasın
-                string legacy = Path.Combine(installDir, "MDM-Setup.exe");
-                if (File.Exists(legacy)) TryDeleteFile(legacy);
+                // Kurulum klasöründe setup kopyası kalmasın; sürüm ekli adlar da (MDM-Setup-1.0.36.exe) temizlenir
+                foreach (string legacy in Directory.EnumerateFiles(installDir, "MDM-Setup*.exe"))
+                {
+                    if (string.Equals(legacy, self, StringComparison.OrdinalIgnoreCase)) continue;
+                    TryDeleteFile(legacy);
+                }
             }
             catch { /* kaldırıcı kopyalanamazsa kurulum yine geçerli */ }
         }
@@ -234,6 +237,8 @@ namespace MDM.Setup
             root["DefaultDownloadFolder"] = options.DownloadDir;
             root["AutoCreateCategoryFolders"] = options.CreateCategoryFolders;
             root["AutoStart"] = options.AutoStart;
+            // Delete tuşu kısayolu kurulumda açık gelsin
+            root["DeleteKeyShortcutsEnabled"] = true;
 
             Directory.CreateDirectory(options.DownloadDir);
             File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));

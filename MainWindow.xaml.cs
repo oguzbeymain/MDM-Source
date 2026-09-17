@@ -3783,6 +3783,8 @@ namespace MDM
             };
 
             if (_downloadView == null) return;
+            // Menüden/ayarlardan sıralama değişince başlıktaki turuncu vurgu yanlış sütunda kalmasın
+            ClearColumnSortHighlight();
             _downloadView.SortDescriptions.Clear();
             switch (_listSort)
             {
@@ -5737,14 +5739,22 @@ namespace MDM
             if (sender is not DataGridColumnHeader clicked) return;
             if (FindParent<Thumb>(e.OriginalSource as DependencyObject) != null) return;
 
+            // Onay kutusu ve eylem sütunları sıralamıyor; vurgu yalnızca sıralanan başlıkta kalsın
+            bool sortable = clicked.Column?.CanUserSort == true;
+
             if (FindVisualChild<DataGridColumnHeadersPresenter>(DgDownloads) is { } headers)
             {
                 foreach (var h in FindVisualChildren<DataGridColumnHeader>(headers))
+                {
                     h.Tag = null;
+                    // Yerel Foreground değeri şablon trigger'ını ezdiği için eski
+                    // başlıklar turuncu kalıyordu; rengi tamamen trigger'a bırak
+                    h.ClearValue(Control.ForegroundProperty);
+                }
             }
 
-            clicked.Tag = "active";
-            clicked.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            if (sortable)
+                clicked.Tag = "active";
         }
 
         private void Marquee_PreviewMouseMove(object sender, MouseEventArgs e)

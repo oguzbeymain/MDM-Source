@@ -89,6 +89,7 @@ namespace MDM
 
             TxtUrl.ContextMenu = BuildEditMenu(light);
             TxtFolder.ContextMenu = BuildEditMenu(light);
+            ApplyTextSelectionColors();
 
             if (TorrentPickCard != null)
             {
@@ -583,6 +584,24 @@ namespace MDM
             SyncFromItem();
         }
 
+        /// <summary>
+        /// Metin seçimi/imleci arama kutusuyla aynı grimsi tonu kullanır; turuncu seçim
+        /// hem koyu hem beyaz temada okunmuyordu.
+        /// </summary>
+        private void ApplyTextSelectionColors()
+        {
+            var selection = new SolidColorBrush(Color.FromRgb(0x3D, 0x4F, 0x66));
+            var selectionText = new SolidColorBrush(Colors.White);
+
+            foreach (var box in new[] { TxtUrl, TxtFolder })
+            {
+                if (box == null) continue;
+                box.SelectionBrush = selection;
+                box.SelectionTextBrush = selectionText;
+                box.CaretBrush = box.Foreground;
+            }
+        }
+
         private void ApplyMeta(string fileName, string url, string folder, string sizeLabel)
         {
             TxtUrl.Text = url;
@@ -593,10 +612,7 @@ namespace MDM
             ImgIcon.Source = IconHelper.GetIconForExtension(fileName);
             TxtUrl.ContextMenu = BuildEditMenu();
             TxtFolder.ContextMenu = BuildEditMenu();
-            TxtUrl.CaretBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
-            TxtUrl.SelectionBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
-            TxtFolder.CaretBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
-            TxtFolder.SelectionBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00));
+            ApplyTextSelectionColors();
             TxtUrl.IsReadOnly = true;
             DataObject.AddCopyingHandler(TxtUrl, (_, _) => { /* allow copy */ });
             TxtUrl.PreviewMouseDoubleClick += (_, e) =>

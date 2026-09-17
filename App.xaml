@@ -36,6 +36,13 @@
             <Style TargetType="Button">
                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             </Style>
+
+            <!-- Metin seçimi: sistem vurgusu turuncu olduğu için kopyalanan adres okunmuyordu.
+                 Arama kutusundaki grimsi ton her pencerede varsayılan olsun. -->
+            <Style TargetType="TextBox">
+                <Setter Property="SelectionBrush" Value="#3D4F66"/>
+                <Setter Property="SelectionTextBrush" Value="#FFFFFF"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

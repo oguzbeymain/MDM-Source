@@ -41,7 +41,8 @@ namespace MDM
         public int LightThemeBrightness { get; set; } = 100;
         public bool CopyFilesHotkeyEnabled { get; set; } = true;
         public string CopyFilesHotkey { get; set; } = "Ctrl+C";
-        public bool DeleteKeyShortcutsEnabled { get; set; }
+        /// <summary>Kurulumdan sonra açık gelir; Delete tuşu liste içinde çalışsın.</summary>
+        public bool DeleteKeyShortcutsEnabled { get; set; } = true;
         public int TorrentListenPort { get; set; } = 6881;
         public bool TorrentDht { get; set; } = true;
         public bool TorrentLocalPeers { get; set; } = true;
