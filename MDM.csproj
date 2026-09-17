@@ -10,10 +10,10 @@
     <RootNamespace>MDM</RootNamespace>
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MDM</AssemblyTitle>
-    <Version>1.0.38</Version>
-    <AssemblyVersion>1.0.38.0</AssemblyVersion>
-    <FileVersion>1.0.38.0</FileVersion>
-    <InformationalVersion>1.0.38</InformationalVersion>
+    <Version>1.0.39</Version>
+    <AssemblyVersion>1.0.39.0</AssemblyVersion>
+    <FileVersion>1.0.39.0</FileVersion>
+    <InformationalVersion>1.0.39</InformationalVersion>
     <ApplicationIcon>Assets\mdm.ico</ApplicationIcon>
     <!-- NuGet uydu (tr/es/fr/Ã¢â‚¬Â¦) klasÃƒÂ¶rlerini ÃƒÂ§Ã„Â±ktÃ„Â±dan ÃƒÂ§Ã„Â±kar Ã¢â‚¬â€ UI zaten TR sabit -->
     <SatelliteResourceLanguages>

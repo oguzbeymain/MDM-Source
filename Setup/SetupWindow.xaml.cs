@@ -54,9 +54,18 @@ namespace MDM.Setup
         {
             Loaded -= RunSilentAsync;
             if (App.UninstallMode)
+            {
                 await RunUninstallAsync();
+            }
             else if (ReadOptions())
+            {
+                // Uygulama içi güncelleme buradan geçer: mevcut tema/dil/klasör korunur
+                _options.PreserveExistingSettings = true;
                 await RunInstallAsync();
+
+                // Güncelleme sonrası kullanıcı uygulamayı kapatmış gibi kalmasın
+                if (_completed) Installer.LaunchApp(_options.InstallDir);
+            }
 
             Close();
         }

@@ -84,3 +84,10 @@ for ($i = 1; $i -le 10; $i++) {
 }
 $setupMb = [math]::Round((Get-Item $target).Length / 1MB, 1)
 Write-Host ("hazir: {0} ({1} MB)" -f $target, $setupMb)
+
+# Uygulama ici guncelleme (Ayarlar > Guncelleme) yayindaki zip'i indirip dosyalari
+# degistirir; setup exe'si kopyalanamaz. Her yayinda ikisi birlikte gonderilmeli.
+$zipTarget = Join-Path $OutDir ("MDM-{0}-{1}.zip" -f $version, $Runtime)
+Copy-Item $payloadZip $zipTarget -Force
+$zipTargetMb = [math]::Round((Get-Item $zipTarget).Length / 1MB, 1)
+Write-Host ("hazir: {0} ({1} MB)" -f $zipTarget, $zipTargetMb)

@@ -18,6 +18,11 @@ namespace MDM.Setup
         public bool StartMenuShortcut { get; set; } = true;
         public bool AutoStart { get; set; } = true;
         public bool CreateCategoryFolders { get; set; } = true;
+        /// <summary>
+        /// Sessiz yükseltmede kullanılır: mevcut settings.json değerleri (tema, dil,
+        /// indirme klasörü) korunur, yalnızca eksik anahtarlar yazılır.
+        /// </summary>
+        public bool PreserveExistingSettings { get; set; }
 
         public static string DefaultInstallDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -232,13 +237,21 @@ namespace MDM.Setup
             string path = Path.Combine(DataDir, "settings.json");
 
             JsonObject root = ReadJsonObject(path) ?? new JsonObject();
-            root["UiLanguage"] = options.Language;
-            root["Theme"] = options.DarkTheme ? "Dark" : "Light";
-            root["DefaultDownloadFolder"] = options.DownloadDir;
-            root["AutoCreateCategoryFolders"] = options.CreateCategoryFolders;
-            root["AutoStart"] = options.AutoStart;
+
+            void Set(string key, JsonNode value)
+            {
+                // Yükseltmede kullanıcının seçimleri kalır; ilk kurulumda sihirbaz kazanır
+                if (options.PreserveExistingSettings && root.ContainsKey(key)) return;
+                root[key] = value;
+            }
+
+            Set("UiLanguage", options.Language);
+            Set("Theme", options.DarkTheme ? "Dark" : "Light");
+            Set("DefaultDownloadFolder", options.DownloadDir);
+            Set("AutoCreateCategoryFolders", options.CreateCategoryFolders);
+            Set("AutoStart", options.AutoStart);
             // Delete tuşu kısayolu kurulumda açık gelsin
-            root["DeleteKeyShortcutsEnabled"] = true;
+            Set("DeleteKeyShortcutsEnabled", true);
 
             Directory.CreateDirectory(options.DownloadDir);
             File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));

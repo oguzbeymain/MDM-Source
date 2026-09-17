@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 namespace MDM
 {
@@ -44,6 +45,30 @@ namespace MDM
                 var v = Assembly.GetExecutingAssembly().GetName().Version;
                 return v == null ? "?" : $"{v.Major}.{v.Minor}.{v.Build}";
             }
+        }
+
+        /// <summary>
+        /// Zip ile güncellemede setup çalışmaz; kayıt defterindeki sürüm eski kalıyordu.
+        /// Açılışta girdi varsa sürüm ve konum tazelenir (Uygulamalar ve özellikler doğru gösterir).
+        /// </summary>
+        public static void SyncInstallRegistryVersion()
+        {
+            try
+            {
+                using RegistryKey? key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Uninstall\MuckDownloadManager", writable: true);
+                if (key == null) return;
+
+                string appDir = AppContext.BaseDirectory.TrimEnd(
+                    Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (key.GetValue("InstallLocation") as string is not { Length: > 0 } dir
+                    || !string.Equals(dir.TrimEnd(Path.DirectorySeparatorChar), appDir, StringComparison.OrdinalIgnoreCase))
+                    return; // başka bir kopya çalışıyor; kurulu sürümün girdisine dokunma
+
+                if (key.GetValue("DisplayVersion") as string == CurrentVersionText) return;
+                key.SetValue("DisplayVersion", CurrentVersionText);
+            }
+            catch { /* kayıt defteri yazılamazsa güncelleme yine geçerli */ }
         }
 
         public static async Task<UpdateCheckResult> CheckAndApplyAsync(
@@ -91,7 +116,7 @@ namespace MDM
                     };
                 }
 
-                if (!TryPickAsset(doc.RootElement, out string assetName, out string downloadUrl))
+                if (!TryPickAsset(doc.RootElement, out string assetName, out string downloadUrl, out PackageKind kind))
                 {
                     return new UpdateCheckResult
                     {
@@ -107,6 +132,21 @@ namespace MDM
                 Directory.CreateDirectory(tempRoot);
                 string downloadPath = Path.Combine(tempRoot, assetName);
                 await DownloadFileAsync(downloadUrl, downloadPath, status, cancellationToken);
+
+                // Setup paketi dosya kopyalanarak kurulamaz; kendi sessiz kurulumunu çalıştırır
+                if (kind == PackageKind.Installer)
+                {
+                    status?.Report("Kurulum başlatılıyor, uygulama yeniden başlatılacak…");
+                    RunInstaller(downloadPath);
+
+                    return new UpdateCheckResult
+                    {
+                        UpdateAvailable = true,
+                        Applying = true,
+                        RemoteVersion = remoteText,
+                        Message = $"v{remoteText} kuruluyor. Uygulama kapanıp yeniden açılacak."
+                    };
+                }
 
                 string extractDir = Path.Combine(tempRoot, "extracted");
                 Directory.CreateDirectory(extractDir);
@@ -210,30 +250,63 @@ namespace MDM
             return Version.TryParse(match.Value, out var version) ? Normalize(version) : null;
         }
 
-        private static bool TryPickAsset(JsonElement release, out string name, out string url)
+        /// <summary>Yayın varlığının nasıl uygulanacağı.</summary>
+        internal enum PackageKind
+        {
+            /// <summary>Uygulama dosyaları; kurulum klasörüne kopyalanır.</summary>
+            Payload,
+            /// <summary>MDM-Setup*.exe; /silent ile kendi kurulumunu yapar.</summary>
+            Installer
+        }
+
+        internal static bool TryPickAsset(JsonElement release, out string name, out string url, out PackageKind kind)
         {
             name = "";
             url = "";
+            kind = PackageKind.Payload;
             if (!release.TryGetProperty("assets", out JsonElement assets) || assets.ValueKind != JsonValueKind.Array)
                 return false;
 
             JsonElement? zip = null;
-            JsonElement? exe = null;
+            JsonElement? payloadExe = null;
+            JsonElement? installer = null;
             foreach (JsonElement asset in assets.EnumerateArray())
             {
                 string assetName = asset.GetProperty("name").GetString() ?? "";
                 if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                     zip ??= asset;
-                else if (assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                         !assetName.Contains("Updater", StringComparison.OrdinalIgnoreCase))
-                    exe ??= asset;
+                else if (!assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                else if (assetName.Contains("Updater", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                else if (assetName.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+                    installer ??= asset;
+                else
+                    payloadExe ??= asset;
             }
 
-            JsonElement? chosen = zip ?? exe;
+            // Zip en hızlısı ve ayarlara dokunmaz; setup yalnızca paket yoksa kullanılır
+            JsonElement? chosen = zip ?? payloadExe ?? installer;
             if (chosen == null) return false;
+            if (zip == null && payloadExe == null)
+                kind = PackageKind.Installer;
+
             name = chosen.Value.GetProperty("name").GetString() ?? "";
             url = chosen.Value.GetProperty("browser_download_url").GetString() ?? "";
             return !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(url);
+        }
+
+        /// <summary>
+        /// Setup'ı sessiz kipte başlatır. Kurulum çalışan uygulamayı kendisi kapatır ve
+        /// bitince yeniden açar; bu yüzden burada beklemek gerekmez.
+        /// </summary>
+        private static void RunInstaller(string setupPath)
+        {
+            Process.Start(new ProcessStartInfo(setupPath, "/silent")
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(setupPath) ?? Path.GetTempPath()
+            });
         }
 
         private static async Task DownloadFileAsync(
