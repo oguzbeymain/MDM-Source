@@ -44,7 +44,11 @@ namespace MDM
                 }
                 set
                 {
-                    bool on = value != false;
+                    // Üç durumlu CheckBox: Checked → Indeterminate(null) → Unchecked.
+                    // Hepsi seçiliyken tık null gelir; value!=false hepsini tekrar seçerdi.
+                    // Davranış: hepsi seçiliyse temizle, değilse hepsini seç.
+                    bool allOn = Items.Count > 0 && Items.All(i => i.IsChecked);
+                    bool on = !allOn;
                     _suppress = true;
                     foreach (var item in Items)
                         item.IsChecked = on;
