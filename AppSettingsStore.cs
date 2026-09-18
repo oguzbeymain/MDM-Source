@@ -9,6 +9,8 @@ namespace MDM
         public bool AutoStartMinimized { get; set; } = true;
         public string? DefaultDownloadFolder { get; set; }
         public bool ExtensionPromptDone { get; set; }
+        public string ListViewMode { get; set; } = "Details";
+        public bool SidebarCollapsed { get; set; }
         public string ListDensity { get; set; } = "Medium";
         public string ListSort { get; set; } = "Date";
         public bool DeleteFilesFromDisk { get; set; } = true;
@@ -41,6 +43,8 @@ namespace MDM
         public string Theme { get; set; } = "Dark";
         /// <summary>Açık tema parlaklığı (70–100). Yalnızca beyaz modda uygulanır.</summary>
         public int LightThemeBrightness { get; set; } = 100;
+        /// <summary>Açıkken sol üstteki kenar çubuğu daraltma düğmesi görünür.</summary>
+        public bool SidebarCollapseEnabled { get; set; } = true;
         public bool CopyFilesHotkeyEnabled { get; set; } = true;
         public string CopyFilesHotkey { get; set; } = "Ctrl+C";
         /// <summary>Kurulumdan sonra açık gelir; Delete tuşu liste içinde çalışsın.</summary>
@@ -80,9 +84,13 @@ namespace MDM
             {
                 if (File.Exists(SettingsPath))
                 {
-                    var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), JsonOpts);
+                    var json = File.ReadAllText(SettingsPath);
+                    var s = JsonSerializer.Deserialize<AppSettings>(json, JsonOpts);
                     if (s != null)
                     {
+                        using var doc = JsonDocument.Parse(json);
+                        if (!doc.RootElement.TryGetProperty(nameof(AppSettings.SidebarCollapseEnabled), out _))
+                            s.SidebarCollapseEnabled = true;
                         _cache = s;
                         return _cache;
                     }

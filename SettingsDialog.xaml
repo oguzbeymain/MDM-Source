@@ -283,7 +283,7 @@
                         <RadioButton x:Name="NavNotifications" Content="Bildirimler" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
-                        <RadioButton x:Name="NavTheme" Content="Tema" GroupName="SettingsNav"
+                        <RadioButton x:Name="NavTheme" Content="Görünüm" GroupName="SettingsNav"
                                      Style="{StaticResource SettingsNavButton}"
                                      Checked="Nav_Checked"/>
                         <RadioButton x:Name="NavExtension" Content="Tarayıcı eklentisi" GroupName="SettingsNav"
@@ -374,10 +374,10 @@
 
                     <ScrollViewer x:Name="PanelTheme" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                         <StackPanel>
-                            <TextBlock x:Name="TxtThemeTitle" Text="Tema" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="TxtThemeTitle" Text="Görünüm" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,8"/>
                             <Border Background="{DynamicResource SettingsPanelBgBrush}" BorderBrush="{DynamicResource SettingsPanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
                                 <StackPanel>
-                                    <TextBlock x:Name="TxtThemeAppearance" Text="Görünüm" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,12"/>
+                                    <TextBlock x:Name="TxtThemeAppearance" Text="Tema" Foreground="{DynamicResource SettingsLabelBrush}" FontSize="11" Margin="0,0,0,12"/>
                                     <UniformGrid Columns="2" Margin="0,0,0,8">
                                         <RadioButton x:Name="ThemeDark" GroupName="ThemePick" Margin="0,0,8,0"
                                                      Cursor="Hand" Checked="ThemePick_Changed">
@@ -461,6 +461,11 @@
                                         </StackPanel>
                                     </Border>
                                     <TextBlock x:Name="TxtThemeHint" Text="Seçince anında önizlenir. Kalıcı olması için Kaydet’e basın; İptal eski temaya döner."
+                                               Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    <CheckBox x:Name="ChkSidebarCollapse" Content="Kategori kenar çubuğunu daralt"
+                                              Margin="0,16,0,0" Cursor="Hand"
+                                              Checked="SidebarCollapse_Changed" Unchecked="SidebarCollapse_Changed"/>
+                                    <TextBlock x:Name="TxtSidebarCollapseHint" Text="Açıkken sol üstteki ‹ düğmesi kenar çubuğunu yalnızca simgelere küçültür. Kapalıysa düğme gizlenir."
                                                Foreground="{DynamicResource SettingsMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>

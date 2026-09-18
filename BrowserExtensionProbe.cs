@@ -31,10 +31,10 @@ namespace MDM
             "DownloadMuck" // eski eklenti adı
         };
 
-        public static IReadOnlyList<BrowserExtensionStatus> ProbeAll()
+        public static IReadOnlyList<BrowserExtensionStatus> ProbeAll(bool forceDiscover = false)
         {
             string extRoot = ExtensionInstaller.InstallRoot;
-            return BrowserDiscovery.Installed(force: true)
+            return BrowserDiscovery.Installed(force: forceDiscover)
                 .Select(t => t.Family == BrowserFamily.Gecko
                     ? ProbeGecko(t)
                     : ProbeChromium(t, extRoot))
@@ -340,7 +340,7 @@ namespace MDM
         private static string? ReadShared(string path)
         {
             if (!File.Exists(path)) return null;
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 3; i++)
             {
                 try
                 {
@@ -351,7 +351,7 @@ namespace MDM
                 }
                 catch (IOException)
                 {
-                    Thread.Sleep(50 + i * 40);
+                    if (i < 2) Thread.Sleep(30 + i * 20);
                 }
                 catch { return null; }
             }

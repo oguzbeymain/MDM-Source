@@ -13,7 +13,7 @@ namespace MDM
     {
         private static List<BrowserTarget>? _cache;
         private static DateTime _cacheUtc = DateTime.MinValue;
-        private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(45);
 
         private static readonly HashSet<string> BrowserExeNames = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -328,7 +328,7 @@ namespace MDM
                 Path.Combine(local, "Google", "Chrome SxS", "User Data"),
                 p => ContainsAll(p, "Chrome SxS") || ContainsAll(p, "Chrome Canary"));
 
-            yield return Chromium("brave", "Brave", "#FB542B", "brave://extensions",
+            yield return Chromium("brave", "Brave", "#FB542B", "chrome://extensions/",
                 new[] { "brave.exe" },
                 new[]
                 {
@@ -338,19 +338,19 @@ namespace MDM
                 Path.Combine(local, "BraveSoftware", "Brave-Browser", "User Data"),
                 p => ContainsAll(p, "Brave-Browser") && !ContainsAny(p, "Beta", "Nightly"));
 
-            yield return Chromium("brave-beta", "Brave Beta", "#FB542B", "brave://extensions",
+            yield return Chromium("brave-beta", "Brave Beta", "#FB542B", "chrome://extensions/",
                 new[] { "brave.exe" },
                 new[] { Path.Combine(local, "BraveSoftware", "Brave-Browser-Beta", "Application", "brave.exe") },
                 Path.Combine(local, "BraveSoftware", "Brave-Browser-Beta", "User Data"),
                 p => ContainsAll(p, "Brave-Browser-Beta"));
 
-            yield return Chromium("brave-nightly", "Brave Nightly", "#FB542B", "brave://extensions",
+            yield return Chromium("brave-nightly", "Brave Nightly", "#FB542B", "chrome://extensions/",
                 new[] { "brave.exe" },
                 new[] { Path.Combine(local, "BraveSoftware", "Brave-Browser-Nightly", "Application", "brave.exe") },
                 Path.Combine(local, "BraveSoftware", "Brave-Browser-Nightly", "User Data"),
                 p => ContainsAll(p, "Brave-Browser-Nightly"));
 
-            yield return Chromium("opera", "Opera", "#FF1B2D", "opera://extensions",
+            yield return Chromium("opera", "Opera", "#FF1B2D", "chrome://extensions/",
                 new[] { "opera.exe" },
                 new[]
                 {
@@ -360,7 +360,7 @@ namespace MDM
                 Path.Combine(roaming, "Opera Software", "Opera Stable"),
                 p => NameIs(p, "opera.exe") && !ContainsAny(p, "Opera GX", "OperaGX", "Opera Air", "Opera Beta"));
 
-            yield return Chromium("opera-gx", "Opera GX", "#EE2B47", "opera://extensions",
+            yield return Chromium("opera-gx", "Opera GX", "#EE2B47", "chrome://extensions/",
                 new[] { "opera.exe" },
                 new[]
                 {
@@ -370,7 +370,7 @@ namespace MDM
                 Path.Combine(roaming, "Opera Software", "Opera GX Stable"),
                 p => ContainsAny(p, "Opera GX", "OperaGX"));
 
-            yield return Chromium("opera-air", "Opera Air", "#FF1B2D", "opera://extensions",
+            yield return Chromium("opera-air", "Opera Air", "#FF1B2D", "chrome://extensions/",
                 new[] { "opera.exe" },
                 new[] { Path.Combine(local, "Programs", "Opera Air", "opera.exe") },
                 Path.Combine(roaming, "Opera Software", "Opera Air Stable"),
@@ -983,10 +983,8 @@ namespace MDM
         private static string ExtensionsPageFor(string exe)
         {
             string p = exe.ToLowerInvariant();
-            if (p.Contains("msedge")) return "edge://extensions";
-            if (p.Contains("brave")) return "brave://extensions";
-            if (p.Contains("opera")) return "opera://extensions";
-            return "chrome://extensions";
+            if (p.Contains("msedge")) return "edge://extensions/";
+            return "chrome://extensions/";
         }
 
         private static string Slug(string name)

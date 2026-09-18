@@ -608,7 +608,7 @@
             </Setter>
         </Style>
 
-        <!-- Ayarlar: sadece çizgi rengi — turuncu kare yok -->
+        <!-- Ayarlar / kenar çubuğu: hover’da yazı turuncu -->
         <Style x:Key="ToolbarIconOnlyButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="30"/>
             <Setter Property="Width" Value="32"/>
@@ -617,21 +617,23 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource ToolbarTextBrush}"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="Transparent" CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              RecognizesAccessKey="True"/>
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="#FF6B00"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="Transparent"/>
-                                <Setter Property="Opacity" Value="0.72"/>
+                                <Setter Property="Foreground" Value="#E55A00"/>
+                                <Setter Property="Opacity" Value="0.92"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -1232,12 +1234,19 @@
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="10,0">
-                                                        <!-- Metin Content'ten gelir; dil değişiminde şablon çocuğu aramak gerekmez -->
-                                                        <TextBlock x:Name="lbl" FontSize="12"
-                                                                   Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Content}"
-                                                                   FontWeight="SemiBold"
-                                                                   Foreground="{TemplateBinding Foreground}"
-                                                                   VerticalAlignment="Center"/>
+                                                        <Grid>
+                                                            <TextBlock x:Name="ico" Text="📥" FontSize="16"
+                                                                       Visibility="Collapsed"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="lbl" FontSize="12"
+                                                                       Text="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Content}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{TemplateBinding Foreground}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="0"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </Grid>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
@@ -1255,6 +1264,11 @@
                                                             <Setter TargetName="bd" Property="Background" Value="{DynamicResource CategorySelectedBgBrush}"/>
                                                             <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrightBrush}"/>
                                                         </MultiTrigger>
+                                                        <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                            <Setter TargetName="lbl" Property="Visibility" Value="Collapsed"/>
+                                                            <Setter TargetName="ico" Property="Visibility" Value="Visible"/>
+                                                            <Setter TargetName="bd" Property="Padding" Value="0"/>
+                                                        </DataTrigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Setter.Value>
@@ -1322,19 +1336,65 @@
                                                                 <DataTrigger Binding="{Binding HasChildren}" Value="True">
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
                                                 <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Opacity="0.45"
                                                            Margin="4,0,0,0" VerticalAlignment="Center"
-                                                           ToolTip="{Binding DragTip}"/>
+                                                           ToolTip="{Binding DragTip}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding CountLabel}"
                                                            FontSize="11" Opacity="0.75" Margin="0,0,6,0"
                                                            VerticalAlignment="Center" MinWidth="14"
-                                                           HorizontalAlignment="Right"/>
+                                                           HorizontalAlignment="Right">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Icon}" FontSize="16"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                           TextTrimming="CharacterEllipsis">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                             </DockPanel>
                                         </Border>
                                     </DataTemplate>
@@ -1402,6 +1462,14 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="BtnSidebarToggle" Style="{StaticResource ToolbarIconOnlyButtonStyle}"
+                                            Width="32" Height="30" Margin="0,0,6,0"
+                                            Click="BtnSidebarToggle_Click" ToolTip="Kenar çubuğunu daralt">
+                                        <TextBlock x:Name="TxtSidebarToggle" Text="‹" FontSize="20" FontWeight="SemiBold"
+                                                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" Margin="0,-2,0,0"/>
+                                    </Button>
                                     <Button x:Name="BtnToolbarNew" Style="{StaticResource ToolbarFlatButtonStyle}" Click="ToolbarNew_Click"
                                             ToolTip="Yeni indirme">
                                         <StackPanel Orientation="Horizontal">
@@ -1504,8 +1572,74 @@
                                       PreviewMouseMove="Marquee_PreviewMouseMove"
                                       PreviewMouseLeftButtonUp="Marquee_PreviewMouseLeftButtonUp"
                                       LostMouseCapture="Marquee_LostMouseCapture">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="0"/>
+                    </Grid.RowDefinitions>
 
-                    <DataGrid x:Name="DgDownloads" AutoGenerateColumns="False" IsReadOnly="False"
+                    <ListBox x:Name="LstDownloadsTiles" Grid.Row="1" Visibility="Collapsed"
+                             Background="#01000000" BorderThickness="0" Padding="10"
+                             SelectionMode="Extended"
+                             ScrollViewer.CanContentScroll="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="False"
+                             ContextMenu="{StaticResource EmptyContextMenu}"
+                             MouseDoubleClick="Tiles_MouseDoubleClick"
+                             SelectionChanged="Tiles_SelectionChanged">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="2"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Focusable" Value="True"/>
+                                <Setter Property="IsHitTestVisible" Value="True"/>
+                                <Setter Property="ContextMenu" Value="{StaticResource RowContextMenu}"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="8"
+                                                    MinWidth="96" MinHeight="88">
+                                                <ContentPresenter HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#252525"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="bd" Property="Background" Value="#2A2118"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Width="96" HorizontalAlignment="Center" Background="Transparent">
+                                    <Image Source="{Binding FileIcon}" Width="40" Height="40"
+                                           HorizontalAlignment="Center"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <TextBlock Text="{Binding FileName}" TextAlignment="Center" TextWrapping="Wrap"
+                                               FontSize="11" MaxHeight="36" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource RowTextBrush}" Margin="0,6,0,0"/>
+                                    <TextBlock Text="{Binding FileSize}" TextAlignment="Center" FontSize="10"
+                                               Foreground="{DynamicResource HeaderTextBrush}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <DataGrid x:Name="DgDownloads" Grid.Row="0" Grid.RowSpan="2"
+                              AutoGenerateColumns="False" IsReadOnly="False"
                               CanUserAddRows="False" CanUserDeleteRows="False"
                               Background="Transparent" RowBackground="Transparent" 
                               BorderThickness="0" HeadersVisibility="Column" GridLinesVisibility="None"
@@ -2075,6 +2209,36 @@
                                 <TextBlock x:Name="ModalDetail" Text="" TextWrapping="Wrap"
                                            FontSize="12" Foreground="#B0B0B0" LineHeight="18"
                                            TextOptions.TextFormattingMode="Display"/>
+                                <Border x:Name="ModalPathPanel" Visibility="Collapsed" Margin="0,10,0,0"
+                                        Background="#141414" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="ModalPathBox" IsReadOnly="True" BorderThickness="0"
+                                                 Background="Transparent" Foreground="#E8E8E8" FontSize="11"
+                                                 FontFamily="Consolas" Padding="10,8" TextWrapping="Wrap"
+                                                 VerticalScrollBarVisibility="Auto" MaxHeight="72" Cursor="IBeam"/>
+                                        <Button x:Name="ModalPathCopy" Grid.Column="1" Content="Kopyala"
+                                                Click="ModalPathCopy_Click" Cursor="Hand" FontSize="11"
+                                                Margin="0,6,8,6" MinWidth="72" Height="28"
+                                                Foreground="#E8E8E8" BorderThickness="0">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="bd" Background="#2A2A2A" CornerRadius="6" Padding="10,0">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="bd" Property="Background" Value="#3A3A3A"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
                             <StackPanel x:Name="ModalButtons" Grid.Row="2" Orientation="Horizontal"
                                         HorizontalAlignment="Right" Margin="18,8,18,16">

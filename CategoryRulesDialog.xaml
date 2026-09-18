@@ -18,6 +18,52 @@
         <SolidColorBrush x:Key="SoftBtnFg" Color="#CCCCCC"/>
         <SolidColorBrush x:Key="GroupLabelFg" Color="#888888"/>
 
+        <Style x:Key="ExtGroupSelectCheckBox" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border x:Name="box" Width="17" Height="17" CornerRadius="4.5"
+                                Background="{DynamicResource ChipBoxBg}"
+                                BorderBrush="{DynamicResource ChipBorder}"
+                                BorderThickness="1.2"
+                                SnapsToDevicePixels="True">
+                            <Viewbox Width="11" Height="11" Stretch="Uniform"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid>
+                                    <Path x:Name="mark" Data="M3.5,8.5 L6.8,11.8 L13.2,5.2"
+                                          Stroke="{DynamicResource ChipCheckMark}" StrokeThickness="1.8"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                          Visibility="Collapsed"/>
+                                    <Path x:Name="dash" Data="M4,9 L12,9"
+                                          Stroke="{DynamicResource ChipCheckMark}" StrokeThickness="1.8"
+                                          StrokeStartLineCap="Round" Visibility="Collapsed"/>
+                                </Grid>
+                            </Viewbox>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource ChipCheckedBoxBg}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ChipCheckedBorder}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="{x:Null}">
+                                <Setter TargetName="dash" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource ChipCheckedBoxBg}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ChipCheckedBorder}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ChipHoverBorder}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ExtChipCheckBox" TargetType="CheckBox">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="3"/>
@@ -150,8 +196,18 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,0,0,12">
-                                        <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource GroupLabelFg}" Margin="4,0,0,6"/>
+                                        <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                                            <CheckBox DockPanel.Dock="Left"
+                                                      IsThreeState="True"
+                                                      IsChecked="{Binding AllChecked, Mode=TwoWay}"
+                                                      Style="{StaticResource ExtGroupSelectCheckBox}"
+                                                      ToolTip="{Binding Title}"/>
+                                            <TextBlock Text="{Binding Title}"
+                                                       Foreground="{DynamicResource GroupLabelFg}"
+                                                       FontSize="12" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       IsHitTestVisible="False"/>
+                                        </DockPanel>
                                         <ItemsControl ItemsSource="{Binding Items}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>

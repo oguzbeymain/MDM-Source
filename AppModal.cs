@@ -27,15 +27,15 @@ namespace MDM
             return dlg.Confirmed;
         }
 
-        public static void Info(string title, string message, string detail = "")
+        public static void Info(string title, string message, string detail = "", string? copyPath = null)
         {
             if (Application.Current?.MainWindow is MainWindow mw)
             {
-                mw.ShowModalInfo(title, message, detail);
+                mw.ShowModalInfo(title, message, detail, copyPath);
                 return;
             }
 
-            var dlg = new InfoDialog(title, message, detail);
+            var dlg = new InfoDialog(title, message, detail, copyPath);
             dlg.ShowDialog();
         }
     }

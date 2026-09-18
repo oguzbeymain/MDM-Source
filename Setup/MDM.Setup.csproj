@@ -9,9 +9,9 @@
     <RootNamespace>MDM.Setup</RootNamespace>
     <Product>MuckDownloadManager</Product>
     <AssemblyTitle>MuckDownloadManager Setup</AssemblyTitle>
-    <Version>1.0.47</Version>
-    <AssemblyVersion>1.0.47.0</AssemblyVersion>
-    <FileVersion>1.0.47.0</FileVersion>
+    <Version>1.0.48</Version>
+    <AssemblyVersion>1.0.48.0</AssemblyVersion>
+    <FileVersion>1.0.48.0</FileVersion>
     <ApplicationIcon>..\Assets\mdm.ico</ApplicationIcon>
     <SatelliteResourceLanguages></SatelliteResourceLanguages>
     <!-- Tek dosya, .NET kurulu olmayan makinede de calisir -->

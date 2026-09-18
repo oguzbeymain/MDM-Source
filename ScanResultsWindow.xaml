@@ -36,7 +36,6 @@
         <SolidColorBrush x:Key="ScanSoftBg" Color="#2A2A2A"/>
         <SolidColorBrush x:Key="ScanSoftHover" Color="#353535"/>
         <SolidColorBrush x:Key="ScanSoftFg" Color="#D0D0D0"/>
-        <sys:String x:Key="ScanGroupSelectText">Seç</sys:String>
         <BooleanToVisibilityConverter x:Key="BoolVis"/>
 
         <!-- Modern koyu scrollbar -->
@@ -228,10 +227,11 @@
             </Setter>
         </Style>
 
-        <!-- Bulunan dosya satırı -->
+        <!-- Bulunan dosya satırı — ContextMenu kodda açılır (Separator/stil hatası yok) -->
         <Style x:Key="ScanItemContainer" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="ScanItem_PreviewMouseRightButtonDown"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -340,7 +340,7 @@
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              VirtualizingPanel.IsVirtualizing="True"
                              VirtualizingPanel.VirtualizationMode="Recycling"
-                             VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                             MouseDoubleClick="LstItems_MouseDoubleClick"
                              HorizontalContentAlignment="Stretch">
                         <ListBox.ItemTemplate>
                             <DataTemplate>

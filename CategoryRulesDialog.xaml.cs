@@ -26,10 +26,49 @@ namespace MDM
             public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         }
 
-        public sealed class ExtGroup
+        public sealed class ExtGroup : System.ComponentModel.INotifyPropertyChanged
         {
             public string Title { get; set; } = "";
             public ObservableCollection<ExtOption> Items { get; set; } = new();
+            private bool _suppress;
+
+            public bool? AllChecked
+            {
+                get
+                {
+                    if (Items.Count == 0) return false;
+                    int n = Items.Count(i => i.IsChecked);
+                    if (n == 0) return false;
+                    if (n == Items.Count) return true;
+                    return null;
+                }
+                set
+                {
+                    bool on = value != false;
+                    _suppress = true;
+                    foreach (var item in Items)
+                        item.IsChecked = on;
+                    _suppress = false;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(AllChecked)));
+                }
+            }
+
+            public void Attach()
+            {
+                foreach (var item in Items)
+                {
+                    item.PropertyChanged -= ItemChanged;
+                    item.PropertyChanged += ItemChanged;
+                }
+            }
+
+            private void ItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (_suppress || e.PropertyName != nameof(ExtOption.IsChecked)) return;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(AllChecked)));
+            }
+
+            public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
         }
 
         private CategoryItem? _category;
@@ -116,6 +155,7 @@ namespace MDM
                     _allOptions.Add(opt);
                     g.Items.Add(opt);
                 }
+                g.Attach();
                 _groups.Add(g);
             }
 
@@ -134,6 +174,7 @@ namespace MDM
                     custom.Items.Add(opt);
                 }
                 _groups.Add(custom);
+                custom.Attach();
             }
         }
 
@@ -242,6 +283,7 @@ namespace MDM
                 _groups.Add(customGroup);
             }
             customGroup.Items.Add(opt);
+            customGroup.Attach();
             TxtCustom.Clear();
         }
 

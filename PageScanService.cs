@@ -98,6 +98,7 @@ namespace MDM
         private const int MaxItems = 600;
         private const int MaxThumbnails = 90;
         private const int MaxThumbnailBytes = 4 * 1024 * 1024;
+        private const int MaxFullImageBytes = 25 * 1024 * 1024;
 
         private static readonly HashSet<string> ImageExt = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -490,6 +491,42 @@ namespace MDM
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
                 bmp.DecodePixelWidth = 96;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                bmp.Freeze();
+                return bmp;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static async Task<ImageSource?> DownloadFullImageAsync(
+            string url, string referrer, CancellationToken token)
+        {
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.TryAddWithoutValidation("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+                req.Headers.TryAddWithoutValidation("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+                if (!string.IsNullOrWhiteSpace(referrer) && Uri.TryCreate(referrer, UriKind.Absolute, out var refUri))
+                    req.Headers.Referrer = refUri;
+
+                using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, token);
+                if (!resp.IsSuccessStatusCode) return null;
+                if (resp.Content.Headers.ContentLength is > MaxFullImageBytes) return null;
+
+                byte[] bytes = await resp.Content.ReadAsByteArrayAsync(token);
+                if (bytes.Length == 0 || bytes.Length > MaxFullImageBytes) return null;
+
+                var bmp = new BitmapImage();
+                using var ms = new MemoryStream(bytes);
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
                 bmp.StreamSource = ms;
                 bmp.EndInit();
                 bmp.Freeze();

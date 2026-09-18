@@ -50,11 +50,11 @@ namespace MDM
     {
         public static readonly BrowserTarget[] All =
         {
-            new() { Id = "edge", Name = "Microsoft Edge", AccentHex = "#0078D4", Family = BrowserFamily.Chromium, ExtensionsPage = "edge://extensions" },
-            new() { Id = "chrome", Name = "Google Chrome", AccentHex = "#34A853", Family = BrowserFamily.Chromium, ExtensionsPage = "chrome://extensions" },
-            new() { Id = "brave", Name = "Brave", AccentHex = "#FB542B", Family = BrowserFamily.Chromium, ExtensionsPage = "brave://extensions" },
-            new() { Id = "opera", Name = "Opera", AccentHex = "#FF1B2D", Family = BrowserFamily.Chromium, ExtensionsPage = "opera://extensions" },
-            new() { Id = "opera-gx", Name = "Opera GX", AccentHex = "#EE2B47", Family = BrowserFamily.Chromium, ExtensionsPage = "opera://extensions" },
+            new() { Id = "edge", Name = "Microsoft Edge", AccentHex = "#0078D4", Family = BrowserFamily.Chromium, ExtensionsPage = "edge://extensions/" },
+            new() { Id = "chrome", Name = "Google Chrome", AccentHex = "#34A853", Family = BrowserFamily.Chromium, ExtensionsPage = "chrome://extensions/" },
+            new() { Id = "brave", Name = "Brave", AccentHex = "#FB542B", Family = BrowserFamily.Chromium, ExtensionsPage = "chrome://extensions/" },
+            new() { Id = "opera", Name = "Opera", AccentHex = "#FF1B2D", Family = BrowserFamily.Chromium, ExtensionsPage = "chrome://extensions/" },
+            new() { Id = "opera-gx", Name = "Opera GX", AccentHex = "#EE2B47", Family = BrowserFamily.Chromium, ExtensionsPage = "chrome://extensions/" },
             new() { Id = "zen", Name = "Zen Browser", AccentHex = "#F76B8A", Family = BrowserFamily.Gecko, ExtensionsPage = "about:addons" },
             new() { Id = "firefox", Name = "Mozilla Firefox", AccentHex = "#FF7139", Family = BrowserFamily.Gecko, ExtensionsPage = "about:debugging#/runtime/this-firefox" },
             new() { Id = "firefox-developer", Name = "Firefox Developer Edition", AccentHex = "#00D4AA", Family = BrowserFamily.Gecko, ExtensionsPage = "about:addons" },

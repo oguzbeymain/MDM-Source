@@ -67,6 +67,12 @@ namespace MDM
             SldLightBrightness.Value = Math.Clamp(brightness, 70, 100);
             TxtLightBrightnessValue.Text = $"{(int)SldLightBrightness.Value}%";
             UpdateLightBrightnessPanelVisibility();
+            if (ChkSidebarCollapse != null)
+            {
+                _themePreviewBusy = true;
+                try { ChkSidebarCollapse.IsChecked = settings.SidebarCollapseEnabled; }
+                finally { _themePreviewBusy = false; }
+            }
 
             ChkCopyHotkey.IsChecked = settings.CopyFilesHotkeyEnabled;
             _copyHotkey = string.IsNullOrWhiteSpace(settings.CopyFilesHotkey) ? "Ctrl+C" : settings.CopyFilesHotkey.Trim();
@@ -108,14 +114,17 @@ namespace MDM
             TxtSkipMaxMb.Text = Math.Max(0, settings.SkipMaxSizeMb).ToString();
             TxtRename.Text = string.IsNullOrWhiteSpace(settings.RenamePattern) ? "{name}{ext}" : settings.RenamePattern;
 
-            TxtExtPath.Text = ExtensionInstaller.InstallRoot;
-            RefreshBrowserStatus();
+            TxtExtPath.Text = ExtensionInstaller.ExtensionHomeRoot;
+            // Tarayıcı taraması UI'yi dondurmasın — eklenti sekmesine girilince / arka planda yüklenir
             ApplyVersionTexts();
             if (!_updateBusy)
                 TxtUpdateStatus.Text = "";
 
             SelectTab(initialTab ?? "general");
             ApplyThemeSurface(string.Equals(settings.Theme, "Light", StringComparison.OrdinalIgnoreCase));
+            if (string.Equals(initialTab, "extension", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(initialTab, "eklenti", StringComparison.OrdinalIgnoreCase))
+                ScheduleBrowserStatusRefresh(forceDiscover: false);
         }
 
         public void SelectTab(string tab)
@@ -191,7 +200,7 @@ namespace MDM
             PanelUpdate.Visibility = NavUpdate.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             PanelAbout.Visibility = NavAbout.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             if (NavExtension.IsChecked == true)
-                RefreshBrowserStatus();
+                ScheduleBrowserStatusRefresh(forceDiscover: false);
             if (NavKeyboard.IsChecked != true)
                 StopHotkeyCapture();
         }
@@ -228,6 +237,13 @@ namespace MDM
             if (LightBrightnessPanel == null) return;
             bool light = ThemeLight?.IsChecked == true;
             LightBrightnessPanel.Visibility = light ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void SidebarCollapse_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!IsLoaded || _themePreviewBusy || ChkSidebarCollapse == null) return;
+            if (OwnerWindow is MainWindow mw)
+                mw.ApplySidebarCollapseButton(ChkSidebarCollapse.IsChecked == true, save: false);
         }
 
         /// <summary>Ayarlar kartını açık/koyu temaya uyarlar — yalnızca kaynak fırçaları; görsel ağaçta statik renk yazılmaz.</summary>
@@ -298,9 +314,6 @@ namespace MDM
                 SetLocalBrush("BrowserPillIdleFgBrush", light ? Color.FromRgb(0x66, 0x66, 0x66) : Color.FromRgb(0x99, 0x99, 0x99));
                 SetLocalBrush("BrowserPillActiveBgBrush", light ? Color.FromRgb(0xE8, 0xF5, 0xE9) : Color.FromRgb(0x1B, 0x3A, 0x24));
                 SetLocalBrush("BrowserPillActiveFgBrush", light ? Color.FromRgb(0x2E, 0x7D, 0x32) : Color.FromRgb(0x8B, 0xC3, 0x4A));
-
-                if (NavExtension?.IsChecked == true)
-                    RefreshBrowserStatus();
             }
             finally
             {
@@ -417,6 +430,29 @@ namespace MDM
             BtnRefreshBrowsers.IsEnabled = false;
             try
             {
+                await RefreshBrowserStatusAsync(forceDiscover: true, showBusy: true);
+            }
+            finally
+            {
+                BtnRefreshBrowsers.IsEnabled = true;
+            }
+        }
+
+        private int _browserRefreshGen;
+
+        private void ScheduleBrowserStatusRefresh(bool forceDiscover)
+            => _ = RefreshBrowserStatusAsync(forceDiscover, showBusy: true);
+
+        private void RefreshBrowserStatus()
+            => ScheduleBrowserStatusRefresh(forceDiscover: false);
+
+        private async Task RefreshBrowserStatusAsync(bool forceDiscover, bool showBusy)
+        {
+            if (BrowserStatusList == null) return;
+            int gen = Interlocked.Increment(ref _browserRefreshGen);
+
+            if (showBusy)
+            {
                 BrowserStatusList.Children.Clear();
                 BrowserStatusList.Children.Add(new TextBlock
                 {
@@ -426,31 +462,22 @@ namespace MDM
                     FontSize = 12,
                     Margin = new Thickness(0, 8, 0, 0)
                 });
-
-                // Edge prefs yazımı gecikebilir — birkaç kez oku
-                IReadOnlyList<BrowserExtensionStatus>? last = null;
-                for (int i = 0; i < 3; i++)
-                {
-                    if (i > 0)
-                        await Task.Delay(350);
-                    last = BrowserExtensionProbe.ProbeAll();
-                }
-
-                BrowserStatusList.Children.Clear();
-                foreach (var b in last!)
-                    BrowserStatusList.Children.Add(BuildBrowserCard(b));
             }
-            finally
+
+            IReadOnlyList<BrowserExtensionStatus> list;
+            try
             {
-                BtnRefreshBrowsers.IsEnabled = true;
+                list = await Task.Run(() => BrowserExtensionProbe.ProbeAll(forceDiscover)).ConfigureAwait(true);
             }
-        }
+            catch
+            {
+                list = Array.Empty<BrowserExtensionStatus>();
+            }
 
-        private void RefreshBrowserStatus()
-        {
-            if (BrowserStatusList == null) return;
+            if (gen != _browserRefreshGen || BrowserStatusList == null) return;
+
             BrowserStatusList.Children.Clear();
-            foreach (var b in BrowserExtensionProbe.ProbeAll())
+            foreach (var b in list)
                 BrowserStatusList.Children.Add(BuildBrowserCard(b));
         }
 
@@ -596,13 +623,13 @@ namespace MDM
             try { ExtensionInstaller.PrepareChromiumStaging("chrome"); }
             catch { /* klasör yoksa yine yolu göster */ }
             string staging = Path.GetFullPath(ExtensionInstaller.ChromiumStagingRoot);
+            ExtensionInstaller.RevealFolder(staging);
             InfoDialog.Show(OwnerWindow,
                 Loc.T("settings.ext.howto_title", "Kurulum nasıl yapılır?"),
                 Loc.T("settings.ext.chromium_message", "Kurulum — bir adım kaldı."),
-                string.Format(
-                    Loc.T("settings.ext.chromium_detail",
-                        "1) Açılan eklentiler sayfasında «Geliştirici modu»nu aç.\n2) «Paketlenmemiş öğe yükle»ye tıkla.\n3) Explorer’da zaten seçili klasörü seç — klasörü başka yere kopyalaman gerekmez:\n   {0}"),
-                    staging));
+                Loc.T("settings.ext.chromium_detail",
+                    "1) Açılan eklentiler sayfasında «Geliştirici modu»nu aç.\n2) «Paketlenmemiş öğe yükle»ye tıkla.\n3) Explorer’da zaten seçili klasörü seç — klasörü başka yere kopyalaman gerekmez."),
+                staging);
         }
 
         private void BtnInstallFirefox_Click(object sender, RoutedEventArgs e) => InstallBrowserExtension("firefox");
@@ -619,7 +646,7 @@ namespace MDM
             {
                 bool ok = ExtensionInstaller.TryInstallBrowser(
                     browserId, out string title, out string message, out string detail);
-                InfoDialog.Show(OwnerWindow, title, message, detail);
+                InfoDialog.Show(OwnerWindow, title, message, detail, ExtensionInstaller.LastInstallPath);
                 if (ok)
                     RefreshBrowserStatus();
             }
@@ -696,7 +723,7 @@ namespace MDM
                 bool ok = ExtensionInstaller.TryInstallFirefox(
                     out string title, out string message, out string detail, mode);
 
-                InfoDialog.Show(OwnerWindow, title, message, detail);
+                InfoDialog.Show(OwnerWindow, title, message, detail, ExtensionInstaller.LastInstallPath);
                 if (ok)
                     RefreshBrowserStatus();
             }
@@ -736,7 +763,7 @@ namespace MDM
                     Loc.T("settings.ext.dialog_title", "Eklenti"),
                     Loc.T("settings.ext.cleanup_done", "Hazır."),
                     Loc.T("settings.ext.cleanup_detail", "Tarayıcıdaki eklenti bu klasörü kullanıyor:")
-                        + "\n" + ExtensionInstaller.InstallRoot);
+                        + "\n" + ExtensionInstaller.ExtensionHomeRoot);
             }
             catch (Exception ex)
             {
@@ -750,12 +777,11 @@ namespace MDM
         {
             try
             {
-                Directory.CreateDirectory(ExtensionInstaller.InstallRoot);
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = ExtensionInstaller.InstallRoot,
-                    UseShellExecute = true
-                });
+                ExtensionInstaller.EnsureInstalled();
+                Directory.CreateDirectory(ExtensionInstaller.ExtensionHomeRoot);
+                Directory.CreateDirectory(ExtensionInstaller.ChromiumStagingRoot);
+                Directory.CreateDirectory(ExtensionInstaller.FirefoxStagingRoot);
+                ExtensionInstaller.RevealFolder(ExtensionInstaller.ExtensionHomeRoot, force: true);
             }
             catch (Exception ex)
             {
@@ -908,7 +934,7 @@ namespace MDM
             if (SettingsTitle != null) SettingsTitle.Text = Loc.T("settings.title", "Ayarlar");
             if (NavGeneral != null) NavGeneral.Content = Loc.T("settings.nav.general", "Genel");
             if (NavNotifications != null) NavNotifications.Content = Loc.T("settings.nav.notifications", "Bildirimler");
-            if (NavTheme != null) NavTheme.Content = Loc.T("settings.nav.theme", "Tema");
+            if (NavTheme != null) NavTheme.Content = Loc.T("settings.nav.theme", "Görünüm");
             if (NavExtension != null) NavExtension.Content = Loc.T("settings.nav.extension", "Tarayıcı eklentisi");
             if (NavKeyboard != null) NavKeyboard.Content = Loc.T("settings.nav.keyboard", "Klavye ayarları");
             if (NavAdvanced != null) NavAdvanced.Content = Loc.T("settings.nav.advanced", "Gelişmiş");
@@ -933,12 +959,17 @@ namespace MDM
                 "Dil değişikliği uygulama arayüzüne ve tarayıcı eklentisine uygulanır.");
             if (BtnCancelSettings != null) BtnCancelSettings.Content = Loc.T("settings.cancel", "İptal");
             if (BtnSaveSettings != null) BtnSaveSettings.Content = Loc.T("settings.save", "Kaydet");
-            if (TxtThemeTitle != null) TxtThemeTitle.Text = Loc.T("settings.theme.title", "Tema");
-            if (TxtThemeAppearance != null) TxtThemeAppearance.Text = Loc.T("settings.theme.appearance", "Görünüm");
+            if (TxtThemeTitle != null) TxtThemeTitle.Text = Loc.T("settings.theme.title", "Görünüm");
+            if (TxtThemeAppearance != null) TxtThemeAppearance.Text = Loc.T("settings.theme.appearance", "Tema");
             if (TxtThemeDark != null) TxtThemeDark.Text = Loc.T("settings.theme.dark", "Koyu");
             if (TxtThemeDarkSub != null) TxtThemeDarkSub.Text = Loc.T("settings.theme.dark_sub", "Siyah mod");
             if (TxtThemeLight != null) TxtThemeLight.Text = Loc.T("settings.theme.light", "Açık");
             if (TxtThemeLightSub != null) TxtThemeLightSub.Text = Loc.T("settings.theme.light_sub", "Beyaz mod");
+            if (ChkSidebarCollapse != null)
+                ChkSidebarCollapse.Content = Loc.T("settings.theme.sidebar_collapse", "Kategori kenar çubuğunu daralt");
+            if (TxtSidebarCollapseHint != null)
+                TxtSidebarCollapseHint.Text = Loc.T("settings.theme.sidebar_collapse_hint",
+                    "Açıkken sol üstteki ‹ düğmesi kenar çubuğunu yalnızca simgelere küçültür. Kapalıysa düğme gizlenir.");
             if (TxtBrightnessLabel != null) TxtBrightnessLabel.Text = Loc.T("settings.theme.brightness", "Beyaz ton parlaklığı");
             if (TxtBrightnessHint != null) TxtBrightnessHint.Text = Loc.T("settings.theme.brightness_hint",
                 "Yalnızca yüzeyleri etkiler (ana pencere ve popup'lar). Yazılar tam kontrastta kalır.");
@@ -1189,6 +1220,7 @@ namespace MDM
             s.GameModeEnabled = ChkGameMode?.IsChecked == true;
             s.Theme = ThemeLight.IsChecked == true ? "Light" : "Dark";
             s.LightThemeBrightness = SldLightBrightness != null ? (int)SldLightBrightness.Value : 100;
+            s.SidebarCollapseEnabled = ChkSidebarCollapse?.IsChecked != false;
             s.CopyFilesHotkeyEnabled = ChkCopyHotkey.IsChecked == true;
             s.CopyFilesHotkey = string.IsNullOrWhiteSpace(_copyHotkey) ? "Ctrl+C" : _copyHotkey;
             s.DeleteKeyShortcutsEnabled = ChkDeleteKey.IsChecked == true;

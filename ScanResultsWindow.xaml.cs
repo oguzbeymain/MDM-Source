@@ -1,10 +1,14 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace MDM
@@ -342,6 +346,169 @@ namespace MDM
             CancelWork();
             Close();
             _host.EnqueueScanItems(chosen);
+        }
+
+        private void ScanItem_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not ListBoxItem row || row.DataContext is not ScanItem item)
+                return;
+
+            row.IsSelected = true;
+            LstItems.SelectedItem = item;
+            ShowScanItemMenu(row, item);
+            e.Handled = true;
+        }
+
+        private void ShowScanItemMenu(FrameworkElement target, ScanItem item)
+        {
+            bool light = ThemeService.IsLight;
+            Color bg = ThemeService.Surface(light, 0xFF, 0xFF, 0xFF, 0x1C, 0x1C, 0x1C);
+            Color border = ThemeService.Surface(light, 0xD8, 0xD8, 0xDE, 0x33, 0x33, 0x33);
+            Color text = ThemeService.Surface(light, 0x1A, 0x1A, 0x1A, 0xE0, 0xE0, 0xE0);
+            Color hover = ThemeService.Surface(light, 0xF3, 0xEA, 0xE0, 0x2A, 0x21, 0x18);
+
+            var menu = new ContextMenu
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HasDropShadow = false,
+                FocusVisualStyle = null,
+                PlacementTarget = target,
+                Placement = PlacementMode.MousePoint,
+                DataContext = item
+            };
+
+            var borderFactory = new FrameworkElementFactory(typeof(Border));
+            borderFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(bg));
+            borderFactory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(border));
+            borderFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            borderFactory.SetValue(Border.PaddingProperty, new Thickness(4));
+            borderFactory.SetValue(Border.SnapsToDevicePixelsProperty, true);
+            var host = new FrameworkElementFactory(typeof(StackPanel));
+            host.SetValue(Panel.IsItemsHostProperty, true);
+            host.SetValue(KeyboardNavigation.DirectionalNavigationProperty, KeyboardNavigationMode.Cycle);
+            borderFactory.AppendChild(host);
+            menu.Template = new ControlTemplate(typeof(ContextMenu)) { VisualTree = borderFactory };
+
+            var itemTemplate = BuildScanMenuItemTemplate(hover);
+            menu.Items.Add(MakeScanMenuItem(
+                Loc.T("scan.menu.copy_link", "Bağlantıyı kopyala"), text, itemTemplate,
+                () => { try { Clipboard.SetText(item.Url); } catch { /* ignore */ } }));
+            menu.Items.Add(MakeScanMenuItem(
+                Loc.T("scan.menu.open_tab", "Yeni sekmede aç"), text, itemTemplate,
+                () => OpenScanUrl(item)));
+            menu.Items.Add(MakeScanMenuItem(
+                Loc.T("scan.menu.download", "İndir"), text, itemTemplate,
+                () =>
+                {
+                    CancelWork();
+                    Close();
+                    _host.EnqueueScanItems(new[] { item });
+                }));
+
+            menu.IsOpen = true;
+        }
+
+        private static ControlTemplate BuildScanMenuItemTemplate(Color hover)
+        {
+            var root = new FrameworkElementFactory(typeof(Border));
+            root.Name = "itemBorder";
+            root.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            root.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            root.SetBinding(Border.PaddingProperty, new Binding("Padding")
+            {
+                RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent)
+            });
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            cp.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            root.AppendChild(cp);
+
+            var template = new ControlTemplate(typeof(MenuItem)) { VisualTree = root };
+            var trigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(hover), "itemBorder"));
+            trigger.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x00))));
+            template.Triggers.Add(trigger);
+            return template;
+        }
+
+        private static MenuItem MakeScanMenuItem(string header, Color text, ControlTemplate template, Action action)
+        {
+            var mi = new MenuItem
+            {
+                Header = header,
+                Foreground = new SolidColorBrush(text),
+                Background = Brushes.Transparent,
+                FontSize = 12,
+                Padding = new Thickness(10, 6, 10, 6),
+                Height = 30,
+                Margin = new Thickness(0),
+                FocusVisualStyle = null,
+                Template = template
+            };
+            mi.Click += (_, _) => action();
+            return mi;
+        }
+
+        private void LstItems_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+            ScanItem? item = (e.OriginalSource as FrameworkElement)?.DataContext as ScanItem
+                             ?? LstItems.SelectedItem as ScanItem;
+            if (item == null) return;
+            if (item.Kind == ScanKind.Image)
+                ShowPreview(item);
+            else
+                OpenScanUrl(item);
+        }
+
+        private static void OpenScanUrl(ScanItem item)
+        {
+            if (string.IsNullOrWhiteSpace(item.Url)) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = item.Url, UseShellExecute = true });
+            }
+            catch { /* ignore */ }
+        }
+
+        private void ShowPreview(ScanItem item)
+        {
+            var img = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(8)
+            };
+            if (item.HasThumbnail)
+                img.Source = item.Thumbnail;
+
+            var win = new Window
+            {
+                Title = item.FileName,
+                Owner = this,
+                Background = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x12)),
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Width = 920,
+                Height = 640,
+                Content = img
+            };
+            win.Show();
+            _ = LoadFullPreviewAsync(img, item, win);
+        }
+
+        private async Task LoadFullPreviewAsync(System.Windows.Controls.Image img, ScanItem item, Window win)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource();
+                win.Closed += (_, _) => cts.Cancel();
+                var full = await PageScanService.DownloadFullImageAsync(item.Url, _pageUrl, cts.Token);
+                if (full != null)
+                    await Dispatcher.InvokeAsync(() => img.Source = full);
+            }
+            catch { /* küçük önizleme kalsın */ }
         }
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();

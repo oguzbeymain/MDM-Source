@@ -32,9 +32,21 @@ namespace MDM
         private readonly object _captureGate = new();
         private static readonly TimeSpan CaptureDebounce = TimeSpan.FromMilliseconds(900);
         private const double ActionColumnWidth = 100;
+        public static readonly DependencyProperty SidebarCompactProperty =
+            DependencyProperty.Register(nameof(SidebarCompact), typeof(bool), typeof(MainWindow),
+                new PropertyMetadata(false));
+
+        public bool SidebarCompact
+        {
+            get => (bool)GetValue(SidebarCompactProperty);
+            set => SetValue(SidebarCompactProperty, value);
+        }
+
         private string _listDensity = "Medium";
+        private string _listViewMode = "Details";
         private string _listSort = "Date";
         private int _listIconPx = 22;
+        private GridLength _sidebarExpandedWidth = new GridLength(200);
         private readonly Dictionary<DownloadItem, string> _itemUrls = new();
         public ObservableCollection<DownloadItem> DownloadList { get; set; } = new ObservableCollection<DownloadItem>();
         private ICollectionView? _downloadView;
@@ -103,6 +115,8 @@ namespace MDM
                 live.IsLiveSorting = true;
             }
             DgDownloads.ItemsSource = _downloadView;
+            if (LstDownloadsTiles != null)
+                LstDownloadsTiles.ItemsSource = _downloadView;
             DgDownloads.GiveFeedback += DgDownloads_GiveFeedback;
             DgDownloads.PreviewGiveFeedback += DgDownloads_GiveFeedback;
             DgDownloads.LayoutUpdated += DgDownloads_LayoutUpdated;
@@ -110,7 +124,10 @@ namespace MDM
             LoadDownloadHistory();
             RestorePendingDownloads();
             ApplyListDensity(appSettings.ListDensity);
+            ApplyListViewMode("Details");
             ApplyListSort(appSettings.ListSort);
+            ApplySidebarCompact(appSettings.SidebarCollapsed && appSettings.SidebarCollapseEnabled, save: false);
+            ApplySidebarCollapseButton(appSettings.SidebarCollapseEnabled, save: false);
             SyncListViewMenuChecks();
             DownloadList.CollectionChanged += (_, _) =>
             {
@@ -389,6 +406,7 @@ namespace MDM
             _modalResult = false;
             ModalTitle.Text = title;
             ModalMessage.Text = message;
+            SetModalCopyPath(null);
             if (string.IsNullOrWhiteSpace(detail))
             {
                 ModalDetail.Visibility = Visibility.Collapsed;
@@ -438,7 +456,7 @@ namespace MDM
             return _modalResult;
         }
 
-        public void ShowModalInfo(string title, string message, string detail)
+        public void ShowModalInfo(string title, string message, string detail, string? copyPath = null)
         {
             _modalResult = true;
             ModalTitle.Text = title;
@@ -453,6 +471,8 @@ namespace MDM
                 ModalDetail.Visibility = Visibility.Visible;
                 ModalDetail.Text = detail;
             }
+
+            SetModalCopyPath(copyPath);
 
             ModalCancelBtn.Visibility = Visibility.Collapsed;
             ModalConfirmBtn.Content = DialogTexts.Ok;
@@ -482,6 +502,45 @@ namespace MDM
                 _modalFrame.Continue = false;
                 _modalFrame = null;
             }
+        }
+
+        private void SetModalCopyPath(string? copyPath)
+        {
+            if (ModalPathPanel == null || ModalPathBox == null) return;
+            if (string.IsNullOrWhiteSpace(copyPath))
+            {
+                ModalPathPanel.Visibility = Visibility.Collapsed;
+                ModalPathBox.Text = "";
+                return;
+            }
+
+            ModalPathBox.Text = copyPath;
+            ModalPathPanel.Visibility = Visibility.Visible;
+            if (ModalPathCopy != null)
+                ModalPathCopy.Content = Loc.T("dialog.copy", "Kopyala");
+        }
+
+        private DispatcherTimer? _modalCopiedTimer;
+
+        private void ModalPathCopy_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(ModalPathBox?.Text)) return;
+                Clipboard.SetText(ModalPathBox.Text);
+                if (ModalPathCopy == null) return;
+                ModalPathCopy.Content = Loc.T("dialog.copied", "Kopyalandı");
+                _modalCopiedTimer?.Stop();
+                _modalCopiedTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
+                _modalCopiedTimer.Tick += (_, _) =>
+                {
+                    _modalCopiedTimer.Stop();
+                    if (ModalPathCopy != null)
+                        ModalPathCopy.Content = Loc.T("dialog.copy", "Kopyala");
+                };
+                _modalCopiedTimer.Start();
+            }
+            catch { /* ignore */ }
         }
 
         private void ModalConfirm_Click(object sender, RoutedEventArgs e) => CloseModal(true);
@@ -1489,10 +1548,14 @@ namespace MDM
         private void OpenRulesOverlay(CategoryItem cat)
         {
             _rulesCategory = cat;
-            RulesPanel.Load(cat);
             RulesOverlay.Visibility = Visibility.Visible;
             RulesOverlay.Focusable = true;
-            Keyboard.Focus(RulesOverlay);
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (RulesOverlay.Visibility != Visibility.Visible) return;
+                RulesPanel.Load(cat);
+                Keyboard.Focus(RulesOverlay);
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void CloseRulesOverlay()
@@ -2583,7 +2646,7 @@ namespace MDM
             if (TitleBarRow != null)
                 TitleBarRow.Height = new GridLength(36);
 
-            if (!_sidebarUserSized)
+            if (!_sidebarUserSized && !SidebarCompact)
             {
                 double target = windowWidth switch
                 {
@@ -2595,7 +2658,7 @@ namespace MDM
                 if (Math.Abs(SidebarCol.Width.Value - target) > 0.5 || !SidebarCol.Width.IsAbsolute)
                     SidebarCol.Width = new GridLength(target);
             }
-            else
+            else if (!SidebarCompact)
             {
                 double maxSidebar = SafeClamp(windowWidth - 280, SidebarCol.MinWidth, SidebarCol.MaxWidth);
                 if (SidebarCol.ActualWidth > maxSidebar + 2)
@@ -3112,11 +3175,18 @@ namespace MDM
 
         private void OpenSettingsOverlay(string? tab = null)
         {
-            var settings = AppSettingsStore.Load();
-            SettingsPanel.Load(settings, _defaultFolder, tab);
+            // Önce paneli göster — Load içindeki işler sonraki tick'te (donma algısı azalır)
             SettingsOverlay.Visibility = Visibility.Visible;
             SettingsOverlay.Focusable = true;
-            Keyboard.Focus(SettingsOverlay);
+            var settings = AppSettingsStore.Load();
+            string folder = _defaultFolder;
+            string? openTab = tab;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (SettingsOverlay.Visibility != Visibility.Visible) return;
+                SettingsPanel.Load(settings, folder, openTab);
+                Keyboard.Focus(SettingsOverlay);
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void CloseSettingsOverlay()
@@ -3130,6 +3200,7 @@ namespace MDM
             catch { /* ignore */ }
             SettingsOverlay.Visibility = Visibility.Collapsed;
             ThemeService.ApplyFromSettings();
+            ApplySidebarCollapseButton(AppSettingsStore.Load().SidebarCollapseEnabled, save: false);
         }
 
         private void TryCloseSettingsOverlay()
@@ -3281,6 +3352,7 @@ namespace MDM
             StartBrowserCaptureServer();
             TorrentEngineHost.ReloadIfIdle();
             ThemeService.ApplyFromSettings();
+            ApplySidebarCollapseButton(settings.SidebarCollapseEnabled, save: false);
             ApplyLocalizedTexts();
             foreach (var item in DownloadList)
                 item.NotifyLanguageChanged();
@@ -3709,7 +3781,6 @@ namespace MDM
         private void MenuViewDensity_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem mi) return;
-            // Başlık yerelleştirildiği için ad üzerinden eşleştir
             string tag = mi.Name switch
             {
                 "MenuViewSmall" => "Small",
@@ -3742,6 +3813,8 @@ namespace MDM
             var s = AppSettingsStore.Load();
             s.ListDensity = _listDensity;
             s.ListSort = _listSort;
+            s.ListViewMode = _listViewMode;
+            s.SidebarCollapsed = SidebarCompact;
             AppSettingsStore.Save(s);
         }
 
@@ -3751,6 +3824,7 @@ namespace MDM
             {
                 "Small" or "Küçük" => "Small",
                 "Large" or "Büyük" => "Large",
+                "ExtraLarge" or "XL" => "ExtraLarge",
                 _ => "Medium"
             };
 
@@ -3760,10 +3834,13 @@ namespace MDM
             switch (_listDensity)
             {
                 case "Small":
-                    icon = 14; row = 34; font = 12; _listIconPx = 16;
+                    icon = 14; row = 32; font = 12; _listIconPx = 16;
                     break;
                 case "Large":
                     icon = 32; row = 64; font = 14; _listIconPx = 32;
+                    break;
+                case "ExtraLarge":
+                    icon = 48; row = 88; font = 15; _listIconPx = 48;
                     break;
                 default:
                     icon = 22; row = 46; font = 13; _listIconPx = 24;
@@ -3772,12 +3849,120 @@ namespace MDM
 
             Resources["ListIconSize"] = icon;
             Resources["ListNameFontSize"] = font;
-            DgDownloads.RowHeight = row;
-            DgDownloads.MinRowHeight = row;
+            if (DgDownloads != null)
+            {
+                DgDownloads.RowHeight = row;
+                DgDownloads.MinRowHeight = row;
+            }
 
             foreach (var item in DownloadList)
                 item.FileIcon = IconHelper.GetIconForExtension(item.FileName, _listIconPx);
 
+            ApplyListViewMode(_listViewMode);
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void ApplyListViewMode(string? mode)
+        {
+            _listViewMode = mode switch
+            {
+                "Grid" or "Izgara" => "Grid",
+                "List" or "Liste" => "List",
+                "Content" or "İçerik" => "Content",
+                _ => "Details"
+            };
+
+            bool tiles = _listViewMode is "Grid" or "Content";
+            if (DownloadListHost != null && DownloadListHost.RowDefinitions.Count >= 2)
+            {
+                if (tiles)
+                {
+                    DownloadListHost.RowDefinitions[0].Height = GridLength.Auto;
+                    DownloadListHost.RowDefinitions[1].Height = new GridLength(1, GridUnitType.Star);
+                }
+                else
+                {
+                    DownloadListHost.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
+                    DownloadListHost.RowDefinitions[1].Height = new GridLength(0);
+                }
+            }
+            if (DgDownloads != null)
+            {
+                DgDownloads.Visibility = Visibility.Visible;
+                DgDownloads.HeadersVisibility = DataGridHeadersVisibility.Column;
+                Grid.SetRow(DgDownloads, 0);
+                Grid.SetRowSpan(DgDownloads, tiles ? 1 : 2);
+                DgDownloads.MaxHeight = tiles ? 42 : double.PositiveInfinity;
+                ScrollViewer.SetVerticalScrollBarVisibility(DgDownloads,
+                    tiles ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+            }
+            if (LstDownloadsTiles != null)
+            {
+                LstDownloadsTiles.Visibility = tiles ? Visibility.Visible : Visibility.Collapsed;
+                bool wrap = _listViewMode == "Grid";
+                VirtualizingPanel.SetIsVirtualizing(LstDownloadsTiles, !wrap);
+                ScrollViewer.SetCanContentScroll(LstDownloadsTiles, !wrap);
+                var factory = new FrameworkElementFactory(
+                    wrap ? typeof(WrapPanel) : typeof(VirtualizingStackPanel));
+                LstDownloadsTiles.ItemsPanel = new ItemsPanelTemplate(factory);
+            }
+        }
+
+        private void BtnSidebarToggle_Click(object sender, RoutedEventArgs e)
+            => ApplySidebarCompact(!SidebarCompact, save: true);
+
+        public void ApplySidebarCollapseButton(bool enabled, bool save)
+        {
+            if (BtnSidebarToggle != null)
+                BtnSidebarToggle.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+            if (!enabled && SidebarCompact)
+                ApplySidebarCompact(false, save);
+            if (save)
+            {
+                var s = AppSettingsStore.Load();
+                s.SidebarCollapseEnabled = enabled;
+                AppSettingsStore.Save(s);
+            }
+        }
+
+        private void ApplySidebarCompact(bool compact, bool save)
+        {
+            if (SidebarCol == null) return;
+            if (compact && !SidebarCompact && SidebarCol.Width.IsAbsolute && SidebarCol.Width.Value > 80)
+                _sidebarExpandedWidth = SidebarCol.Width;
+
+            SidebarCompact = compact;
+            if (compact)
+            {
+                SidebarCol.MinWidth = 56;
+                SidebarCol.MaxWidth = 72;
+                SidebarCol.Width = new GridLength(64);
+                if (MainSplitter != null) MainSplitter.IsEnabled = false;
+            }
+            else
+            {
+                SidebarCol.MinWidth = 160;
+                SidebarCol.MaxWidth = 280;
+                SidebarCol.Width = _sidebarExpandedWidth.Value > 80 ? _sidebarExpandedWidth : new GridLength(200);
+                if (MainSplitter != null) MainSplitter.IsEnabled = true;
+            }
+
+            if (LblCategoriesHeader != null)
+                LblCategoriesHeader.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            if (BtnAllDownloads != null)
+            {
+                BtnAllDownloads.HorizontalContentAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+                BtnAllDownloads.Content = Loc.T("main.all_downloads", "Tüm indirilenler");
+                BtnAllDownloads.ToolTip = Loc.T("main.all_downloads", "Tüm indirilenler");
+            }
+            if (TxtSidebarToggle != null)
+                TxtSidebarToggle.Text = compact ? "›" : "‹";
+            if (BtnSidebarToggle != null)
+                BtnSidebarToggle.ToolTip = compact
+                    ? Loc.T("main.sidebar_expand", "Kenar çubuğunu genişlet")
+                    : Loc.T("main.sidebar_collapse", "Kenar çubuğunu daralt");
+
+            if (save) PersistListViewSettings();
             ApplyResponsiveLayout(ActualWidth);
         }
 
@@ -5484,6 +5669,25 @@ namespace MDM
             // Ust transport cubugu kaldirildi; satir aksiyonlari kullanilir
         }
 
+        private bool _syncingTileSelection;
+
+        private void Tiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_syncingTileSelection || LstDownloadsTiles == null || DgDownloads == null) return;
+            _syncingTileSelection = true;
+            try
+            {
+                DgDownloads.SelectedItems.Clear();
+                foreach (var item in LstDownloadsTiles.SelectedItems.OfType<DownloadItem>())
+                    DgDownloads.SelectedItems.Add(item);
+            }
+            finally
+            {
+                _syncingTileSelection = false;
+            }
+            UpdateTransportButtons();
+        }
+
         private void DgDownloads_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateTransportButtons();
@@ -5494,6 +5698,20 @@ namespace MDM
             foreach (DownloadItem item in e.AddedItems)
                 item.IsChecked = true;
             SyncSelectAllCheckbox();
+
+            if (_syncingTileSelection || LstDownloadsTiles == null || LstDownloadsTiles.Visibility != Visibility.Visible)
+                return;
+            _syncingTileSelection = true;
+            try
+            {
+                LstDownloadsTiles.SelectedItems.Clear();
+                foreach (DownloadItem item in DgDownloads.SelectedItems.OfType<DownloadItem>())
+                    LstDownloadsTiles.SelectedItems.Add(item);
+            }
+            finally
+            {
+                _syncingTileSelection = false;
+            }
         }
 
         private void DgDownloads_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -5744,11 +5962,54 @@ namespace MDM
             UpdateTransportButtons();
         }
 
+        private static bool IsImageFile(string? path)
+        {
+            string ext = Path.GetExtension(path ?? "").ToLowerInvariant();
+            return ext is ".png" or ".jpg" or ".jpeg" or ".webp" or ".gif" or ".bmp" or ".svg" or ".ico";
+        }
+
+        private void Tiles_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (LstDownloadsTiles?.SelectedItem is not DownloadItem item) return;
+            OpenDownloadItem(item);
+        }
+
+        private void ShowLocalImagePreview(string path, string title)
+        {
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.UriSource = new Uri(path);
+                bmp.EndInit();
+                var win = new Window
+                {
+                    Title = title,
+                    Owner = this,
+                    Background = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x12)),
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                    Width = 920,
+                    Height = 640,
+                    Content = new Image { Source = bmp, Stretch = Stretch.Uniform, Margin = new Thickness(8) }
+                };
+                win.Show();
+            }
+            catch
+            {
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
+        }
+
         private void DgDownloads_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (DgDownloads.SelectedItem is not DownloadItem selectedItem)
                 return;
+            OpenDownloadItem(selectedItem);
+        }
 
+        private void OpenDownloadItem(DownloadItem selectedItem)
+        {
             // Indirme / duraklatma / yeni tamamlanan: oturum penceresini ac
             if (selectedItem.IsDownloading
                 || selectedItem.Status.Contains("Duraklat", StringComparison.OrdinalIgnoreCase)
@@ -5762,6 +6023,11 @@ namespace MDM
 
             if (File.Exists(selectedItem.FilePath))
             {
+                if (IsImageFile(selectedItem.FilePath) || IsImageFile(selectedItem.FileName))
+                {
+                    ShowLocalImagePreview(selectedItem.FilePath, selectedItem.FileName);
+                    return;
+                }
                 Process.Start(new ProcessStartInfo(selectedItem.FilePath) { UseShellExecute = true });
             }
             else
@@ -5775,6 +6041,7 @@ namespace MDM
             if (e.ChangedButton != MouseButton.Left) return;
 
             DependencyObject? source = e.OriginalSource as DependencyObject;
+            if (FindParent<ListBoxItem>(source) != null) return;
             if (FindParent<ScrollBar>(source) != null) return;
             if (FindParent<DataGridColumnHeader>(source) != null) return;
             if (FindParent<Thumb>(source) != null) return;
