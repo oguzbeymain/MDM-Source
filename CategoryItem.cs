@@ -29,7 +29,7 @@ namespace MDM
         public string Icon
         {
             get => _icon;
-            set => SetField(ref _icon, value);
+            set => SetField(ref _icon, CategoryIcons.Normalize(value));
         }
 
         private bool _isBuiltin;
@@ -63,8 +63,14 @@ namespace MDM
                 OnPropertyChanged(nameof(IndentMargin));
                 OnPropertyChanged(nameof(NestBackground));
                 OnPropertyChanged(nameof(HasChildren));
+                OnPropertyChanged(nameof(IsNested));
+                OnPropertyChanged(nameof(NestAccentThickness));
+                OnPropertyChanged(nameof(NestAccentBrush));
             }
         }
+
+        /// <summary>İç kategori mi (derinlik &gt; 0).</summary>
+        public bool IsNested => Depth > 0;
 
         public ObservableCollection<CategoryItem> Children { get; } = new();
 
@@ -110,6 +116,42 @@ namespace MDM
         }
         public bool HasChildren => Children.Count > 0;
 
+        /// <summary>Daraltılmış sidebar: alt kategori sayısı (turuncu rozet).</summary>
+        public string ChildCountLabel => Children.Count > 0 ? Children.Count.ToString() : "";
+
+        private bool _isActiveInSidebar;
+        /// <summary>Bu kategori tam olarak aktif filtre (flyout satırı / seçim).</summary>
+        public bool IsActiveInSidebar
+        {
+            get => _isActiveInSidebar;
+            set
+            {
+                if (!SetField(ref _isActiveInSidebar, value)) return;
+                OnPropertyChanged(nameof(IsCompactRailHighlighted));
+            }
+        }
+
+        private bool _compactFlyoutOpen;
+        /// <summary>Daraltılmış sidebar: alt kategori flyout açık mı.</summary>
+        public bool CompactFlyoutOpen
+        {
+            get => _compactFlyoutOpen;
+            set
+            {
+                if (!SetField(ref _compactFlyoutOpen, value)) return;
+                OnPropertyChanged(nameof(IsCompactRailHighlighted));
+            }
+        }
+
+        /// <summary>Compact rail ikonu: kendisi aktif, flyout açık veya altı seçili.</summary>
+        public bool IsCompactRailHighlighted =>
+            IsActiveInSidebar
+            || CompactFlyoutOpen
+            || Children.Any(ch => ch.Flatten().Any(x => x.IsActiveInSidebar));
+
+        public void NotifyCompactRailHighlight()
+            => OnPropertyChanged(nameof(IsCompactRailHighlighted));
+
         public Thickness IndentMargin => new(8 + Depth * 14, 0, 0, 0);
 
         /// <summary>Sadece hiyerarşi için cok hafif sol cizgi; secim turuncusuyle karismasin.</summary>
@@ -124,6 +166,7 @@ namespace MDM
         public void NotifyChildrenChanged()
         {
             OnPropertyChanged(nameof(HasChildren));
+            OnPropertyChanged(nameof(ChildCountLabel));
             OnPropertyChanged(nameof(NestBackground));
             OnPropertyChanged(nameof(NestAccentThickness));
             OnPropertyChanged(nameof(NestAccentBrush));

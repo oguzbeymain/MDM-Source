@@ -50,7 +50,49 @@
             </DockPanel>
 
             <Border x:Name="IconListBorder" Grid.Row="4" Background="#141414" BorderBrush="#2A2A2A" BorderThickness="1"
-                    CornerRadius="10" Padding="10" MaxHeight="140">
+                    CornerRadius="10" Padding="8" MaxHeight="120">
+                <Border.Resources>
+                    <Style x:Key="DlgScrollThumb" TargetType="Thumb">
+                        <Setter Property="OverridesDefaultStyle" Value="True"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Border x:Name="t" Background="#3A3A3A" CornerRadius="4" Margin="1"/>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="t" Property="Background" Value="#FF6B00"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                    <Style TargetType="ScrollBar">
+                        <Setter Property="Width" Value="8"/>
+                        <Setter Property="MinWidth" Value="8"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ScrollBar">
+                                    <Grid Background="Transparent" Margin="1,2">
+                                        <Border Background="#1A1A1A" CornerRadius="4" Opacity="0.5"/>
+                                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                            <Track.DecreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0"/>
+                                            </Track.DecreaseRepeatButton>
+                                            <Track.Thumb>
+                                                <Thumb Style="{StaticResource DlgScrollThumb}"/>
+                                            </Track.Thumb>
+                                            <Track.IncreaseRepeatButton>
+                                                <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0"/>
+                                            </Track.IncreaseRepeatButton>
+                                        </Track>
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Border.Resources>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <WrapPanel x:Name="IconPanel"/>
                 </ScrollViewer>

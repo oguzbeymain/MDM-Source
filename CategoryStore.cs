@@ -40,7 +40,7 @@ namespace MDM
                 },
                 new()
                 {
-                    Id = "Images", Name = "Resimler", Icon = "🖼️", IsBuiltin = true, Depth = 0,
+                    Id = "Images", Name = "Resimler", Icon = "📷", IsBuiltin = true, Depth = 0,
                     Extensions = GetDefaultExtensions("Images")
                 },
                 new()
@@ -79,7 +79,7 @@ namespace MDM
             "Videos" => "🎬",
             "Audio" => "🎵",
             "Archives" => "📦",
-            "Images" => "🖼️",
+            "Images" => "📷",
             "Apps" => "🚀",
             _ => "📁"
         };
@@ -132,7 +132,8 @@ namespace MDM
                     {
                         Id = d.Id,
                         Name = d.Name,
-                        Icon = string.IsNullOrWhiteSpace(d.Icon) ? "📁" : d.Icon,
+                        Icon = CategoryIcons.Normalize(
+                            string.IsNullOrWhiteSpace(d.Icon) ? GetDefaultIcon(d.Id) : d.Icon),
                         IsBuiltin = d.IsBuiltin,
                         ParentId = d.ParentId,
                         IsExpanded = d.IsExpanded,
@@ -231,7 +232,9 @@ namespace MDM
                     existing.IsBuiltin = true;
                     // Kayitli uzantilari dokunma — kullanici ozel kurallarini / bos listeyi koru.
                     // Eksik kategori yeni eklenirken zaten def.Extensions gelir.
-                    if (string.IsNullOrWhiteSpace(existing.Icon) || existing.Icon == "📁")
+                    if (string.IsNullOrWhiteSpace(existing.Icon) || existing.Icon == "📁"
+                        || existing.Icon == "🖼️"
+                        || (existing.Icon.Length == 1 && existing.Icon[0] >= '\uE700'))
                         existing.Icon = def.Icon;
                     // Eski TR yapıdan gelen "Images" adını düzelt; İngilizce kurulumda dokunma
                     if (Loc.Code == "tr"

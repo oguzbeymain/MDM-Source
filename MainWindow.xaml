@@ -544,8 +544,10 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="bd" Background="Transparent" CornerRadius="9"
-                                Padding="{TemplateBinding Padding}" BorderThickness="0">
+                                Padding="{TemplateBinding Padding}" BorderThickness="0"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}">
                             <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -570,6 +572,15 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <!-- Küçük sidebar: ikon ortalanır; yükseklik sayı+tik için biraz artar -->
+                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                    <Setter Property="Height" Value="Auto"/>
+                    <Setter Property="MinHeight" Value="36"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="ToolbarFlatButtonStyle" TargetType="Button">
@@ -729,7 +740,8 @@
         <ContextMenu x:Key="CategoryItemContextMenu"
                      Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False"
                      FocusVisualStyle="{x:Null}" StaysOpen="False"
-                     Opened="CategoryItemContextMenu_Opened">
+                     Opened="CategoryItemContextMenu_Opened"
+                     Closed="CategoryItemContextMenu_Closed">
             <ContextMenu.Template>
                 <ControlTemplate TargetType="ContextMenu">
                     <Border Background="{DynamicResource MenuBgBrush}" BorderBrush="{DynamicResource MenuBorderBrush}" BorderThickness="1"
@@ -766,9 +778,9 @@
                     </Setter>
                 </Style>
             </ContextMenu.Resources>
+            <MenuItem x:Name="MenuCatAddChild" Header="İçine alt kategori ekle" Click="MenuAddChildCategory_Click"/>
             <MenuItem x:Name="MenuCatRename" Header="Yeniden adlandır" Click="MenuRenameCategory_Click"/>
             <MenuItem x:Name="MenuCatOpenFolder" Header="Dosya konumunu aç" Click="MenuOpenCategoryFolder_Click"/>
-            <MenuItem x:Name="MenuCatAddChild" Header="İçine alt kategori ekle" Click="MenuAddChildCategory_Click"/>
             <MenuItem x:Name="MenuCatUnnest" Header="Kategoriyi çıkar" Click="MenuUnnestCategory_Click"/>
             <MenuItem x:Name="MenuCatRules" Header="Dosya türlerini ayarla" Click="MenuCategoryRules_Click"/>
             <MenuItem x:Name="MenuCatDelete" Header="Seçilen kategorileri sil" Click="MenuDeleteCategories_Click"/>
@@ -1237,6 +1249,7 @@
                                                         <Grid>
                                                             <TextBlock x:Name="ico" Text="📥" FontSize="16"
                                                                        Visibility="Collapsed"
+                                                                       Foreground="{TemplateBinding Foreground}"
                                                                        HorizontalAlignment="Center"
                                                                        VerticalAlignment="Center"/>
                                                             <TextBlock x:Name="lbl" FontSize="12"
@@ -1295,6 +1308,7 @@
                                      SelectionMode="Extended"
                                      SelectionChanged="LstCategories_SelectionChanged"
                                      PreviewMouseLeftButtonDown="LstCategories_PreviewMouseLeftButtonDown"
+                                     PreviewMouseLeftButtonUp="LstCategories_PreviewMouseLeftButtonUp"
                                      PreviewMouseRightButtonDown="LstCategories_PreviewMouseRightButtonDown"
                                      PreviewMouseMove="LstCategories_PreviewMouseMove"
                                      GiveFeedback="LstCategories_GiveFeedback"
@@ -1307,27 +1321,115 @@
                                      PreviewKeyDown="LstCategories_PreviewKeyDown">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="Transparent" BorderBrush="{Binding NestAccentBrush}"
-                                                BorderThickness="{Binding NestAccentThickness}" CornerRadius="8" Padding="2,0">
-                                            <DockPanel LastChildFill="True" Margin="{Binding IndentMargin}">
-                                                <Button DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,4,0"
-                                                        Tag="{Binding}" Click="CategoryExpand_Click"
-                                                        Cursor="Hand" Background="Transparent" BorderThickness="0"
-                                                        VerticalAlignment="Center" Focusable="False">
+                                        <Grid ToolTip="{Binding DisplayName}">
+                                            <!-- Geniş sidebar: indent + etiket -->
+                                            <Border Background="Transparent"
+                                                    BorderBrush="{Binding NestAccentBrush}"
+                                                    BorderThickness="{Binding NestAccentThickness}"
+                                                    CornerRadius="8" Padding="2,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <DockPanel LastChildFill="True" Margin="{Binding IndentMargin}">
+                                                    <Button DockPanel.Dock="Left" Width="18" Height="18" Margin="0,0,4,0"
+                                                            Tag="{Binding}" Click="CategoryExpand_Click"
+                                                            Cursor="Hand" Background="Transparent" BorderThickness="0"
+                                                            VerticalAlignment="Center" Focusable="False">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button">
+                                                                <Setter Property="Visibility" Value="Hidden"/>
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border Background="Transparent">
+                                                                                <TextBlock x:Name="arrow" Text="▸" FontSize="10" Foreground="{DynamicResource HeaderTextBrush}"
+                                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                                    <Setter TargetName="arrow" Property="Text" Value="▾"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasChildren}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                    <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Opacity="0.45"
+                                                               Margin="4,0,0,0" VerticalAlignment="Center"
+                                                               ToolTip="{Binding DragTip}"/>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountLabel}"
+                                                               FontSize="11" Opacity="0.75" Margin="0,0,6,0"
+                                                               VerticalAlignment="Center" MinWidth="14"
+                                                               HorizontalAlignment="Right"/>
+                                                    <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </DockPanel>
+                                            </Border>
+
+                                            <!-- Küçük sidebar: ikon + köşe rozeti; alt klasörler sağda flyout -->
+                                            <Grid Width="40" Height="36" HorizontalAlignment="Center" Margin="0,1">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
+                                                <TextBlock Text="{Binding Icon}" FontSize="18"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           TextOptions.TextFormattingMode="Display">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsCompactRailHighlighted}" Value="True">
+                                                                    <Setter Property="Foreground" Value="#FF6B00"/>
+                                                                </DataTrigger>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource SidebarHoverBrush}"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <Button Tag="{Binding}"
+                                                        Click="CategoryExpand_Click"
+                                                        Cursor="Hand" Focusable="False"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                        Margin="0,0,-2,-2" Width="18" Height="18" Padding="0"
+                                                        ToolTip="{Binding DisplayName}">
                                                     <Button.Style>
                                                         <Style TargetType="Button">
-                                                            <Setter Property="Visibility" Value="Hidden"/>
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
                                                             <Setter Property="Template">
                                                                 <Setter.Value>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border Background="Transparent">
-                                                                            <TextBlock x:Name="arrow" Text="▸" FontSize="10" Foreground="{DynamicResource HeaderTextBrush}"
+                                                                        <Border x:Name="bd" Width="15" Height="15" CornerRadius="7.5"
+                                                                                Background="#FF6B00" BorderBrush="#1A1A1A" BorderThickness="1">
+                                                                            <TextBlock Text="{Binding ChildCountLabel}" FontSize="8"
+                                                                                       FontWeight="Bold" Foreground="#1A1A1A"
                                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                                                <Setter TargetName="arrow" Property="Text" Value="▾"/>
-                                                                            </DataTrigger>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter TargetName="bd" Property="Background" Value="#FF8A3D"/>
+                                                                            </Trigger>
                                                                         </ControlTemplate.Triggers>
                                                                     </ControlTemplate>
                                                                 </Setter.Value>
@@ -1336,67 +1438,110 @@
                                                                 <DataTrigger Binding="{Binding HasChildren}" Value="True">
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </DataTrigger>
-                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <TextBlock DockPanel.Dock="Right" Text="⠿" FontSize="10" Opacity="0.45"
-                                                           Margin="4,0,0,0" VerticalAlignment="Center"
-                                                           ToolTip="{Binding DragTip}">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding CountLabel}"
-                                                           FontSize="11" Opacity="0.75" Margin="0,0,6,0"
-                                                           VerticalAlignment="Center" MinWidth="14"
-                                                           HorizontalAlignment="Right">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Icon}" FontSize="16"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding DisplayLabel}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding SidebarCompact, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </DockPanel>
-                                        </Border>
+                                                <Popup AllowsTransparency="True" StaysOpen="True"
+                                                       Placement="Right" HorizontalOffset="8" VerticalOffset="-4"
+                                                       PopupAnimation="Fade"
+                                                       IsOpen="{Binding CompactFlyoutOpen, Mode=TwoWay}">
+                                                    <Border MinWidth="156" MaxWidth="200" MaxHeight="260"
+                                                            Background="{DynamicResource MenuBgBrush}"
+                                                            BorderBrush="{DynamicResource MenuBorderBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="10" Padding="4,6" Margin="2"
+                                                            SnapsToDevicePixels="True">
+                                                        <Border.Effect>
+                                                            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270"
+                                                                              Color="#000000" Opacity="0.28"/>
+                                                        </Border.Effect>
+                                                        <DockPanel>
+                                                            <Button DockPanel.Dock="Top"
+                                                                    Click="CompactParentCategory_Click"
+                                                                    PreviewMouseLeftButtonDown="CompactParent_PreviewMouseLeftButtonDown"
+                                                                    Cursor="Hand" BorderThickness="0"
+                                                                    Margin="0,0,0,2" Padding="6,5" Focusable="False"
+                                                                    HorizontalContentAlignment="Left"
+                                                                    Background="Transparent"
+                                                                    ToolTip="{Binding DisplayName}">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                            <DockPanel LastChildFill="True">
+                                                                                <TextBlock x:Name="ico" DockPanel.Dock="Left" Text="{Binding Icon}" FontSize="14"
+                                                                                           Margin="0,0,7,0" VerticalAlignment="Center"
+                                                                                           Foreground="{DynamicResource MenuTextBrush}"/>
+                                                                                <TextBlock x:Name="lbl" Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold"
+                                                                                           Foreground="{DynamicResource MenuTextBrush}"
+                                                                                           VerticalAlignment="Center"
+                                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                            </DockPanel>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF6B00"/>
+                                                                                <Setter TargetName="ico" Property="Foreground" Value="#FF6B00"/>
+                                                                            </Trigger>
+                                                                            <DataTrigger Binding="{Binding IsActiveInSidebar}" Value="True">
+                                                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF8A3D"/>
+                                                                                <Setter TargetName="ico" Property="Foreground" Value="#FF8A3D"/>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                            </Button>
+                                                            <Border DockPanel.Dock="Top" Height="1"
+                                                                    Background="{DynamicResource MenuSeparatorBrush}"
+                                                                    Margin="4,0,4,4"/>
+                                                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                                          HorizontalScrollBarVisibility="Disabled">
+                                                                <ItemsControl ItemsSource="{Binding Children}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <Button Click="CompactChildCategory_Click"
+                                                                                    PreviewMouseLeftButtonDown="CompactChild_PreviewMouseLeftButtonDown"
+                                                                                    PreviewMouseRightButtonDown="CompactChild_PreviewMouseRightButtonDown"
+                                                                                    ContextMenu="{DynamicResource CategoryItemContextMenu}"
+                                                                                    Cursor="Hand" BorderThickness="0"
+                                                                                    Margin="0,0" Padding="6,5" Focusable="False"
+                                                                                    HorizontalContentAlignment="Left"
+                                                                                    Background="Transparent">
+                                                                                <Button.Template>
+                                                                                    <ControlTemplate TargetType="Button">
+                                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                            <StackPanel Orientation="Horizontal">
+                                                                                                <TextBlock x:Name="ico" Text="{Binding Icon}" FontSize="13"
+                                                                                                           Margin="0,0,7,0" VerticalAlignment="Center"
+                                                                                                           Foreground="{DynamicResource MenuTextBrush}"/>
+                                                                                                <TextBlock x:Name="lbl" Text="{Binding DisplayName}" FontSize="12"
+                                                                                                           VerticalAlignment="Center"
+                                                                                                           Foreground="{DynamicResource MenuTextBrush}"
+                                                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                                            </StackPanel>
+                                                                                        </Border>
+                                                                                        <ControlTemplate.Triggers>
+                                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF6B00"/>
+                                                                                                <Setter TargetName="ico" Property="Foreground" Value="#FF6B00"/>
+                                                                                            </Trigger>
+                                                                                            <DataTrigger Binding="{Binding IsActiveInSidebar}" Value="True">
+                                                                                                <Setter TargetName="lbl" Property="Foreground" Value="#FF8A3D"/>
+                                                                                                <Setter TargetName="ico" Property="Foreground" Value="#FF8A3D"/>
+                                                                                            </DataTrigger>
+                                                                                        </ControlTemplate.Triggers>
+                                                                                    </ControlTemplate>
+                                                                                </Button.Template>
+                                                                            </Button>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                        </DockPanel>
+                                                    </Border>
+                                                </Popup>
+                                            </Grid>
+                                        </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>

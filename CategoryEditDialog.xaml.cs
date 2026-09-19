@@ -225,13 +225,13 @@ namespace MDM
 
                 {
 
-                    Width = 36,
+                    Width = 34,
 
-                    Height = 36,
+                    Height = 34,
 
-                    Margin = new Thickness(3),
+                    Margin = new Thickness(2),
 
-                    CornerRadius = new CornerRadius(8),
+                    CornerRadius = new CornerRadius(7),
 
                     Cursor = Cursors.Hand,
 
@@ -244,6 +244,8 @@ namespace MDM
                         Text = icon,
 
                         FontSize = 16,
+
+                        Foreground = Brushes.White,
 
                         HorizontalAlignment = HorizontalAlignment.Center,
 
@@ -295,7 +297,7 @@ namespace MDM
 
                 cell.BorderBrush = Brush(sel ? _cellSelBorder : _cellBorder);
 
-                cell.BorderThickness = new Thickness(sel ? 2 : 1);
+                cell.BorderThickness = new Thickness(sel ? 1.5 : 1);
 
                 cell.Background = Brush(sel ? _cellSelBg : _cellBg);
 

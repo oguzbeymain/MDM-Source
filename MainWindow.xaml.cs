@@ -63,6 +63,8 @@ namespace MDM
         public ObservableCollection<CategoryItem> VisibleCategories { get; } = new();
         private Point _categoryDragStart;
         private CategoryItem? _categoryDragItem;
+        private bool _categoryDragMoved;
+        private bool _suppressCompactFlyoutOpen;
         private bool _isPseudoMaximized;
         // Restore bounds for drag-from-maximize (OS restores size; we keep a fallback)
         private Rect _restoreBounds;
@@ -71,6 +73,8 @@ namespace MDM
         private Point _catMarqueeStart;
         private HashSet<CategoryItem>? _catMarqueeCtrlBase;
         private bool _suppressCategorySelection;
+        /// <summary>Flyout içinden sağ tık menüsü için hedef kategori (VisibleCategories'de olmayabilir).</summary>
+        private CategoryItem? _categoryMenuTarget;
         private enum CatDropKind { None, Nest, InsertBefore, InsertAfter, ToRoot }
         private CatDropKind _catDropKind;
         private CategoryItem? _catDropTarget;
@@ -145,6 +149,8 @@ namespace MDM
             StateChanged += MainWindow_StateChanged;
             Closing += MainWindow_Closing;
             Loaded += MainWindow_Loaded;
+            Deactivated += (_, _) => CloseAllCompactFlyouts();
+            PreviewMouseDown += MainWindow_PreviewMouseDown_CloseCompactFlyout;
             NativeWindowChrome.Attach(this);
             InitTray();
 
@@ -717,6 +723,7 @@ namespace MDM
         {
             if (sender is ListBoxItem lbi && lbi.DataContext is CategoryItem cat)
             {
+                _categoryMenuTarget = cat;
                 if (!lbi.IsSelected)
                 {
                     if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
@@ -727,6 +734,54 @@ namespace MDM
             }
         }
 
+        private void CompactChild_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is not FrameworkElement { DataContext: CategoryItem child }) return;
+            _categoryMenuTarget = child;
+
+            // Üst kategoriyi listede seçili tut; flyout kapanmasın
+            if (!string.IsNullOrEmpty(child.ParentId))
+            {
+                var parent = CategoryStore.FindById(Categories, child.ParentId);
+                if (parent != null)
+                {
+                    parent.CompactFlyoutOpen = true;
+                    _suppressCategorySelection = true;
+                    try
+                    {
+                        if (VisibleCategories.Contains(parent))
+                            LstCategories.SelectedItem = parent;
+                    }
+                    finally { _suppressCategorySelection = false; }
+                }
+            }
+
+            SetSidebarActiveCategory(child);
+            // ContextMenu PlacementTarget = bu buton; Opened handler hedefi okur
+        }
+
+        private CategoryItem? ResolveCategoryMenuTarget()
+        {
+            if (_categoryMenuTarget != null)
+                return _categoryMenuTarget;
+            return LstCategories.SelectedItem as CategoryItem;
+        }
+
+        private List<CategoryItem> ResolveCategoryMenuTargets()
+        {
+            if (_categoryMenuTarget != null
+                && (LstCategories.SelectedItems.Count <= 1
+                    || !LstCategories.SelectedItems.OfType<CategoryItem>().Contains(_categoryMenuTarget)))
+                return new List<CategoryItem> { _categoryMenuTarget };
+
+            var selected = LstCategories.SelectedItems.OfType<CategoryItem>().ToList();
+            if (selected.Count == 0 && LstCategories.SelectedItem is CategoryItem one)
+                selected.Add(one);
+            if (selected.Count == 0 && _categoryMenuTarget != null)
+                selected.Add(_categoryMenuTarget);
+            return selected;
+        }
+
         private void CategoryItemContextMenu_Opened(object sender, RoutedEventArgs e)
         {
             if (sender is not ContextMenu menu) return;
@@ -734,15 +789,23 @@ namespace MDM
             foreach (var item in menu.Items.OfType<MenuItem>())
                 item.Visibility = Visibility.Visible;
 
-            var selected = LstCategories.SelectedItems.OfType<CategoryItem>().ToList();
-            if (selected.Count == 0 && LstCategories.SelectedItem is CategoryItem one)
-                selected.Add(one);
+            if (menu.PlacementTarget is FrameworkElement { DataContext: CategoryItem fromTarget })
+                _categoryMenuTarget = fromTarget;
+
+            var selected = ResolveCategoryMenuTargets();
 
             bool showDelete = selected.Any(c => !c.IsBuiltin && c.Id != "All");
             SetCategoryMenuItemVisible(menu, "MenuCatDelete", showDelete);
 
             bool showUnnest = selected.Any(c => !c.IsBuiltin && !string.IsNullOrEmpty(c.ParentId));
             SetCategoryMenuItemVisible(menu, "MenuCatUnnest", showUnnest);
+        }
+
+        private void CategoryItemContextMenu_Closed(object sender, RoutedEventArgs e)
+        {
+            // Menü kapandıktan sonra bir sonraki sol tık için hedefi temizleme —
+            // Click handler'lar Closed'dan önce çalışır; kısa gecikmeyle temizle
+            Dispatcher.BeginInvoke(() => { _categoryMenuTarget = null; }, DispatcherPriority.Background);
         }
 
         /// <summary>Başlık yerelleştirildiği için ada göre eşleştirir.</summary>
@@ -887,11 +950,56 @@ namespace MDM
         private void AppendVisible(CategoryItem item)
         {
             VisibleCategories.Add(item);
+            // Küçük sidebar: çocuklar üst öğenin gölge kartı içinde; listeye eklenmez
+            if (SidebarCompact) return;
             if (item.IsExpanded)
             {
                 foreach (var child in item.Children)
                     AppendVisible(child);
             }
+        }
+
+        /// <summary>Küçük sidebar'a geçince ağaçları kapat — iç kategoriler tik ile açılır.</summary>
+        private void CollapseCategoryTreesForCompact()
+        {
+            void Walk(CategoryItem c)
+            {
+                if (c.IsExpanded)
+                    c.IsExpanded = false;
+                foreach (var ch in c.Children)
+                    Walk(ch);
+            }
+            foreach (var root in Categories)
+                Walk(root);
+        }
+
+        private void ClearSidebarActiveFlags()
+        {
+            void Walk(CategoryItem c)
+            {
+                if (c.IsActiveInSidebar)
+                    c.IsActiveInSidebar = false;
+                foreach (var ch in c.Children)
+                    Walk(ch);
+            }
+            foreach (var root in Categories)
+                Walk(root);
+            NotifyCompactRailHighlights();
+        }
+
+        private void SetSidebarActiveCategory(CategoryItem? cat)
+        {
+            ClearSidebarActiveFlags();
+            if (cat != null)
+                cat.IsActiveInSidebar = true;
+            NotifyCompactRailHighlights();
+        }
+
+        private void NotifyCompactRailHighlights()
+        {
+            foreach (var root in Categories)
+            foreach (var c in root.Flatten())
+                c.NotifyCompactRailHighlight();
         }
 
         private void StartBrowserCaptureServer()
@@ -1019,6 +1127,7 @@ namespace MDM
             {
                 if (LstCategories.SelectedItem is not CategoryItem cat) return;
                 _currentCategory = cat.Id;
+                SetSidebarActiveCategory(cat);
                 HighlightAllDownloadsButton(false);
                 // Secim degisirken DataGrid ile cakismasin
                 Dispatcher.BeginInvoke(() =>
@@ -1042,6 +1151,8 @@ namespace MDM
             try
             {
                 _currentCategory = "All";
+                SetSidebarActiveCategory(null);
+                CloseAllCompactFlyouts();
                 _suppressCategorySelection = true;
                 try { LstCategories.SelectedItems.Clear(); }
                 finally { _suppressCategorySelection = false; }
@@ -1361,8 +1472,7 @@ namespace MDM
 
         private void MenuUnnestCategory_Click(object sender, RoutedEventArgs e)
         {
-            var targets = LstCategories.SelectedItems
-                .OfType<CategoryItem>()
+            var targets = ResolveCategoryMenuTargets()
                 .Where(c => !c.IsBuiltin && !string.IsNullOrEmpty(c.ParentId))
                 .ToList();
             if (targets.Count == 0)
@@ -1376,7 +1486,7 @@ namespace MDM
 
         private void MenuRenameCategory_Click(object sender, RoutedEventArgs e)
         {
-            if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
+            if (ResolveCategoryMenuTarget() is not CategoryItem cat || cat.Id == "All")
             {
                 InfoDialog.Show(this, Loc.T("title.rename", "Yeniden adlandır"), Loc.T("msg.category.rename_select", "Yeniden adlandırmak için bir kategori seçin."));
                 return;
@@ -1462,7 +1572,7 @@ namespace MDM
 
         private void MenuOpenCategoryFolder_Click(object sender, RoutedEventArgs e)
         {
-            if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
+            if (ResolveCategoryMenuTarget() is not CategoryItem cat || cat.Id == "All")
             {
                 InfoDialog.Show(this, Loc.T("title.folder", "Klasör"), Loc.T("msg.category.open_folder_select", "Klasörünü açmak için bir kategori seçin."));
                 return;
@@ -1485,12 +1595,12 @@ namespace MDM
             CategoryItem? parent = null;
             if (asChild)
             {
-                if (LstCategories.SelectedItem is not CategoryItem p || p.Id == "All")
+                parent = ResolveCategoryMenuTarget();
+                if (parent == null || parent.Id == "All")
                 {
                     InfoDialog.Show(this, Loc.T("title.subcategory", "Alt kategori"), Loc.T("msg.category.child_parent_select", "Alt kategori eklemek için bir üst kategori seçin."));
                     return;
                 }
-                parent = p;
             }
 
             string suggestRoot = parent != null
@@ -1506,7 +1616,7 @@ namespace MDM
             {
                 Id = "custom_" + Guid.NewGuid().ToString("N")[..8],
                 Name = name,
-                Icon = "📁",
+                Icon = string.IsNullOrWhiteSpace(dlg.SelectedIcon) ? "📁" : CategoryIcons.Normalize(dlg.SelectedIcon),
                 IsBuiltin = false,
                 Depth = 0,
                 CustomFolderPath = dlg.FolderPath
@@ -1519,6 +1629,8 @@ namespace MDM
                 parent.Children.Add(item);
                 parent.IsExpanded = true;
                 parent.NotifyChildrenChanged();
+                if (SidebarCompact)
+                    parent.CompactFlyoutOpen = true;
             }
             else
             {
@@ -1529,12 +1641,26 @@ namespace MDM
             CategoryStore.Save(Categories);
             CategoryStore.EnsureDiskFolders(Categories, _defaultFolder);
             RebuildVisibleCategories();
-            LstCategories.SelectedItem = item;
+            if (SidebarCompact && parent != null)
+            {
+                // Flyout çocuğu listede yok; üstü seçili kalsın, filtre çocuğa gitsin
+                _suppressCategorySelection = true;
+                try { LstCategories.SelectedItem = parent; }
+                finally { _suppressCategorySelection = false; }
+                _currentCategory = item.Id;
+                SetSidebarActiveCategory(item);
+                parent.CompactFlyoutOpen = true;
+                _downloadView?.Refresh();
+            }
+            else
+            {
+                LstCategories.SelectedItem = item;
+            }
         }
 
         private void MenuCategoryRules_Click(object sender, RoutedEventArgs e)
         {
-            if (LstCategories.SelectedItem is not CategoryItem cat || cat.Id == "All")
+            if (ResolveCategoryMenuTarget() is not CategoryItem cat || cat.Id == "All")
             {
                 InfoDialog.Show(this, Loc.T("title.category", "Kategori"), Loc.T("msg.category.rules_select", "Dosya türü ayarlamak için bir kategori seçin."));
                 return;
@@ -1732,8 +1858,7 @@ namespace MDM
 
         private void MenuDeleteCategories_Click(object sender, RoutedEventArgs e)
         {
-            var toDelete = LstCategories.SelectedItems
-                .OfType<CategoryItem>()
+            var toDelete = ResolveCategoryMenuTargets()
                 .Where(c => !c.IsBuiltin && c.Id != "All")
                 .ToList();
 
@@ -1790,10 +1915,131 @@ namespace MDM
         private void CategoryExpand_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button { Tag: CategoryItem cat }) return;
+            e.Handled = true;
+
+            if (SidebarCompact)
+            {
+                bool open = !cat.CompactFlyoutOpen;
+                CloseAllCompactFlyouts();
+                cat.CompactFlyoutOpen = open;
+                return;
+            }
+
             cat.IsExpanded = !cat.IsExpanded;
             CategoryStore.Save(Categories);
             RebuildVisibleCategories();
+        }
+
+        private void CloseAllCompactFlyouts()
+        {
+            void Walk(CategoryItem c)
+            {
+                if (c.CompactFlyoutOpen)
+                    c.CompactFlyoutOpen = false;
+                foreach (var ch in c.Children)
+                    Walk(ch);
+            }
+            foreach (var root in Categories)
+                Walk(root);
+        }
+
+        private void CompactChild_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Click'ten önce seç — popup kapanma yarışını önler
+            CompactChildCategory_Click(sender, e);
             e.Handled = true;
+        }
+
+        private void CompactParent_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            CompactParentCategory_Click(sender, e);
+            e.Handled = true;
+        }
+
+        /// <summary>Flyout başlığı (ör. Dökümanlar): üst kategorinin dosyalarını göster.</summary>
+        private void CompactParentCategory_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement { DataContext: CategoryItem parent }) return;
+            e.Handled = true;
+
+            _suppressCategorySelection = true;
+            try
+            {
+                if (VisibleCategories.Contains(parent))
+                    LstCategories.SelectedItem = parent;
+            }
+            finally
+            {
+                _suppressCategorySelection = false;
+            }
+
+            _currentCategory = parent.Id;
+            SetSidebarActiveCategory(parent);
+            HighlightAllDownloadsButton(false);
+
+            _suppressCompactFlyoutOpen = true;
+            parent.CompactFlyoutOpen = false;
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    _downloadView?.Refresh();
+                    DgDownloads.SelectedItems.Clear();
+                }
+                catch (Exception ex) { Debug.WriteLine($"Compact parent filter: {ex.Message}"); }
+            }, DispatcherPriority.Background);
+        }
+
+        private void CompactChildCategory_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement { DataContext: CategoryItem child }) return;
+            e.Handled = true;
+
+            CategoryItem? parent = null;
+            if (!string.IsNullOrEmpty(child.ParentId))
+                parent = CategoryStore.FindById(Categories, child.ParentId);
+
+            _suppressCategorySelection = true;
+            try
+            {
+                if (parent != null && VisibleCategories.Contains(parent))
+                    LstCategories.SelectedItem = parent;
+                else if (VisibleCategories.Contains(child))
+                    LstCategories.SelectedItem = child;
+            }
+            finally
+            {
+                _suppressCategorySelection = false;
+            }
+
+            _currentCategory = child.Id;
+            SetSidebarActiveCategory(child);
+            // Üst kategori listede seçili kalsın → rail ikonu turuncu (IsCompactRailHighlighted)
+            if (parent != null && VisibleCategories.Contains(parent))
+            {
+                _suppressCategorySelection = true;
+                try { LstCategories.SelectedItem = parent; }
+                finally { _suppressCategorySelection = false; }
+            }
+
+            HighlightAllDownloadsButton(false);
+            // Seçim sonrası flyout kapansın (mouseup üst ikonu tekrar açmasın)
+            _suppressCompactFlyoutOpen = true;
+            if (parent != null)
+                parent.CompactFlyoutOpen = false;
+            else
+                CloseAllCompactFlyouts();
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    _downloadView?.Refresh();
+                    DgDownloads.SelectedItems.Clear();
+                }
+                catch (Exception ex) { Debug.WriteLine($"Compact child filter: {ex.Message}"); }
+            }, DispatcherPriority.Background);
         }
 
         private void LstCategories_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1802,14 +2048,45 @@ namespace MDM
             LstCategories.Focus();
             _categoryDragStart = e.GetPosition(null);
             _categoryDragItem = null;
-            // Expand butonundan surukleme baslatma
+            _categoryDragMoved = false;
+            // Expand / rozet butonundan surukleme baslatma
             if (e.OriginalSource is DependencyObject d0 && FindAncestor<Button>(d0) != null)
                 return;
             if (e.OriginalSource is DependencyObject d)
             {
                 var lbi = FindAncestor<ListBoxItem>(d);
                 if (lbi?.DataContext is CategoryItem cat)
+                {
                     _categoryDragItem = cat;
+                    _categoryMenuTarget = null;
+                    // Flyout'u mouse up'ta aç — mousedown'da açmak sürüklemeyi bozar
+                }
+            }
+        }
+
+        private void LstCategories_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_suppressCompactFlyoutOpen)
+            {
+                _suppressCompactFlyoutOpen = false;
+                return;
+            }
+            if (_categoryDragMoved || _categoryDragItem == null) return;
+            if (!SidebarCompact) return;
+            if (e.OriginalSource is DependencyObject d0 && FindAncestor<Button>(d0) != null)
+                return;
+            if (e.OriginalSource is DependencyObject src && IsInsideAnyPopup(src))
+                return;
+
+            var cat = _categoryDragItem;
+            if (cat.HasChildren)
+            {
+                CloseAllCompactFlyouts();
+                cat.CompactFlyoutOpen = true;
+            }
+            else
+            {
+                CloseAllCompactFlyouts();
             }
         }
 
@@ -1824,8 +2101,13 @@ namespace MDM
 
             if (_categoryDragItem.Id == "All") return;
 
+            _categoryDragMoved = true;
+            if (SidebarCompact)
+                CloseAllCompactFlyouts();
+
             var dragged = _categoryDragItem;
             TxtDragGhost.Text = dragged.DisplayLabel;
+            TxtDragGhost.ClearValue(TextBlock.FontFamilyProperty);
             CategoryDragPopup.IsOpen = true;
 
             if (LstCategories.ItemContainerGenerator.ContainerFromItem(dragged) is ListBoxItem lbi)
@@ -2086,7 +2368,8 @@ namespace MDM
 
             // Built-in kategoriler kökte kalır — sadece siralama
             // Özel kategoriler: ortada içine al, kenarlarda sıraya koy
-            bool canNest = dragged != null && !dragged.IsBuiltin && hitCat.Id != "All"
+            bool canNest = !SidebarCompact
+                           && dragged != null && !dragged.IsBuiltin && hitCat.Id != "All"
                            && !hitCat.IsDescendantOf(dragged!);
             bool nestZone = canNest && ratioY >= 0.28 && ratioY <= 0.72;
 
@@ -2935,6 +3218,88 @@ namespace MDM
                 return;
 
             ClearSearchFocus();
+        }
+
+        private void MainWindow_PreviewMouseDown_CloseCompactFlyout(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+            if (!SidebarCompact) return;
+            if (!Categories.Any(c => c.Flatten().Any(x => x.CompactFlyoutOpen))) return;
+
+            // Hemen kapatma — flyout satır tıklaması Click'e ulaşsın; sonra dışarıysa kapat
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (!SidebarCompact) return;
+                if (!Categories.Any(c => c.Flatten().Any(x => x.CompactFlyoutOpen))) return;
+
+                var over = Mouse.DirectlyOver as DependencyObject;
+                if (IsInsideAnyPopup(over)) return;
+                if (IsUnderElement(over, LstCategories)) return;
+                if (FindContextMenuAncestor(over) != null) return;
+
+                CloseAllCompactFlyouts();
+            }, DispatcherPriority.Input);
+        }
+
+        private static bool IsInsideAnyPopup(DependencyObject? src)
+        {
+            for (var d = src; d != null;)
+            {
+                if (d is Popup) return true;
+                string name = d.GetType().Name;
+                if (name.Contains("PopupRoot", StringComparison.Ordinal))
+                    return true;
+
+                var parent = VisualTreeHelper.GetParent(d);
+                if (parent == null && d is FrameworkElement fe)
+                {
+                    if (fe.Parent is Popup) return true;
+                    parent = fe.Parent as DependencyObject;
+                }
+                d = parent;
+            }
+            return false;
+        }
+
+        private static ContextMenu? FindContextMenuAncestor(DependencyObject? src)
+        {
+            while (src != null)
+            {
+                if (src is ContextMenu cm) return cm;
+                var parent = VisualTreeHelper.GetParent(src);
+                if (parent == null && src is FrameworkElement fe)
+                    parent = fe.Parent as DependencyObject;
+                src = parent;
+            }
+            return null;
+        }
+
+        private static Popup? FindPopupAncestor(DependencyObject? src)
+        {
+            while (src != null)
+            {
+                if (src is Popup p) return p;
+                string name = src.GetType().Name;
+                if (name.Contains("PopupRoot", StringComparison.Ordinal))
+                    return FindLogicalPopup(src);
+
+                var parent = VisualTreeHelper.GetParent(src);
+                if (parent == null && src is FrameworkElement fe)
+                    parent = fe.Parent as DependencyObject;
+                src = parent;
+            }
+            return null;
+        }
+
+        private static Popup? FindLogicalPopup(DependencyObject src)
+        {
+            DependencyObject? cur = src;
+            while (cur != null)
+            {
+                if (cur is Popup p) return p;
+                cur = LogicalTreeHelper.GetParent(cur) ?? VisualTreeHelper.GetParent(cur);
+            }
+            return null;
         }
 
         private static bool IsUnderElement(DependencyObject? src, DependencyObject? ancestor)
@@ -3938,6 +4303,10 @@ namespace MDM
                 SidebarCol.MaxWidth = 72;
                 SidebarCol.Width = new GridLength(64);
                 if (MainSplitter != null) MainSplitter.IsEnabled = false;
+                // Daraltınca iç kategoriler yer kaplamasın; flyout ile açılır
+                CollapseCategoryTreesForCompact();
+                CloseAllCompactFlyouts();
+                RebuildVisibleCategories();
             }
             else
             {
@@ -3945,6 +4314,8 @@ namespace MDM
                 SidebarCol.MaxWidth = 280;
                 SidebarCol.Width = _sidebarExpandedWidth.Value > 80 ? _sidebarExpandedWidth : new GridLength(200);
                 if (MainSplitter != null) MainSplitter.IsEnabled = true;
+                CloseAllCompactFlyouts();
+                RebuildVisibleCategories();
             }
 
             if (LblCategoriesHeader != null)

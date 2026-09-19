@@ -669,7 +669,7 @@ namespace MDM.Setup
             "Videos" => "🎬",
             "Audio" => "🎵",
             "Archives" => "📦",
-            "Images" => "🖼️",
+            "Images" => "📷",
             "Apps" => "🚀",
             _ => "📁"
         };
